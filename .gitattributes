@@ -1,0 +1,17 @@
+# Line endings are normalised to LF in the repository and on checkout, on every platform.
+# See markdown-lsp-harness/docs/decisions/LDR-0001-line-endings-new-repos.md
+#
+# This overrides each developer's core.autocrlf setting, which is the point: the rule belongs to
+# the repository, not to the machine.
+
+* text=auto eol=lf
+
+# Exemption: files whose exact line endings ARE the fixture -- CRLF, mixed endings, no trailing newline.
+# A Markdown formatter must preserve a document's line endings, and LSP offsets differ between
+# \n and \r\n, so these cases have to be testable. '-text' stores and checks them out byte for
+# byte; it does not make them diff as binary.
+#
+# Put a file here only when the test genuinely needs a file. Prefer building the content in test
+# code ("a\r\nb\n") -- then the intent is visible in the test instead of in invisible bytes.
+
+**/resources/keep-eol/** -text
