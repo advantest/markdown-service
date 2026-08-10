@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>com.advantest.markdown</groupId>
+	<artifactId>markdown-service</artifactId>
+	<version>1.0.0-SNAPSHOT</version> <!-- set to something like 1.0.2-20240821-1452 for releases -->
+
+	<name>Markdown service</name>
+	<description>Service facade for Markdown parsing and HTML rendering</description>
+
+	<organization>
+		<name>Advantest Europe</name>
+		<url>https://www.advantest.com/</url>
+	</organization>
+
+	<properties>
+		<markdown-core-version>1.0.11-20260521-1035</markdown-core-version>
+		<java-version>21</java-version>
+		<junit-version>5.9.2</junit-version>
+
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+		<maven.compiler.source>${java-version}</maven.compiler.source>
+		<maven.compiler.target>${java-version}</maven.compiler.target>
+		<java.version>${java-version}</java.version>
+	</properties>
+
+	<repositories>
+		<repository>
+			<id>github-packages-flexmark</id>
+			<url>https://maven.pkg.github.com/advantest/flexmark-java</url>
+		</repository>
+		<repository>
+			<id>github-packages-flexmark-extensions</id>
+			<url>https://maven.pkg.github.com/advantest/flexmark-extensions</url>
+		</repository>
+		<repository>
+			<id>github-packages-markdown-core</id>
+			<url>https://maven.pkg.github.com/advantest/markdown-core</url>
+		</repository>
+	</repositories>
+
+	<dependencies>
+
+		<dependency>
+			<groupId>com.advantest.markdown</groupId>
+			<artifactId>markdown-core</artifactId>
+			<version>${markdown-core-version}</version>
+		</dependency>
+
+		<!-- test dependencies -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-api</artifactId>
+			<version>${junit-version}</version>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-params</artifactId>
+			<version>${junit-version}</version>
+			<scope>test</scope>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+				<filtering>true</filtering>
+			</resource>
+		</resources>
+
+		<plugins>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>3.6.2</version>
+				<executions>
+					<execution>
+						<id>enforce-versions</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireMavenVersion>
+									<version>[3.9.0,4)</version>
+								</requireMavenVersion>
+								<requireJavaVersion>
+									<version>21</version>
+								</requireJavaVersion>
+								<dependencyConvergence/>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-resources-plugin</artifactId>
+				<version>3.3.1</version>
+				<configuration>
+					<propertiesEncoding>UTF-8</propertiesEncoding>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.13.0</version>
+				<configuration>
+					<release>21</release>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.1.2</version>
+				<dependencies>
+					<dependency>
+						<groupId>org.junit.jupiter</groupId>
+						<artifactId>junit-jupiter-engine</artifactId>
+						<version>5.9.1</version>
+					</dependency>
+				</dependencies>
+			</plugin>
+
+		</plugins>
+	</build>
+
+	<profiles>
+		<profile>
+			<id>deploy-github</id>
+			<distributionManagement>
+				<repository>
+					<id>github</id>
+					<name>Advantest's Maven Packages on GitHub</name>
+					<url>https://maven.pkg.github.com/advantest/markdown-service</url>
+				</repository>
+				<snapshotRepository>
+					<id>github</id>
+					<name>Advantest's Maven Packages on GitHub</name>
+					<url>https://maven.pkg.github.com/advantest/markdown-service</url>
+				</snapshotRepository>
+			</distributionManagement>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-source-plugin</artifactId>
+						<version>3.2.1</version>
+						<executions>
+							<execution>
+								<id>package-sources</id>
+								<phase>package</phase>
+								<goals>
+									<goal>jar</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<profile>
+			<id>deploy-advantest</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.jfrog.buildinfo</groupId>
+						<artifactId>artifactory-maven-plugin</artifactId>
+						<version>3.6.1</version>
+						<executions>
+							<execution>
+								<id>build-info</id>
+								<goals>
+									<goal>publish</goal>
+								</goals>
+								<configuration>
+									<publisher>
+										<contextUrl>${ARTIFACTORY_URL}</contextUrl>
+										<username>${ARTIFACTORY_USR}</username>
+										<password>${ARTIFACTORY_PW}</password>
+										<repoKey>${ARTIFACTORY_REPO}</repoKey>
+										<snapshotRepoKey>${ARTIFACTORY_REPO}</snapshotRepoKey>
+										<publishBuildInfo>true</publishBuildInfo>
+									</publisher>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
+</project>
