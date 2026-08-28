@@ -9,26 +9,59 @@ package com.advantest.markdown.service;
 import java.io.File;
 import java.io.IOException;
 
+import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
+import com.vladsch.flexmark.util.data.DataKey;
+import com.vladsch.flexmark.util.data.NullableDataKey;
+import com.vladsch.flexmark.util.misc.Extension;
 
 /**
  * Facade offering Markdown parsing and HTML rendering features.
+ * 
+ * <p>Use the parameter-less constructor to get a service with the default configuration.
+ * If the underlying Markdown parser and HTML renderer needs to be customized, e.g. by adding
+ * further flexmark extensions or by setting flexmark options, use the {@link #builder()}:</p>
+ * 
+ * <pre>
+ * MarkdownService service = MarkdownService.builder()
+ *         .withExtension(SomeFlexmarkExtension.create())
+ *         .withOption(SomeExtension.SOME_OPTION, "some value")
+ *         .build();
+ * </pre>
  */
 public class MarkdownService {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
+	/**
+	 * Creates a service using the default Markdown parser and HTML renderer configuration.
+	 * Use {@link #builder()} if you need to customize the parser and renderer.
+	 */
 	public MarkdownService() {
 		this(new MarkdownParserAndHtmlRenderer());
 	}
 
-	public MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer) {
+	/**
+	 * Creates a service delegating to the given Markdown parser and HTML renderer.
+	 * 
+	 * @param parserAndRenderer the parser and renderer to delegate to, must not be <code>null</code>
+	 */
+	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer) {
 		if (parserAndRenderer == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 		this.parserAndRenderer = parserAndRenderer;
+	}
+
+	/**
+	 * Creates a builder for a service with a customized Markdown parser and HTML renderer.
+	 * 
+	 * @return a new builder, never <code>null</code>
+	 */
+	public static Builder builder() {
+		return new Builder();
 	}
 
 	/**
@@ -77,6 +110,89 @@ public class MarkdownService {
 	 */
 	public String parseMarkdownAndRenderHtml(String markdownSourceCode) {
 		return this.parserAndRenderer.parseMarkdownAndRenderHtml(markdownSourceCode);
+	}
+
+	/**
+	 * Builder for a {@link MarkdownService} with a customized Markdown parser and HTML renderer.
+	 * 
+	 * <p>All customizations are applied in the order in which they are registered here,
+	 * i.e. later customizations override earlier ones. They are applied on top of the default
+	 * configuration, so they also override the defaults.</p>
+	 * 
+	 * @see MarkdownParserAndHtmlRenderer.Builder
+	 */
+	public static final class Builder {
+
+		private final MarkdownParserAndHtmlRenderer.Builder parserAndRendererBuilder =
+				MarkdownParserAndHtmlRenderer.builder();
+
+		private Builder() {
+		}
+
+		/**
+		 * Adds the given flexmark extension to the extensions already configured,
+		 * i.e. it does not replace or remove any of the default extensions.
+		 * 
+		 * @param extension the flexmark extension to be added, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @see MarkdownParserAndHtmlRenderer.Builder#withExtension(Extension)
+		 */
+		public Builder withExtension(Extension extension) {
+			this.parserAndRendererBuilder.withExtension(extension);
+			return this;
+		}
+
+		/**
+		 * Sets the given flexmark option value.
+		 * 
+		 * @param <T> the option value's type
+		 * @param key the flexmark data key of the option to be set, must not be <code>null</code>
+		 * @param value the option's value, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @see MarkdownParserAndHtmlRenderer.Builder#withOption(DataKey, Object)
+		 */
+		public <T> Builder withOption(DataKey<T> key, T value) {
+			this.parserAndRendererBuilder.withOption(key, value);
+			return this;
+		}
+
+		/**
+		 * Sets the given flexmark option value which may be <code>null</code>.
+		 * 
+		 * @param <T> the option value's type
+		 * @param key the flexmark data key of the option to be set, must not be <code>null</code>
+		 * @param value the option's value, may be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @see MarkdownParserAndHtmlRenderer.Builder#withOption(NullableDataKey, Object)
+		 */
+		public <T> Builder withOption(NullableDataKey<T> key, T value) {
+			this.parserAndRendererBuilder.withOption(key, value);
+			return this;
+		}
+
+		/**
+		 * Adds the given customization, i.e. arbitrary changes to the parser's and renderer's options.
+		 * This is the generic extension point for customizations contributed by other components,
+		 * e.g. Eclipse plug-in extensions or dependency injection beans.
+		 * 
+		 * @param customization the customization to be applied, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @see MarkdownParserAndHtmlRenderer.Builder#withCustomization(MarkdownCustomization)
+		 */
+		public Builder withCustomization(MarkdownCustomization customization) {
+			this.parserAndRendererBuilder.withCustomization(customization);
+			return this;
+		}
+
+		/**
+		 * Creates the service with the customized Markdown parser and HTML renderer.
+		 * 
+		 * @return the newly created service, never <code>null</code>
+		 */
+		public MarkdownService build() {
+			return new MarkdownService(this.parserAndRendererBuilder.build());
+		}
+
 	}
 
 }
