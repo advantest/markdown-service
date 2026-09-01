@@ -7,6 +7,8 @@
 package com.advantest.markdown.service.differential;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -48,12 +50,18 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * {@link PortedValidationRules}. Everything the service does report is compared, though: a finding
  * it invents is a difference, whatever it is about.</p>
  * 
- * <p>The corpus and the recording are not part of this repository, and they are not published. The
- * test therefore takes their locations as system properties and is skipped without them:</p>
+ * <p>The corpus and the recording are not part of this repository and are not published, so their
+ * locations have no default and have to be given as system properties. The build therefore leaves
+ * this test out — the surefire plugin excludes the package — and running it means asking for it:</p>
  * 
  * <pre>
- * mvn test -Dmarkdown.corpus.root=&lt;corpus&gt; -Dmarkdown.recording.dir=&lt;recording&gt;
+ * mvn test -Dtest=MarkdownValidationDifferentialTest -DfailIfNoSpecifiedTests=false \
+ *          -Dmarkdown.corpus.root=&lt;corpus&gt; -Dmarkdown.recording.dir=&lt;recording&gt;
  * </pre>
+ * 
+ * <p>In the IDE the two belong into the VM arguments of the launch configuration, not into the
+ * program arguments. A missing or wrong location fails the test instead of skipping it, because a
+ * skipped comparison is indistinguishable from one that found no difference.</p>
  * 
  * <p>The optional properties <code>markdown.corpus.include</code> and
  * <code>markdown.corpus.exclude</code> take a regular expression each and are matched against the
@@ -105,17 +113,10 @@ public class MarkdownValidationDifferentialTest {
 
 	@TestFactory
 	public Stream<DynamicTest> reportsWhatTheRecordedRunReported() {
-		Optional<Path> corpusRoot = directoryFromProperty(CORPUS_ROOT_PROPERTY);
-		Optional<Path> recordingDirectory = directoryFromProperty(RECORDING_DIRECTORY_PROPERTY);
+		Path corpusRoot = directoryFromProperty(CORPUS_ROOT_PROPERTY);
+		Path recordingDirectory = directoryFromProperty(RECORDING_DIRECTORY_PROPERTY);
 
-		if (corpusRoot.isEmpty() || recordingDirectory.isEmpty()) {
-			return Stream.of(DynamicTest.dynamicTest("comparison with a recorded validation run",
-					() -> Assumptions.abort("Set -D" + CORPUS_ROOT_PROPERTY + " and -D"
-							+ RECORDING_DIRECTORY_PROPERTY + " to compare this service"
-							+ " with a recorded validation run of the FluentMark Eclipse plug-ins.")));
-		}
-
-		ValidationRecording recording = ValidationRecording.readFrom(recordingDirectory.get());
+		ValidationRecording recording = ValidationRecording.readFrom(recordingDirectory);
 		Predicate<String> inScope = scopeFromProperties();
 
 		return recording.validatedFiles().stream()
@@ -126,7 +127,7 @@ public class MarkdownValidationDifferentialTest {
 								+ " or " + EXCLUDE_PROPERTY + ".");
 					}
 
-					compare(file, corpusRoot.get(), recording);
+					compare(file, corpusRoot, recording);
 				}));
 	}
 
@@ -176,16 +177,32 @@ public class MarkdownValidationDifferentialTest {
 				.collect(Collectors.joining("\n"));
 	}
 
-	private static Optional<Path> directoryFromProperty(String propertyName) {
+	/**
+	 * Reads a directory location from a system property, and fails if it is not there.
+	 * 
+	 * <p>An unset or wrong location is a configuration mistake, not a reason to pass: a silently
+	 * skipped comparison looks exactly like one that found no difference. The default build does not
+	 * run this test at all, see the class comment, so failing here costs nobody anything.</p>
+	 */
+	private static Path directoryFromProperty(String propertyName) {
 		String value = System.getProperty(propertyName);
-		if (value == null || value.isBlank()) {
-			return Optional.empty();
-		}
+
+		assertNotNull(value, () -> missingConfiguration(propertyName, "is not set"));
+		assertFalse(value.isBlank(), () -> missingConfiguration(propertyName, "is empty"));
 
 		Path directory = Path.of(value);
-		assertTrue(Files.isDirectory(directory), "-D" + propertyName + " is not a directory: " + value);
+		assertTrue(Files.isDirectory(directory),
+				() -> missingConfiguration(propertyName, "is not a directory: " + value));
 
-		return Optional.of(directory);
+		return directory;
+	}
+
+	private static String missingConfiguration(String propertyName, String problem) {
+		return "The system property " + propertyName + " " + problem + ", so this service cannot be"
+				+ " compared with a recorded validation run of the FluentMark Eclipse plug-ins."
+				+ " Pass -D" + CORPUS_ROOT_PROPERTY + "=<corpus> and -D" + RECORDING_DIRECTORY_PROPERTY
+				+ "=<recording> as VM arguments, not as program arguments. Neither location belongs"
+				+ " into this repository, so neither has a default.";
 	}
 
 	private static Predicate<String> scopeFromProperties() {

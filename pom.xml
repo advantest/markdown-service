@@ -132,6 +132,16 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.1.2</version>
+				<configuration>
+					<!-- The differential comparison needs a corpus and a recording that are not part
+					     of this repository, so it fails without them and is not part of the build.
+					     Run it explicitly:
+					     mvn test -Dtest=MarkdownValidationDifferentialTest -DfailIfNoSpecifiedTests=false
+					              -Dmarkdown.corpus.root=<corpus> -Dmarkdown.recording.dir=<recording> -->
+					<excludes>
+						<exclude>**/differential/*Test.java</exclude>
+					</excludes>
+				</configuration>
 				<dependencies>
 					<dependency>
 						<groupId>org.junit.jupiter</groupId>
