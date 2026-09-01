@@ -1,0 +1,55 @@
+/*
+ * This work is made available under the terms of the BSD 2-Clause "Simplified" License.
+ * The BSD accompanies this distribution (LICENSE.txt).
+ * 
+ * Copyright © 2026 Advantest Europe GmbH. All rights reserved.
+ */
+package com.advantest.markdown.service.validation;
+
+/**
+ * The identifiers of the issue types this service reports itself.
+ * 
+ * <p>An issue type identifier names one concrete problem, so that a tool can recognize, filter,
+ * suppress or offer a fix for it without matching the message text. Identifiers are stable API:
+ * once published, an identifier keeps its meaning.</p>
+ * 
+ * <p>Components extending this service report their own issue types and are not restricted to the
+ * identifiers listed here. To keep identifiers unique across all contributors, an identifier
+ * starts with the reverse domain name of the contributing component, the way the identifiers
+ * below start with <code>com.advantest.markdown</code>.</p>
+ */
+public final class MarkdownIssueTypes {
+
+	private static final String PREFIX = "com.advantest.markdown.";
+
+	/** A link or image has no target at all, e.g. <code>[label]()</code>. */
+	public static final String LINK_EMPTY_TARGET = PREFIX + "link.emptyTarget";
+
+	/** A reference link has an empty label, e.g. <code>[label][]</code> used as a full reference link. */
+	public static final String LINK_EMPTY_REFERENCE_LABEL = PREFIX + "link.emptyReferenceLabel";
+
+	/** A reference link refers to a label that no link reference definition in the document defines. */
+	public static final String LINK_MISSING_REFERENCE_DEFINITION = PREFIX + "link.missingReferenceDefinition";
+
+	/** A reference link is broken in a way that leaves open whether its label or its definition is missing. */
+	public static final String LINK_AMBIGUOUS_REFERENCE = PREFIX + "link.ambiguousReference";
+
+	/** A link reference definition uses an identifier that Markdown does not allow. */
+	public static final String LINK_REFERENCE_DEFINITION_INVALID_IDENTIFIER =
+			PREFIX + "linkReferenceDefinition.invalidIdentifier";
+
+	/** Several link reference definitions in the same document use the same identifier. */
+	public static final String LINK_REFERENCE_DEFINITION_DUPLICATE_IDENTIFIER =
+			PREFIX + "linkReferenceDefinition.duplicateIdentifier";
+
+	/** A section anchor uses an identifier that is not allowed as an HTML anchor identifier. */
+	public static final String ANCHOR_INVALID_IDENTIFIER = PREFIX + "anchor.invalidIdentifier";
+
+	/** Several section anchors in the same document use the same identifier. */
+	public static final String ANCHOR_DUPLICATE_IDENTIFIER = PREFIX + "anchor.duplicateIdentifier";
+
+	private MarkdownIssueTypes() {
+		// utility class, not meant to be instantiated
+	}
+
+}

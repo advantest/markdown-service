@@ -8,9 +8,11 @@ package com.advantest.markdown.service;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
+import com.advantest.markdown.service.validation.ValidationIssue;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.DataKey;
@@ -18,7 +20,7 @@ import com.vladsch.flexmark.util.data.NullableDataKey;
 import com.vladsch.flexmark.util.misc.Extension;
 
 /**
- * Facade offering Markdown parsing and HTML rendering features.
+ * Facade offering Markdown parsing, HTML rendering and validation features.
  * 
  * <p>Use the parameter-less constructor to get a service with the default configuration.
  * If the underlying Markdown parser and HTML renderer needs to be customized, e.g. by adding
@@ -110,6 +112,29 @@ public class MarkdownService {
 	 */
 	public String parseMarkdownAndRenderHtml(String markdownSourceCode) {
 		return this.parserAndRenderer.parseMarkdownAndRenderHtml(markdownSourceCode);
+	}
+
+	/**
+	 * Checks the given Markdown source code and reports the problems found in it, e.g. links
+	 * that cannot be resolved.
+	 * 
+	 * <p>The source code is validated as it is, without access to a file system: only problems
+	 * that are visible within the given text are found. Checks that need the document's
+	 * surroundings, e.g. whether a linked file exists, are not performed here.</p>
+	 * 
+	 * <p>The returned issues are ordered by their start offset, so that two validation runs over
+	 * equal source code return equal lists.</p>
+	 * 
+	 * @param markdownSourceCode the Markdown source code to be checked, must not be <code>null</code>
+	 * @return the problems found, ordered by start offset, empty if there are none,
+	 *         never <code>null</code> and not modifiable
+	 */
+	public List<ValidationIssue> validateMarkdown(String markdownSourceCode) {
+		if (markdownSourceCode == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
+		// no validation rules are implemented yet
+		return List.of();
 	}
 
 	/**
