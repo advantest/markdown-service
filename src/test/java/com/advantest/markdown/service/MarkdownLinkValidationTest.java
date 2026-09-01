@@ -282,6 +282,85 @@ public class MarkdownLinkValidationTest {
 						+ " This reproduces FluentMark, see issue I-05.");
 	}
 
+	@Test
+	public void reportsReferenceLinkLabelContainingATabulator() {
+		String markdown = "See [some\tlabel] for details.\n";
+
+		int expectedStart = markdown.indexOf("some\tlabel");
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+						IssueSeverity.ERROR, missingReferenceDefinitionMessage("some\tlabel"),
+						1, expectedStart, expectedStart + "some\tlabel".length())),
+				this.service.validateMarkdown(markdown),
+				"A reference link label may contain a tabulator, which ends up in the message unchanged.");
+	}
+
+	@Test
+	public void reportsReferenceLinkLabelsWithSpecialCharacters() {
+		// This is the content of a document of the recorded corpus. Company internal names
+		// are replaced by generic ones of the same length, so the expected offsets are
+		// still the recorded ones.
+		String markdown = """
+				TEST_CASE [Test_somelib/Main/BasicConfigurationTest.hpp]|n/a (offline)|
+
+				[Some component core partition] i.e., the Alpha driver has to implement many callback interfaces
+				(here named *hook*-interfaces), each having
+
+				# References
+
+				- [ARC42.Alpha]
+				- [Widget (Alpha)]
+				- [some text]\s\
+				""";
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR,
+								missingReferenceDefinitionMessage("Test_somelib/Main/BasicConfigurationTest.hpp"),
+								1, 11, 55),
+						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR,
+								missingReferenceDefinitionMessage("Some component core partition"), 3, 74, 103),
+						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR, missingReferenceDefinitionMessage("ARC42.Alpha"), 8, 232, 243),
+						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR, missingReferenceDefinitionMessage("Widget (Alpha)"), 9, 248, 262),
+						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR, missingReferenceDefinitionMessage("some text"), 10, 267, 276)),
+				this.service.validateMarkdown(markdown),
+				"A reference link label may contain slashes, dots, spaces and parentheses.");
+	}
+
+	@Test
+	public void reportsQuotedReferenceLinkButNotEscapedBrackets() {
+		// This is the content of a document of the recorded corpus. Company internal names
+		// are replaced by generic ones of the same length, so the expected offsets are
+		// still the recorded ones.
+		String markdown = """
+				this is the [unit]
+
+				this is the \\[unit\\] with escapes
+
+				this is the "[unit]" with quotes
+
+				this is the "\\[unit\\]" with quotes and escapes
+
+				https://www.example.com
+
+				http://www.google.de
+
+				""";
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR, missingReferenceDefinitionMessage("unit"), 1, 13, 17),
+						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR, missingReferenceDefinitionMessage("unit"), 5, 69, 73)),
+				this.service.validateMarkdown(markdown),
+				"Quotes around a reference link do not hide it, while escaped brackets are no link at all.");
+	}
+
 	private static String missingReferenceDefinitionMessage(String linkLabel) {
 		return "There is no link reference definition for the reference link label \"" + linkLabel
 				+ "\". Expected a link reference definition like \"[ReferenceLinkLabel]: https://plantuml.com\"";
