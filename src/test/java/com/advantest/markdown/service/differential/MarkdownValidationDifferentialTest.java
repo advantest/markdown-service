@@ -137,17 +137,18 @@ public class MarkdownValidationDifferentialTest {
 				"The recording names " + file + ", but there is no such file under the corpus root "
 						+ corpusRoot + ".");
 
-		List<ComparableFinding> expectedFindings = recordedFindings(file, recording);
+		List<RecordedFinding> recordedFindings = recording.findingsOf(file);
+		List<ComparableFinding> expectedFindings = toComparableFindings(recordedFindings);
 		List<ComparableFinding> actualFindings = producedFindings(markdownFile);
 
-		SUMMARY.count(expectedFindings, actualFindings);
+		SUMMARY.count(recordedFindings, expectedFindings, actualFindings);
 
 		assertEquals(render(expectedFindings), render(actualFindings),
 				"The service does not report " + file + " the way the recorded run did.");
 	}
 
-	private static List<ComparableFinding> recordedFindings(String file, ValidationRecording recording) {
-		return recording.findingsOf(file).stream()
+	private static List<ComparableFinding> toComparableFindings(List<RecordedFinding> recordedFindings) {
+		return recordedFindings.stream()
 				.flatMap(finding -> PortedValidationRules.issueTypeIdOf(finding.message()).stream()
 						.map(issueTypeId -> new ComparableFinding(finding.lineNumber(), finding.startOffset(),
 								finding.endOffset(), finding.severity(), issueTypeId, finding.message())))
@@ -233,17 +234,26 @@ public class MarkdownValidationDifferentialTest {
 	 */
 	private static final class Summary {
 
+		private static final int MESSAGE_SHAPE_LENGTH = 90;
+
 		private int comparedFiles;
 		private int matchingFiles;
 		private int skippedFiles;
 		private final Map<String, int[]> countsPerIssueType = new LinkedHashMap<>();
+		private final Map<String, Integer> notCoveredPerMessage = new LinkedHashMap<>();
+		private int notCoveredFindings;
 
 		synchronized void countSkippedFile() {
 			this.skippedFiles++;
 		}
 
-		synchronized void count(List<ComparableFinding> expected, List<ComparableFinding> actual) {
+		synchronized void count(List<RecordedFinding> recorded, List<ComparableFinding> expected,
+				List<ComparableFinding> actual) {
 			this.comparedFiles++;
+
+			recorded.stream()
+					.filter(finding -> PortedValidationRules.issueTypeIdOf(finding.message()).isEmpty())
+					.forEach(this::countNotCovered);
 
 			List<ComparableFinding> missing = new ArrayList<>(expected);
 			List<ComparableFinding> surplus = new ArrayList<>();
@@ -260,6 +270,41 @@ public class MarkdownValidationDifferentialTest {
 			expected.forEach(finding -> count(finding, 0));
 			missing.forEach(finding -> count(finding, 1));
 			surplus.forEach(finding -> count(finding, 2));
+		}
+
+		/**
+		 * Counts a recorded finding that no ported rule accounts for, under the shape of its
+		 * message. The rule behind it has no name here yet, and the message is all the recording
+		 * says about it, so the shapes are the list of what is still to be ported.
+		 */
+		private void countNotCovered(RecordedFinding finding) {
+			this.notCoveredFindings++;
+			this.notCoveredPerMessage.merge(
+					String.format("%-10s %s", bundleOf(finding), messageShape(finding.message())), 1, Integer::sum);
+		}
+
+		private static String bundleOf(RecordedFinding finding) {
+			return finding.bundle().contains(".extensions.") ? "extensions" : "fluentmark";
+		}
+
+		/**
+		 * Reduces a message to what it says about its rule. Everything a message quotes from the
+		 * validated document is replaced, both because it varies from finding to finding and
+		 * because it must not be printed: neither the corpus nor its content is public.
+		 */
+		private static String messageShape(String message) {
+			String shape = message
+					.replaceAll("\\s+", " ")
+					.replaceAll("https?://[^\\s'\"<>)\\]]+", "<url>")
+					.replaceAll("'[^']*'", "'<text>'")
+					.replaceAll("\"[^\"]*\"", "\"<text>\"")
+					.replaceAll("\\S*[/\\\\]\\S*", "<path>")
+					.replaceAll("\\d+", "#")
+					.trim();
+
+			return shape.length() <= MESSAGE_SHAPE_LENGTH
+					? shape
+					: shape.substring(0, MESSAGE_SHAPE_LENGTH) + "...";
 		}
 
 		private void count(ComparableFinding finding, int index) {
@@ -281,7 +326,27 @@ public class MarkdownValidationDifferentialTest {
 					.forEach(entry -> report.append(String.format("  %-60s recorded %4d, missing %4d, surplus %4d%n",
 							entry.getKey(), entry.getValue()[0], entry.getValue()[1], entry.getValue()[2])));
 
+			appendNotCovered(report);
+
 			System.out.println(report);
+		}
+
+		/**
+		 * Lists the recorded findings that no ported rule accounts for, so that the report states
+		 * what is still missing and not only how well the ported rules do. The rules behind them are
+		 * unnamed here, so they are grouped by the shape of their message.
+		 */
+		private void appendNotCovered(StringBuilder report) {
+			int covered = this.countsPerIssueType.values().stream().mapToInt(counts -> counts[0]).sum();
+
+			report.append(String.format("%n  findings of the compared files: %d covered by a ported rule,"
+					+ " %d not covered yet%n", covered, this.notCoveredFindings));
+
+			this.notCoveredPerMessage.entrySet().stream()
+					.sorted(Map.Entry.<String, Integer>comparingByValue().reversed()
+							.thenComparing(Map.Entry.comparingByKey()))
+					.forEach(entry -> report.append(String.format("  %4d %s%n",
+							entry.getValue(), entry.getKey())));
 		}
 
 	}
