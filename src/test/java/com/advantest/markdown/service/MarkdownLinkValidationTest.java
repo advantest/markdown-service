@@ -261,6 +261,27 @@ public class MarkdownLinkValidationTest {
 				"A shortcut reference link with a definition must not be reported.");
 	}
 
+	@Test
+	public void reportsTaskListItemsAsReferenceLinks() {
+		// The lines are taken from a document of the recorded corpus.
+		String markdown = "* [ ] unchecked\n* [x] checked item\n";
+
+		int uncheckedStart = markdown.indexOf("[ ]") + "[".length();
+		int checkedStart = markdown.indexOf("[x]") + "[".length();
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_EMPTY_REFERENCE_LABEL,
+								IssueSeverity.ERROR, EMPTY_REFERENCE_LINK_LABEL_MESSAGE,
+								1, uncheckedStart, uncheckedStart + " ".length()),
+						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR, missingReferenceDefinitionMessage("x"),
+								2, checkedStart, checkedStart + "x".length())),
+				this.service.validateMarkdown(markdown),
+				"The check box of a task list item is read as a shortcut reference link,"
+						+ " so every task list item is reported."
+						+ " This reproduces FluentMark, see issue I-05.");
+	}
+
 	private static String missingReferenceDefinitionMessage(String linkLabel) {
 		return "There is no link reference definition for the reference link label \"" + linkLabel
 				+ "\". Expected a link reference definition like \"[ReferenceLinkLabel]: https://plantuml.com\"";
