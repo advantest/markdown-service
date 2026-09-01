@@ -25,7 +25,7 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * computed from the Markdown source code instead of being written down as numbers, so that a test
  * states which text range it expects to be marked.</p>
  */
-public class MarkdownLinkValidationTest {
+public class MarkdownLinkValidatorTest {
 
 	private static final String MESSAGE_EMPTY_TARGET = "The target file path or URL is empty.";
 

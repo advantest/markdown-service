@@ -25,7 +25,7 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * starts at the number sign of the anchor declaration and ends behind the identifier, so the
  * closing brace stays unmarked.</p>
  */
-public class MarkdownAnchorValidationTest {
+public class MarkdownAnchorValidatorTest {
 
 	private final MarkdownService service = new MarkdownService();
 
