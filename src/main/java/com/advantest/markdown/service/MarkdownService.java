@@ -37,6 +37,8 @@ public class MarkdownService {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
+	private final MarkdownValidator validator = new MarkdownValidator();
+
 	/**
 	 * Creates a service using the default Markdown parser and HTML renderer configuration.
 	 * Use {@link #builder()} if you need to customize the parser and renderer.
@@ -133,8 +135,7 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		// no validation rules are implemented yet
-		return List.of();
+		return this.validator.validate(markdownSourceCode);
 	}
 
 	/**
