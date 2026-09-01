@@ -361,8 +361,57 @@ public class MarkdownLinkValidatorTest {
 				"Quotes around a reference link do not hide it, while escaped brackets are no link at all.");
 	}
 
-	private static String missingReferenceDefinitionMessage(String linkLabel) {
-		return "There is no link reference definition for the reference link label \"" + linkLabel
+	@Test
+	public void reportsInvalidLinkReferenceDefinitionIdentifier() {
+		// This is the content of a document of the recorded corpus. Company internal names
+		// are replaced by generic ones of the same length, so the expected offsets are
+		// still the recorded ones.
+		String markdown = """
+				bla [(REF:ARC42.Alpha)] blubb
+
+				<!-- External references -->
+				[(REF:ARC42.Alpha)]: https://wiki.example.com/display/PROJ/Alpha\s\
+				""";
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_REFERENCE_DEFINITION_INVALID_IDENTIFIER,
+						IssueSeverity.ERROR,
+						invalidLinkReferenceDefinitionIdentifierMessage("(REF:ARC42.Alpha)"), 4, 61, 78)),
+				this.service.validateMarkdown(markdown),
+				"Parentheses are not allowed in a link reference definition identifier."
+						+ " Only the definition is reported, the reference to it is not,"
+						+ " because it does have a definition.");
+	}
+
+	@Test
+	public void acceptsLinkReferenceDefinitionIdentifierWithSpacesAndSlashes() {
+		String markdown = "[bla blub 1]: https://example.com\n[a/b_c-d:e.f]: https://example.org\n";
+
+		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
+				"Letters, digits, spaces, slashes, underscores, hyphens, colons and periods are allowed.");
+	}
+
+	@Test
+	public void reportsEveryDeclarationOfADuplicateLinkReferenceDefinitionIdentifier() {
+		String markdown = "[bla blub 1]: https://example.com\n[bla blub 1]: https://example.org\n";
+
+		int firstStart = markdown.indexOf("bla blub 1");
+		int secondStart = markdown.indexOf("bla blub 1", firstStart + 1);
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_REFERENCE_DEFINITION_DUPLICATE_IDENTIFIER,
+								IssueSeverity.ERROR,
+								duplicateLinkReferenceDefinitionIdentifierMessage("bla blub 1", "1, 2"),
+								1, firstStart, firstStart + "bla blub 1".length()),
+						new ValidationIssue(MarkdownIssueTypes.LINK_REFERENCE_DEFINITION_DUPLICATE_IDENTIFIER,
+								IssueSeverity.ERROR,
+								duplicateLinkReferenceDefinitionIdentifierMessage("bla blub 1", "1, 2"),
+								2, secondStart, secondStart + "bla blub 1".length())),
+				this.service.validateMarkdown(markdown),
+				"Both definitions are reported, and both name the lines of all definitions.");
+	}
+
+	private static String missingReferenceDefinitionMessage(String linkLabel) {		return "There is no link reference definition for the reference link label \"" + linkLabel
 				+ "\". Expected a link reference definition like \"[ReferenceLinkLabel]: https://plantuml.com\"";
 	}
 
@@ -374,6 +423,20 @@ public class MarkdownLinkValidatorTest {
 				+ " Expected a link reference definition like \"[" + linkLabel + "]: https://plantuml.com\""
 				+ " or a reference link \"[" + linkLabel + "][ReferenceLinkLabel]\""
 				+ " to an existing link reference definition.";
+	}
+
+	private static String invalidLinkReferenceDefinitionIdentifierMessage(String identifier) {
+		return "The link reference definition identifier \"" + identifier + "\" is invalid."
+				// The double space is the one FluentMark produces, see issue I-01.
+				+ " It has to contain at least one non-space character "
+				+ " and is allowed to contain any number of the following characters:"
+				+ " letters ([A-Za-z]), digits ([0-9]), hyphens (\"-\"), underscores (\"_\"),"
+				+ " colons (\":\"), periods (\".\"), slashes (\"/\"), spaces (\" \").";
+	}
+
+	private static String duplicateLinkReferenceDefinitionIdentifierMessage(String identifier, String lines) {
+		return "The link reference definition identifier \"" + identifier + "\" is not unique."
+				+ " The same identifier is used in the following lines: " + lines;
 	}
 
 }

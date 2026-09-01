@@ -7,7 +7,10 @@
 package com.advantest.markdown.service.validation;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
@@ -39,7 +42,11 @@ class MarkdownLinkValidator {
 		MarkdownParsingTools.findLinksAndImages(markdownSourceCode)
 				.forEach(link -> checkLinkTarget(link, markdownSourceCode, false, issues));
 		MarkdownParsingTools.findLinkReferenceDefinitions(markdownSourceCode)
-				.forEach(definition -> checkLinkTarget(definition, markdownSourceCode, true, issues));
+				.forEach(definition -> {
+					checkLinkReferenceDefinitionIdentifier(definition, markdownSourceCode, issues);
+					checkLinkTarget(definition, markdownSourceCode, true, issues);
+				});
+		checkLinkReferenceDefinitionIdentifiersAreUnique(markdownSourceCode, issues);
 
 		Stream.concat(
 				MarkdownParsingTools.findFullAndCollapsedReferenceLinks(markdownSourceCode),
@@ -47,6 +54,62 @@ class MarkdownLinkValidator {
 				.forEach(referenceLink -> checkReferenceLinkLabel(referenceLink, markdownSourceCode, issues));
 
 		return issues;
+	}
+
+	private void checkLinkReferenceDefinitionIdentifier(RegexMatch linkReferenceDefinition,
+			String markdownSourceCode, List<ValidationIssue> issues) {
+
+		RegexMatch labelMatch = linkReferenceDefinition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_LABEL);
+		if (labelMatch == null
+				|| MarkdownParsingTools.isValidLinkReferenceDefinitionIdentifier(labelMatch.matchedText)) {
+			return;
+		}
+
+		issues.add(new ValidationIssue(MarkdownIssueTypes.LINK_REFERENCE_DEFINITION_INVALID_IDENTIFIER,
+				IssueSeverity.ERROR, invalidLinkReferenceDefinitionIdentifierMessage(labelMatch.matchedText),
+				TextUtils.getLineNumberForOffset(markdownSourceCode, labelMatch.startIndex),
+				labelMatch.startIndex, labelMatch.endIndex));
+	}
+
+	private void checkLinkReferenceDefinitionIdentifiersAreUnique(String markdownSourceCode,
+			List<ValidationIssue> issues) {
+
+		Map<String, List<RegexMatch>> identifiers = new LinkedHashMap<>();
+		MarkdownParsingTools.findLinkReferenceDefinitions(markdownSourceCode)
+				.map(definition -> definition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_LABEL))
+				.forEach(labelMatch -> identifiers
+						.computeIfAbsent(labelMatch.matchedText, identifier -> new ArrayList<>(2))
+						.add(labelMatch));
+
+		identifiers.entrySet().stream()
+				.filter(identifier -> identifier.getValue().size() > 1)
+				.forEach(identifier -> {
+					String lines = identifier.getValue().stream()
+							.map(labelMatch -> TextUtils.getLineNumberForOffset(markdownSourceCode,
+									labelMatch.startIndex))
+							.map(String::valueOf)
+							.collect(Collectors.joining(", "));
+
+					for (RegexMatch labelMatch : identifier.getValue()) {
+						issues.add(new ValidationIssue(
+								MarkdownIssueTypes.LINK_REFERENCE_DEFINITION_DUPLICATE_IDENTIFIER,
+								IssueSeverity.ERROR,
+								"The link reference definition identifier \"" + identifier.getKey()
+										+ "\" is not unique."
+										+ " The same identifier is used in the following lines: " + lines,
+								TextUtils.getLineNumberForOffset(markdownSourceCode, labelMatch.startIndex),
+								labelMatch.startIndex, labelMatch.endIndex));
+					}
+				});
+	}
+
+	private static String invalidLinkReferenceDefinitionIdentifierMessage(String identifier) {
+		return "The link reference definition identifier \"" + identifier + "\" is invalid."
+				// The double space is the one FluentMark produces, see issue I-01.
+				+ " It has to contain at least one non-space character "
+				+ " and is allowed to contain any number of the following characters:"
+				+ " letters ([A-Za-z]), digits ([0-9]), hyphens (\"-\"), underscores (\"_\"),"
+				+ " colons (\":\"), periods (\".\"), slashes (\"/\"), spaces (\" \").";
 	}
 
 	private void checkLinkTarget(RegexMatch linkStatement, String markdownSourceCode,
