@@ -23,6 +23,8 @@ public class MarkdownValidator {
 
 	private final MarkdownLinkValidator linkValidator = new MarkdownLinkValidator();
 
+	private final MarkdownAnchorValidator anchorValidator = new MarkdownAnchorValidator();
+
 	/**
 	 * Checks the given Markdown source code.
 	 * 
@@ -35,6 +37,7 @@ public class MarkdownValidator {
 		}
 
 		List<ValidationIssue> issues = new ArrayList<>(this.linkValidator.validate(markdownSourceCode));
+		issues.addAll(this.anchorValidator.validate(markdownSourceCode));
 
 		issues.sort(Comparator.comparingInt(ValidationIssue::startOffset));
 		return List.copyOf(issues);
