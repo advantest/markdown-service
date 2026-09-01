@@ -4,12 +4,12 @@
  * 
  * Copyright © 2026 Advantest Europe GmbH. All rights reserved.
  */
-package com.advantest.markdown.service.validation;
+package com.advantest.markdown.service.utils;
 
 /**
  * Helpers for working with positions in a text.
  */
-final class TextUtils {
+public final class TextUtils {
 
 	/**
 	 * Determines the number of the line the given offset points into, counting line breaks the way
@@ -20,7 +20,7 @@ final class TextUtils {
 	 * @param offset the offset to determine the line for
 	 * @return the line number, starting at 1
 	 */
-	static int getLineNumberForOffset(String text, int offset) {
+	public static int getLineNumberForOffset(String text, int offset) {
 		int lineNumber = 1;
 		int lastOffsetToLookAt = Math.min(offset, text.length());
 

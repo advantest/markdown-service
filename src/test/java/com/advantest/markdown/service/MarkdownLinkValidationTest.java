@@ -29,6 +29,12 @@ public class MarkdownLinkValidationTest {
 
 	private static final String MESSAGE_EMPTY_TARGET = "The target file path or URL is empty.";
 
+	private static final String EMPTY_REFERENCE_LINK_LABEL_MESSAGE =
+			"The reference link label is empty. Please create a link reference definition like"
+			+ " \"[ReferenceLinkLabel]: https://plantuml.com\""
+			+ " and use that reference link label in your link,"
+			+ " e.g. \"[your link text][ReferenceLinkLabel]\" or \"[ReferenceLinkLabel]\".";
+
 	private final MarkdownService service = new MarkdownService();
 
 	@Test
@@ -124,6 +130,150 @@ public class MarkdownLinkValidationTest {
 
 		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
 				"A link reference definition with a target must not be reported.");
+	}
+
+	@Test
+	public void reportsFullReferenceLinkWithoutDefinition() {
+		String markdown = "See [the overview][overview] for details.";
+
+		int expectedStart = markdown.indexOf("[overview]") + "[".length();
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+						IssueSeverity.ERROR, missingReferenceDefinitionMessage("overview"),
+						1, expectedStart, expectedStart + "overview".length())),
+				this.service.validateMarkdown(markdown),
+				"The label of a full reference link is marked, not the whole link.");
+	}
+
+	@Test
+	public void reportsShortcutReferenceLinkWithoutDefinition() {
+		String markdown = "See [overview] for details.";
+
+		int expectedStart = markdown.indexOf("overview");
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+						IssueSeverity.ERROR, missingReferenceDefinitionMessage("overview"),
+						1, expectedStart, expectedStart + "overview".length())),
+				this.service.validateMarkdown(markdown));
+	}
+
+	@Test
+	public void reportsFootnoteReferencesWithoutDefinition() {
+		// This is the content of a document of the recorded corpus. Company internal names
+		// are replaced by generic ones of the same length, so the expected offsets are
+		// still the recorded ones.
+		String markdown = """
+				Some text with footnotes here[^1] and there[^2].
+				Other references work either[^other].
+
+				[^1]: footnote 1
+				[^2]:footnote 2
+				[^other]:
+				    Other footnote.
+				""";
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR, missingReferenceDefinitionMessage("^1"), 1, 30, 32),
+						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR, missingReferenceDefinitionMessage("^2"), 1, 44, 46),
+						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
+								IssueSeverity.ERROR, missingReferenceDefinitionMessage("^other"), 2, 78, 84)),
+				this.service.validateMarkdown(markdown),
+				"A footnote reference is read as a shortcut reference link, while its footnote definition"
+						+ " is not read as a link reference definition, so it is reported although it is defined."
+						+ " This reproduces FluentMark, see issue I-04.");
+	}
+
+	@Test
+	public void reportsCollapsedReferenceLinkWithoutDefinition() {
+		String markdown = "See [the overview][] for details.";
+
+		int expectedStart = markdown.indexOf("[the overview][]");
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_AMBIGUOUS_REFERENCE,
+						IssueSeverity.ERROR, ambiguousReferenceMessage("the overview"),
+						1, expectedStart, expectedStart + "[the overview][]".length())),
+				this.service.validateMarkdown(markdown),
+				"A collapsed reference link cannot be told apart from a full one without a label,"
+						+ " so the whole link is marked and the message names both possibilities.");
+	}
+
+	@Test
+	public void reportsEmptyReferenceLinkLabel() {
+		String markdown = "See [][] for details.";
+
+		int expectedStart = markdown.indexOf("[]", markdown.indexOf("[]") + 1);
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_EMPTY_REFERENCE_LABEL,
+						IssueSeverity.ERROR, EMPTY_REFERENCE_LINK_LABEL_MESSAGE,
+						1, expectedStart, expectedStart + "[]".length())),
+				this.service.validateMarkdown(markdown),
+				"An empty label has no character to mark, so the surrounding brackets are marked.");
+	}
+
+	@Test
+	public void reportsBlankReferenceLinkLabel() {
+		String markdown = "See [the overview][ ] for details.";
+
+		int expectedStart = markdown.indexOf("[ ]") + "[".length();
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_EMPTY_REFERENCE_LABEL,
+						IssueSeverity.ERROR, EMPTY_REFERENCE_LINK_LABEL_MESSAGE,
+						1, expectedStart, expectedStart + " ".length())),
+				this.service.validateMarkdown(markdown),
+				"A label of blanks has a character to mark, so the brackets stay unmarked.");
+	}
+
+	@Test
+	public void reportsEmptyReferenceLinkLabelOfLinkWithBlankText() {
+		String markdown = "See [ ][] for details.";
+
+		int expectedStart = markdown.indexOf("[]");
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_EMPTY_REFERENCE_LABEL,
+						IssueSeverity.ERROR, EMPTY_REFERENCE_LINK_LABEL_MESSAGE,
+						1, expectedStart, expectedStart + "[]".length())),
+				this.service.validateMarkdown(markdown),
+				"Blank link text does not turn this into a collapsed reference link,"
+						+ " so the empty label is reported rather than the missing definition.");
+	}
+
+	@Test
+	public void acceptsFullReferenceLinkWithDefinition() {
+		String markdown = "See [the overview][overview] for details.\n\n[overview]: https://example.com\n";
+
+		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
+				"A reference link with a definition must not be reported.");
+	}
+
+	@Test
+	public void acceptsShortcutReferenceLinkWithDefinition() {
+		String markdown = "See [overview] for details.\n\n[overview]: https://example.com\n";
+
+		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
+				"A shortcut reference link with a definition must not be reported.");
+	}
+
+	private static String missingReferenceDefinitionMessage(String linkLabel) {
+		return "There is no link reference definition for the reference link label \"" + linkLabel
+				+ "\". Expected a link reference definition like \"[ReferenceLinkLabel]: https://plantuml.com\"";
+	}
+
+	private static String ambiguousReferenceMessage(String linkLabel) {
+		return "There is either no link reference definition for the reference link label \"" + linkLabel
+				+ "\" (assuming this is a collapsed reference link like \"[ReferenceLinkLabel][]\")"
+				+ " or the reference link label is empty  (assuming this is a full reference link"
+				+ " like \"[Some text][ReferenceLinkLabel]\")."
+				+ " Expected a link reference definition like \"[" + linkLabel + "]: https://plantuml.com\""
+				+ " or a reference link \"[" + linkLabel + "][ReferenceLinkLabel]\""
+				+ " to an existing link reference definition.";
 	}
 
 }
