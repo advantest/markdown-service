@@ -60,24 +60,24 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 	@Override
 	public List<ValidationIssue> validate(Node node) {
-		BasedSequence sourceCode = node.getDocument().getChars();
+		Document document = node.getDocument();
 		List<ValidationIssue> issues = new ArrayList<>();
 
-		if (node instanceof Document document) {
-			checkLinkReferenceDefinitionIdentifiersAreUnique(document, sourceCode, issues);
+		if (node instanceof Document) {
+			checkLinkReferenceDefinitionIdentifiersAreUnique(document, issues);
 		} else if (node instanceof Reference || node instanceof Paragraph) {
-			findLinkReferenceDefinitionsIn(node, sourceCode).forEach(definition -> {
-				checkLinkReferenceDefinitionIdentifier(definition, sourceCode, issues);
-				checkLinkTarget(definition, sourceCode, true, issues);
+			findLinkReferenceDefinitionsIn(node).forEach(definition -> {
+				checkLinkReferenceDefinitionIdentifier(definition, document, issues);
+				checkLinkTarget(definition, document, true, issues);
 			});
 		} else if (node instanceof Text) {
-			checkLinksTheParserLeftAsText(node, sourceCode, issues);
+			checkLinksTheParserLeftAsText(node, document, issues);
 		} else if (node instanceof Link || node instanceof Image) {
-			findLinkOrImage(node, sourceCode)
-					.ifPresent(link -> checkLinkTarget(link, sourceCode, false, issues));
+			findLinkOrImage(node)
+					.ifPresent(link -> checkLinkTarget(link, document, false, issues));
 		} else {
-			findReferenceLink(node, sourceCode)
-					.ifPresent(referenceLink -> checkReferenceLinkLabel(referenceLink, sourceCode, issues));
+			findReferenceLink(node)
+					.ifPresent(referenceLink -> checkReferenceLinkLabel(referenceLink, document, issues));
 		}
 
 		return issues;
@@ -88,29 +88,29 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * not accept. Text nodes hold the plain text between the constructs the parser did read, so a
 	 * link found here is not reported by one of the other checks a second time.
 	 */
-	private void checkLinksTheParserLeftAsText(Node node, BasedSequence sourceCode,
-			List<ValidationIssue> issues) {
-
+	private void checkLinksTheParserLeftAsText(Node node, Document document, List<ValidationIssue> issues) {
+		BasedSequence sourceCode = document.getChars();
 		int startOffset = node.getStartOffset();
 		int endOffset = node.getEndOffset();
 
 		MarkdownParsingTools.findLinksAndImages(sourceCode, startOffset, endOffset)
-				.forEach(link -> checkLinkTarget(link, sourceCode, false, issues));
+				.forEach(link -> checkLinkTarget(link, document, false, issues));
 
 		Stream.concat(
 				MarkdownParsingTools.findFullAndCollapsedReferenceLinks(sourceCode, startOffset, endOffset),
 				MarkdownParsingTools.findShortcutReferenceLinks(sourceCode, startOffset, endOffset))
-				.forEach(referenceLink -> checkReferenceLinkLabel(referenceLink, sourceCode, issues));
+				.forEach(referenceLink -> checkReferenceLinkLabel(referenceLink, document, issues));
 	}
 
-	private static Optional<RegexMatch> findLinkOrImage(Node node, BasedSequence sourceCode) {
+	private static Optional<RegexMatch> findLinkOrImage(Node node) {
 		return MarkdownParsingTools
-				.findLinksAndImages(sourceCode, node.getStartOffset(), node.getEndOffset())
+				.findLinksAndImages(sourceCodeOf(node), node.getStartOffset(), node.getEndOffset())
 				.filter(match -> describesTheWholeNode(match, node))
 				.findFirst();
 	}
 
-	private static Optional<RegexMatch> findReferenceLink(Node node, BasedSequence sourceCode) {
+	private static Optional<RegexMatch> findReferenceLink(Node node) {
+		BasedSequence sourceCode = sourceCodeOf(node);
 		int startOffset = node.getStartOffset();
 		int endOffset = node.getEndOffset();
 
@@ -129,6 +129,14 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	/**
+	 * Returns the source code of the whole document the given node belongs to. Every offset of a
+	 * node is an offset in that source code, so this is the only sequence the patterns may run on.
+	 */
+	private static BasedSequence sourceCodeOf(Node node) {
+		return node.getDocument().getChars();
+	}
+
+	/**
 	 * Tells whether the given match is the node itself and not something nested in it. The
 	 * expressions for links do not know the exclamation mark of an image, so a match may start
 	 * one character behind the node.
@@ -140,13 +148,13 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		return match.startIndex == startOffset || (image && match.startIndex == startOffset + 1);
 	}
 
-	private static Stream<RegexMatch> findLinkReferenceDefinitionsIn(Node node, BasedSequence sourceCode) {
+	private static Stream<RegexMatch> findLinkReferenceDefinitionsIn(Node node) {
 		return MarkdownParsingTools
-				.findLinkReferenceDefinitions(sourceCode, node.getStartOffset(), node.getEndOffset());
+				.findLinkReferenceDefinitions(sourceCodeOf(node), node.getStartOffset(), node.getEndOffset());
 	}
 
 	private void checkLinkReferenceDefinitionIdentifier(RegexMatch linkReferenceDefinition,
-			BasedSequence markdownSourceCode, List<ValidationIssue> issues) {
+			Document document, List<ValidationIssue> issues) {
 
 		RegexMatch labelMatch = linkReferenceDefinition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_LABEL);
 		if (labelMatch == null
@@ -156,21 +164,21 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 		issues.add(new ValidationIssue(MarkdownIssueTypes.LINK_REFERENCE_DEFINITION_INVALID_IDENTIFIER,
 				IssueSeverity.ERROR, invalidLinkReferenceDefinitionIdentifierMessage(labelMatch.matchedText),
-				TextUtils.getLineNumberForOffset(markdownSourceCode, labelMatch.startIndex),
+				TextUtils.getLineNumberForOffset(document, labelMatch.startIndex),
 				labelMatch.startIndex, labelMatch.endIndex));
 	}
 
 	private void checkLinkReferenceDefinitionIdentifiersAreUnique(Document document,
-			BasedSequence markdownSourceCode, List<ValidationIssue> issues) {
+			List<ValidationIssue> issues) {
 
 		Map<String, List<RegexMatch>> identifiers = new LinkedHashMap<>();
-		collectLinkReferenceDefinitionIdentifiers(document, markdownSourceCode, identifiers);
+		collectLinkReferenceDefinitionIdentifiers(document, identifiers);
 
 		identifiers.entrySet().stream()
 				.filter(identifier -> identifier.getValue().size() > 1)
 				.forEach(identifier -> {
 					String lines = identifier.getValue().stream()
-							.map(labelMatch -> TextUtils.getLineNumberForOffset(markdownSourceCode,
+							.map(labelMatch -> TextUtils.getLineNumberForOffset(document,
 									labelMatch.startIndex))
 							.map(String::valueOf)
 							.collect(Collectors.joining(", "));
@@ -182,7 +190,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 								"The link reference definition identifier \"" + identifier.getKey()
 										+ "\" is not unique."
 										+ " The same identifier is used in the following lines: " + lines,
-								TextUtils.getLineNumberForOffset(markdownSourceCode, labelMatch.startIndex),
+								TextUtils.getLineNumberForOffset(document, labelMatch.startIndex),
 								labelMatch.startIndex, labelMatch.endIndex));
 					}
 				});
@@ -193,19 +201,19 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * order. A definition belongs to the whole document, so a reference is defined no matter where
 	 * in the document the definition stands.
 	 */
-	private static void collectLinkReferenceDefinitionIdentifiers(Node node, BasedSequence markdownSourceCode,
+	private static void collectLinkReferenceDefinitionIdentifiers(Node node,
 			Map<String, List<RegexMatch>> identifiers) {
 
 		for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
 			if (child instanceof Reference || child instanceof Paragraph) {
-				findLinkReferenceDefinitionsIn(child, markdownSourceCode)
+				findLinkReferenceDefinitionsIn(child)
 						.map(definition -> definition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_LABEL))
 						.filter(labelMatch -> labelMatch != null)
 						.forEach(labelMatch -> identifiers
 								.computeIfAbsent(labelMatch.matchedText, identifier -> new ArrayList<>(2))
 								.add(labelMatch));
 			} else {
-				collectLinkReferenceDefinitionIdentifiers(child, markdownSourceCode, identifiers);
+				collectLinkReferenceDefinitionIdentifiers(child, identifiers);
 			}
 		}
 	}
@@ -219,7 +227,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 				+ " colons (\":\"), periods (\".\"), slashes (\"/\"), spaces (\" \").";
 	}
 
-	private void checkLinkTarget(RegexMatch linkStatement, BasedSequence markdownSourceCode,
+	private void checkLinkTarget(RegexMatch linkStatement, Document document,
 			boolean targetInLinkReferenceDefinition, List<ValidationIssue> issues) {
 
 		RegexMatch targetMatch = linkStatement.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
@@ -250,12 +258,12 @@ class MarkdownLinkValidator implements MarkdownValidator {
 				MarkdownIssueTypes.LINK_EMPTY_TARGET,
 				IssueSeverity.ERROR,
 				MESSAGE_EMPTY_LINK_TARGET,
-				TextUtils.getLineNumberForOffset(markdownSourceCode, startOffset),
+				TextUtils.getLineNumberForOffset(document, startOffset),
 				startOffset,
 				endOffset));
 	}
 
-	private void checkReferenceLinkLabel(RegexMatch referenceLink, BasedSequence markdownSourceCode,
+	private void checkReferenceLinkLabel(RegexMatch referenceLink, Document document,
 			List<ValidationIssue> issues) {
 
 		RegexMatch targetMatch = referenceLink.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
@@ -289,13 +297,13 @@ class MarkdownLinkValidator implements MarkdownValidator {
 					MarkdownIssueTypes.LINK_EMPTY_REFERENCE_LABEL,
 					IssueSeverity.ERROR,
 					MESSAGE_EMPTY_REFERENCE_LINK_LABEL,
-					TextUtils.getLineNumberForOffset(markdownSourceCode, startOffset),
+					TextUtils.getLineNumberForOffset(document, startOffset),
 					startOffset,
 					endOffset));
 			return;
 		}
 
-		if (MarkdownParsingTools.findLinkReferenceDefinition(markdownSourceCode.toString(), linkLabel).isPresent()) {
+		if (MarkdownParsingTools.findLinkReferenceDefinition(document.getChars().toString(), linkLabel).isPresent()) {
 			return;
 		}
 
@@ -312,7 +320,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 					MarkdownIssueTypes.LINK_AMBIGUOUS_REFERENCE,
 					IssueSeverity.ERROR,
 					ambiguousReferenceMessage(linkLabel),
-					TextUtils.getLineNumberForOffset(markdownSourceCode, startOffset),
+					TextUtils.getLineNumberForOffset(document, startOffset),
 					startOffset,
 					endOffset));
 		} else {
@@ -323,7 +331,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 					MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
 					IssueSeverity.ERROR,
 					missingReferenceDefinitionMessage(linkLabel),
-					TextUtils.getLineNumberForOffset(markdownSourceCode, startOffset),
+					TextUtils.getLineNumberForOffset(document, startOffset),
 					startOffset,
 					endOffset));
 		}

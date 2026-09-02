@@ -19,7 +19,6 @@ import com.advantest.markdown.service.utils.TextUtils;
 import com.vladsch.flexmark.ast.Heading;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
-import com.vladsch.flexmark.util.sequence.BasedSequence;
 
 /**
  * Checks the anchor identifiers declared in the headings of Markdown source code.
@@ -46,56 +45,56 @@ class MarkdownAnchorValidator implements MarkdownValidator {
 
 	@Override
 	public List<ValidationIssue> validate(Node node) {
-		BasedSequence markdownSourceCode = node.getDocument().getChars();
+		Document document = node.getDocument();
 		List<ValidationIssue> issues = new ArrayList<>();
 
 		Map<String, List<RegexMatch>> anchorDeclarations = new LinkedHashMap<>();
-		collectAnchorDeclarations(node, markdownSourceCode, anchorDeclarations);
+		collectAnchorDeclarations(node, anchorDeclarations);
 
 		anchorDeclarations.values().stream()
 				.flatMap(List::stream)
 				.filter(anchorIdMatch -> !MarkdownParsingTools.isValidAnchorIdentifier(anchorIdMatch.matchedText))
-				.forEach(anchorIdMatch -> issues.add(invalidAnchorIdentifierIssue(anchorIdMatch, markdownSourceCode)));
+				.forEach(anchorIdMatch -> issues.add(invalidAnchorIdentifierIssue(anchorIdMatch, document)));
 
 		anchorDeclarations.entrySet().stream()
 				.filter(anchor -> anchor.getValue().size() > 1)
 				.forEach(anchor -> reportDuplicateAnchorIdentifier(anchor.getKey(), anchor.getValue(),
-						markdownSourceCode, issues));
+						document, issues));
 
 		return issues;
 	}
 
-	private static void collectAnchorDeclarations(Node node, BasedSequence markdownSourceCode,
+	private static void collectAnchorDeclarations(Node node,
 			Map<String, List<RegexMatch>> anchorDeclarations) {
 
 		for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
 			if (child instanceof Heading) {
 				MarkdownParsingTools
-						.findHeadingAnchorIds(markdownSourceCode, child.getStartOffset(), child.getEndOffset())
+						.findHeadingAnchorIds(node.getDocument().getChars(), child.getStartOffset(), child.getEndOffset())
 						.forEach(match -> anchorDeclarations
 								.computeIfAbsent(match.matchedText, anchorId -> new ArrayList<>(2))
 								.add(match));
 			} else {
-				collectAnchorDeclarations(child, markdownSourceCode, anchorDeclarations);
+				collectAnchorDeclarations(child, anchorDeclarations);
 			}
 		}
 	}
 
-	private ValidationIssue invalidAnchorIdentifierIssue(RegexMatch anchorIdMatch, BasedSequence markdownSourceCode) {
+	private ValidationIssue invalidAnchorIdentifierIssue(RegexMatch anchorIdMatch, Document document) {
 		int startOffset = anchorIdMatch.startIndex - 1;
 		int endOffset = anchorIdMatch.endIndex;
 
 		return new ValidationIssue(MarkdownIssueTypes.ANCHOR_INVALID_IDENTIFIER, IssueSeverity.ERROR,
 				"The anchor identifier \"" + anchorIdMatch.matchedText + "\" is invalid."
 						+ MESSAGE_INVALID_ANCHOR_IDENTIFIER_SUFFIX,
-				TextUtils.getLineNumberForOffset(markdownSourceCode, startOffset), startOffset, endOffset);
+				TextUtils.getLineNumberForOffset(document, startOffset), startOffset, endOffset);
 	}
 
 	private void reportDuplicateAnchorIdentifier(String anchorId, List<RegexMatch> declarations,
-			BasedSequence markdownSourceCode, List<ValidationIssue> issues) {
+			Document document, List<ValidationIssue> issues) {
 
 		String lines = declarations.stream()
-				.map(declaration -> TextUtils.getLineNumberForOffset(markdownSourceCode, declaration.startIndex))
+				.map(declaration -> TextUtils.getLineNumberForOffset(document, declaration.startIndex))
 				.map(String::valueOf)
 				.collect(Collectors.joining(", "));
 
@@ -106,7 +105,7 @@ class MarkdownAnchorValidator implements MarkdownValidator {
 			issues.add(new ValidationIssue(MarkdownIssueTypes.ANCHOR_DUPLICATE_IDENTIFIER, IssueSeverity.ERROR,
 					"The anchor identifier \"" + anchorId + "\" is not unique."
 							+ " The same identifier is used in the following lines: " + lines,
-					TextUtils.getLineNumberForOffset(markdownSourceCode, startOffset), startOffset, endOffset));
+					TextUtils.getLineNumberForOffset(document, startOffset), startOffset, endOffset));
 		}
 	}
 
