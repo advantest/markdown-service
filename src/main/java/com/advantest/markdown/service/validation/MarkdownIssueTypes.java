@@ -25,6 +25,15 @@ public final class MarkdownIssueTypes {
 	/** A link or image has no target at all, e.g. <code>[label]()</code>. */
 	public static final String LINK_EMPTY_TARGET = PREFIX + "link.emptyTarget";
 
+	/** A link or image points to a file or directory that does not exist. */
+	public static final String LINK_TARGET_DOES_NOT_EXIST = PREFIX + "link.targetDoesNotExist";
+
+	/**
+	 * A link or image points to a file relative to the document containing it, but the location of
+	 * that document is unknown, so there is nothing the target could be resolved against.
+	 */
+	public static final String LINK_UNKNOWN_DOCUMENT_LOCATION = PREFIX + "link.unknownDocumentLocation";
+
 	/** A reference link has an empty label, e.g. <code>[label][]</code> used as a full reference link. */
 	public static final String LINK_EMPTY_REFERENCE_LABEL = PREFIX + "link.emptyReferenceLabel";
 

@@ -15,10 +15,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.advantest.resources.ResourceResolver;
+import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
+import com.advantest.markdown.service.parsing.LinkTarget;
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.utils.TextUtils;
+import com.advantest.resources.Resource;
+import com.advantest.resources.ResourceResolver;
+import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.ast.Image;
 import com.vladsch.flexmark.ast.ImageRef;
 import com.vladsch.flexmark.ast.Link;
@@ -263,6 +267,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 		String linkTarget = targetMatch.matchedText;
 		if (!linkTarget.isBlank()) {
+			checkTargetFileExists(targetMatch, document, issues);
 			return;
 		}
 
@@ -287,6 +292,72 @@ class MarkdownLinkValidator implements MarkdownValidator {
 				TextUtils.getLineNumberForOffset(document, startOffset),
 				startOffset,
 				endOffset));
+	}
+
+	/**
+	 * Checks that the file or directory a link points to is there. Only a target without a scheme
+	 * names a file; everything else is resolved by whoever owns its scheme, e.g. a web address by
+	 * the environment, and is not this rule's business.
+	 * 
+	 * <p>The fragment of a target names a place inside the target, e.g. a section of a document. It
+	 * can only be looked for once the target itself is found, which is why only the path is
+	 * checked here.</p>
+	 */
+	private void checkTargetFileExists(RegexMatch targetMatch, Document document,
+			List<ValidationIssue> issues) {
+
+		LinkTarget target = LinkTarget.of(targetMatch.matchedText);
+		if (!target.namesAFile()) {
+			return;
+		}
+
+		Resource documentResource = MarkdownParserAndHtmlRenderer.getDocumentResource(document);
+		Resource targetResource = this.resourceResolver.resolve(target.path(), documentResource);
+		if (targetResource.exists()) {
+			return;
+		}
+
+		boolean documentLocationIsUnknown = UnresolvedResource.UNKNOWN_DOCUMENT.equals(documentResource);
+		int startOffset = targetMatch.startIndex;
+
+		issues.add(new ValidationIssue(
+				documentLocationIsUnknown
+						? MarkdownIssueTypes.LINK_UNKNOWN_DOCUMENT_LOCATION
+						: MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
+				IssueSeverity.ERROR,
+				documentLocationIsUnknown
+						? unknownDocumentLocationMessage(target.path())
+						: missingTargetFileMessage(target.path(), targetResource),
+				TextUtils.getLineNumberForOffset(document, startOffset),
+				startOffset,
+				startOffset + target.path().length()));
+	}
+
+	private static String missingTargetFileMessage(String targetPath, Resource targetResource) {
+		return String.format("The referenced file or directory '%s' does not exist. Target path: %s",
+				withoutCurrentDirectorySegments(targetPath), targetResource.getResolvedPath());
+	}
+
+	private static String unknownDocumentLocationMessage(String targetPath) {
+		return String.format("The referenced file or directory '%s' cannot be resolved,"
+				+ " because the location of the document containing this link is unknown.",
+				withoutCurrentDirectorySegments(targetPath));
+	}
+
+	/**
+	 * Drops the <code>./</code> segments of a path, which say "this directory" and therefore say
+	 * nothing. A message reads better without them, and this is what FluentMark quotes as well,
+	 * because Eclipse canonicalizes a path before its message names it. The offsets keep counting
+	 * the target as it is written in the document.
+	 */
+	private static String withoutCurrentDirectorySegments(String targetPath) {
+		String path = targetPath;
+
+		while (path.startsWith("./")) {
+			path = path.substring(2);
+		}
+
+		return path.replace("/./", "/");
 	}
 
 	private void checkReferenceLinkLabel(RegexMatch referenceLink, Document document,

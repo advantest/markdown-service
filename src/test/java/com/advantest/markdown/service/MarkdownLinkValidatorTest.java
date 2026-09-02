@@ -118,7 +118,7 @@ public class MarkdownLinkValidatorTest {
 
 	@Test
 	public void acceptsLinkWithTarget() {
-		String markdown = "See the [overview](overview.md) for details.\n";
+		String markdown = "See the [overview](https://example.com/overview.md) for details.\n";
 
 		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
 				"A link with a target must not be reported.");
