@@ -18,7 +18,11 @@ import java.util.stream.Stream;
 
 
 
-public class MarkdownParsingTools {
+public final class MarkdownParsingTools {
+	
+	private MarkdownParsingTools() {
+		// this class offers static methods only
+	}
 	
 	public static final String REGEX_ANY_LINE_SEPARATOR = "(\\r\\n|\\n)";
 	
@@ -81,6 +85,14 @@ public class MarkdownParsingTools {
 		return identifier != null && identifier.matches(REGEX_VALID_ANCHOR_ID);
 	}
 	
+	/**
+	 * Collects the anchor identifiers declared in the headings of the given Markdown source code,
+	 * e.g. <code>anchor-id</code> in <code>## Some heading {#anchor-id}</code>. Only identifiers
+	 * that are valid according to {@link #isValidAnchorIdentifier(String)} are returned.
+	 * 
+	 * @param markdownCode Markdown source code
+	 * @return the anchor identifiers a link may point to
+	 */
 	public static Set<String> findValidSectionAnchorsInMarkdownCode(String markdownCode) {
 		return Arrays.stream(markdownCode.split(REGEX_ANY_LINE_SEPARATOR))
 				.filter(line -> line.matches(REGEX_HEADING_WITH_ANCHOR))
@@ -112,28 +124,6 @@ public class MarkdownParsingTools {
 	 */
 	public static Stream<RegexMatch> findLinksAndImages(String markdownCode) {
 		return findMatches(markdownCode, LINK_PATTERN, CAPTURING_GROUP_LABEL, CAPTURING_GROUP_TARGET);
-	}
-	
-	/**
-	 * Detects Markdown links of the form <code>[label](target)</code>
-	 * (so called <a href="https://spec.commonmark.org/0.31.2/#inline-link">inline links</a>)
-	 * in the given Markdown source code.
-	 * Does not capture reference links like <code>[key]</code>, <code>[key][]</code>, or <code>[label][key]</code>.
-	 * The <em>label</em> and <em>target</em> matches are captured in sub-group matches with the capturing group names
-	 * {@link #CAPTURING_GROUP_LABEL} and {@link #CAPTURING_GROUP_TARGET}.
-	 * 
-	 * @param markdownCode Markdown source code
-	 * @return the detected regular expression matches for inline links
-	 * 
-	 * @see {@link #CAPTURING_GROUP_LABEL}
-	 * @see {@link #CAPTURING_GROUP_TARGET}
-	 * @see {@link #findFullAndCollapsedReferenceLinks(String)}
-	 * @see {@link #findShortcutReferenceLinks(String)}
-	 * @see {@link #findLinksAndImages(String)}
-	 */
-	public static Stream<RegexMatch> findInlineLinks(String markdownCode) {
-		return findLinksAndImages(markdownCode)
-				.filter(match -> !match.matchedText.startsWith("!"));
 	}
 	
 	/**
@@ -178,32 +168,9 @@ public class MarkdownParsingTools {
 	
 	/**
 	 * Finds a <a href="https://spec.commonmark.org/0.31.2/#link-reference-definition">link reference definition</a> of the form <code>[label]: target</code>
-	 * with the given link reference definition name (link label) in the given list of link reference definition matches,
-	 * does not capture the title in definitions like <code>[label]: target "title"</code>,
-	 * excludes footnote definitions like <code>[^label]: Some text</code>.
-	 * The <em>label</em> and <em>target</em> matches are captured in sub-group matches with the capturing group names
-	 * {@link #CAPTURING_GROUP_LABEL} and {@link #CAPTURING_GROUP_TARGET}.
-	 * 
-	 * @param markdownCode Markdown source code
-	 * @param linkReferenceDefinitionName the link reference definition's link label, i.e. the part in square brackets
-	 * @return the detected regular expression match for the requested link reference definition if it can be found
-	 * 
-	 * @see {@link #CAPTURING_GROUP_LABEL}
-	 * @see {@link #CAPTURING_GROUP_TARGET}
+	 * with the given link reference definition name (link label) among the given matches.
 	 */
-	public static Optional<RegexMatch> findLinkReferenceDefinition(List<RegexMatch> linkReferenceDefinitions, String linkReferenceDefinitionName) {
-		if (linkReferenceDefinitions == null) {
-			throw new IllegalArgumentException();
-		}
-		
-		return findLinkReferenceDefinition(linkReferenceDefinitions.stream(), linkReferenceDefinitionName);
-	}
-	
 	private static Optional<RegexMatch> findLinkReferenceDefinition(Stream<RegexMatch> linkReferenceDefinitionsStream, String linkReferenceDefinitionName) {
-		if (linkReferenceDefinitionName == null || linkReferenceDefinitionName.isBlank()) {
-			throw new IllegalArgumentException();
-		}
-		
 		return linkReferenceDefinitionsStream
 				.filter(match -> {
 					RegexMatch labelMatch = match.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_LABEL);
@@ -245,11 +212,6 @@ public class MarkdownParsingTools {
 	 */
 	public static Stream<RegexMatch> findShortcutReferenceLinks(String markdownCode) {
 		return findMatches(markdownCode, REF_LINK_SHORT_PATTERN, CAPTURING_GROUP_TARGET);
-	}
-	
-	public static Stream<RegexMatch> findHeadingAnchorIds(String markdownCode) {
-		return findMatches(markdownCode, HEADING_PATTERN, CAPTURING_GROUP_ANCHOR)
-				.map(match -> match.subMatches.get(CAPTURING_GROUP_ANCHOR));
 	}
 	
 	/**
@@ -327,7 +289,7 @@ public class MarkdownParsingTools {
 	 * @param endOffset the offset the search ends at
 	 * @return the detected regular expression matches, with offsets counted in the whole source code
 	 * 
-	 * @see #findHeadingAnchorIds(String)
+	 * @see #findValidSectionAnchorsInMarkdownCode(String)
 	 */
 	public static Stream<RegexMatch> findHeadingAnchorIds(CharSequence markdownCode, int startOffset, int endOffset) {
 		return findMatchesIn(markdownCode, startOffset, endOffset, HEADING_PATTERN, CAPTURING_GROUP_ANCHOR)
