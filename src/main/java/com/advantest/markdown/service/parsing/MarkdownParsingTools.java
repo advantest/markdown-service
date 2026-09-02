@@ -252,14 +252,119 @@ public class MarkdownParsingTools {
 				.map(match -> match.subMatches.get(CAPTURING_GROUP_ANCHOR));
 	}
 	
+	/**
+	 * Detects Markdown links and images of the form <code>[label](target)</code> and
+	 * <code>![label](target)</code> in a part of the given Markdown source code.
+	 * 
+	 * @param markdownCode Markdown source code
+	 * @param startOffset the offset the search starts at
+	 * @param endOffset the offset the search ends at
+	 * @return the detected regular expression matches, with offsets counted in the whole source code
+	 * 
+	 * @see #findLinksAndImages(String)
+	 */
+	public static Stream<RegexMatch> findLinksAndImages(CharSequence markdownCode, int startOffset, int endOffset) {
+		return findMatchesIn(markdownCode, startOffset, endOffset, LINK_PATTERN,
+				CAPTURING_GROUP_LABEL, CAPTURING_GROUP_TARGET);
+	}
+	
+	/**
+	 * Detects link reference definitions of the form <code>[label]: target</code> in a part of the
+	 * given Markdown source code.
+	 * 
+	 * @param markdownCode Markdown source code
+	 * @param startOffset the offset the search starts at
+	 * @param endOffset the offset the search ends at
+	 * @return the detected regular expression matches, with offsets counted in the whole source code
+	 * 
+	 * @see #findLinkReferenceDefinitions(String)
+	 */
+	public static Stream<RegexMatch> findLinkReferenceDefinitions(CharSequence markdownCode,
+			int startOffset, int endOffset) {
+		return findMatchesIn(markdownCode, startOffset, endOffset, LINK_REF_DEF_PATTERN,
+				CAPTURING_GROUP_LABEL, CAPTURING_GROUP_TARGET);
+	}
+	
+	/**
+	 * Detects full and collapsed reference links of the form <code>[label][target]</code> in a part
+	 * of the given Markdown source code.
+	 * 
+	 * @param markdownCode Markdown source code
+	 * @param startOffset the offset the search starts at
+	 * @param endOffset the offset the search ends at
+	 * @return the detected regular expression matches, with offsets counted in the whole source code
+	 * 
+	 * @see #findFullAndCollapsedReferenceLinks(String)
+	 */
+	public static Stream<RegexMatch> findFullAndCollapsedReferenceLinks(CharSequence markdownCode,
+			int startOffset, int endOffset) {
+		return findMatchesIn(markdownCode, startOffset, endOffset, REF_LINK_FULL_PATTERN,
+				CAPTURING_GROUP_LABEL, CAPTURING_GROUP_TARGET);
+	}
+	
+	/**
+	 * Detects shortcut reference links of the form <code>[target]</code> in a part of the given
+	 * Markdown source code.
+	 * 
+	 * @param markdownCode Markdown source code
+	 * @param startOffset the offset the search starts at
+	 * @param endOffset the offset the search ends at
+	 * @return the detected regular expression matches, with offsets counted in the whole source code
+	 * 
+	 * @see #findShortcutReferenceLinks(String)
+	 */
+	public static Stream<RegexMatch> findShortcutReferenceLinks(CharSequence markdownCode,
+			int startOffset, int endOffset) {
+		return findMatchesIn(markdownCode, startOffset, endOffset, REF_LINK_SHORT_PATTERN, CAPTURING_GROUP_TARGET);
+	}
+	
+	/**
+	 * Detects the anchor identifier declared in a part of the given Markdown source code, e.g. in
+	 * one heading.
+	 * 
+	 * @param markdownCode Markdown source code
+	 * @param startOffset the offset the search starts at
+	 * @param endOffset the offset the search ends at
+	 * @return the detected regular expression matches, with offsets counted in the whole source code
+	 * 
+	 * @see #findHeadingAnchorIds(String)
+	 */
+	public static Stream<RegexMatch> findHeadingAnchorIds(CharSequence markdownCode, int startOffset, int endOffset) {
+		return findMatchesIn(markdownCode, startOffset, endOffset, HEADING_PATTERN, CAPTURING_GROUP_ANCHOR)
+				.map(match -> match.subMatches.get(CAPTURING_GROUP_ANCHOR));
+	}
+	
+	/**
+	 * Searches the given part of the text, while the expressions looking before and behind a match
+	 * still see the whole text: a shortcut reference link, for example, is not one if the text
+	 * behind it continues with a colon, no matter where the searched part ends.
+	 */
+	private static Stream<RegexMatch> findMatchesIn(CharSequence textToCheck, int startOffset, int endOffset,
+			Pattern patternToFind, String... capturingGroupNames) {
+		
+		if (textToCheck == null) {
+			throw new IllegalArgumentException();
+		}
+		
+		Matcher textMatcher = patternToFind.matcher(textToCheck);
+		textMatcher.region(startOffset, endOffset);
+		textMatcher.useTransparentBounds(true);
+		textMatcher.useAnchoringBounds(false);
+		
+		return collectMatches(textMatcher, capturingGroupNames);
+	}
+	
 	private static Stream<RegexMatch> findMatches(String textToCheck, Pattern patternToFind, String... capturingGroupNames) {
 		if (textToCheck == null) {
 			throw new IllegalArgumentException();
 		}
 		
+		return collectMatches(patternToFind.matcher(textToCheck), capturingGroupNames);
+	}
+	
+	private static Stream<RegexMatch> collectMatches(Matcher textMatcher, String... capturingGroupNames) {
 		List<RegexMatch> matches = new ArrayList<>();
 		
-		Matcher textMatcher = patternToFind.matcher(textToCheck);
 		boolean found = textMatcher.find();
 		
 		while (found) {

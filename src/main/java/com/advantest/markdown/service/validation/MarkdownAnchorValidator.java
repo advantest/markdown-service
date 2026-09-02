@@ -10,16 +10,28 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.utils.TextUtils;
+import com.vladsch.flexmark.ast.Heading;
+import com.vladsch.flexmark.util.ast.Document;
+import com.vladsch.flexmark.util.ast.Node;
+import com.vladsch.flexmark.util.sequence.BasedSequence;
 
 /**
  * Checks the anchor identifiers declared in the headings of Markdown source code.
+ * 
+ * <p>An anchor is declared by <code>{#identifier}</code> at the end of a heading. An identifier
+ * written in embedded HTML, e.g. <code>&lt;a id="identifier"&gt;</code>, does not declare one:
+ * a reader looking for the anchors of a document reads its headings.</p>
+ * 
+ * <p>Whether an identifier is used twice can only be told from the whole document, so this
+ * validator is triggered by the document and looks at its headings.</p>
  */
-class MarkdownAnchorValidator {
+class MarkdownAnchorValidator implements MarkdownValidator {
 
 	private static final String MESSAGE_INVALID_ANCHOR_IDENTIFIER_SUFFIX =
 			" It has to contain at least one character, must start with a letter,"
@@ -27,20 +39,18 @@ class MarkdownAnchorValidator {
 			+ " letters ([A-Za-z]), digits ([0-9]), hyphens (\"-\"), underscores (\"_\"),"
 			+ " colons (\":\"), and periods (\".\").";
 
-	/**
-	 * Checks the given Markdown source code.
-	 * 
-	 * @param markdownSourceCode the Markdown source code to be checked, must not be <code>null</code>
-	 * @return the problems found, in no particular order, never <code>null</code>
-	 */
-	List<ValidationIssue> validate(String markdownSourceCode) {
+	@Override
+	public Set<Class<? extends Node>> getTriggeringNodeTypes() {
+		return Set.of(Document.class);
+	}
+
+	@Override
+	public List<ValidationIssue> validate(Node node) {
+		BasedSequence markdownSourceCode = node.getDocument().getChars();
 		List<ValidationIssue> issues = new ArrayList<>();
 
 		Map<String, List<RegexMatch>> anchorDeclarations = new LinkedHashMap<>();
-		MarkdownParsingTools.findHeadingAnchorIds(markdownSourceCode)
-				.forEach(match -> anchorDeclarations
-						.computeIfAbsent(match.matchedText, anchorId -> new ArrayList<>(2))
-						.add(match));
+		collectAnchorDeclarations(node, markdownSourceCode, anchorDeclarations);
 
 		anchorDeclarations.values().stream()
 				.flatMap(List::stream)
@@ -55,7 +65,23 @@ class MarkdownAnchorValidator {
 		return issues;
 	}
 
-	private ValidationIssue invalidAnchorIdentifierIssue(RegexMatch anchorIdMatch, String markdownSourceCode) {
+	private static void collectAnchorDeclarations(Node node, BasedSequence markdownSourceCode,
+			Map<String, List<RegexMatch>> anchorDeclarations) {
+
+		for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+			if (child instanceof Heading) {
+				MarkdownParsingTools
+						.findHeadingAnchorIds(markdownSourceCode, child.getStartOffset(), child.getEndOffset())
+						.forEach(match -> anchorDeclarations
+								.computeIfAbsent(match.matchedText, anchorId -> new ArrayList<>(2))
+								.add(match));
+			} else {
+				collectAnchorDeclarations(child, markdownSourceCode, anchorDeclarations);
+			}
+		}
+	}
+
+	private ValidationIssue invalidAnchorIdentifierIssue(RegexMatch anchorIdMatch, BasedSequence markdownSourceCode) {
 		int startOffset = anchorIdMatch.startIndex - 1;
 		int endOffset = anchorIdMatch.endIndex;
 
@@ -66,7 +92,7 @@ class MarkdownAnchorValidator {
 	}
 
 	private void reportDuplicateAnchorIdentifier(String anchorId, List<RegexMatch> declarations,
-			String markdownSourceCode, List<ValidationIssue> issues) {
+			BasedSequence markdownSourceCode, List<ValidationIssue> issues) {
 
 		String lines = declarations.stream()
 				.map(declaration -> TextUtils.getLineNumberForOffset(markdownSourceCode, declaration.startIndex))

@@ -160,7 +160,7 @@ public class MarkdownLinkValidatorTest {
 	}
 
 	@Test
-	public void reportsFootnoteReferencesWithoutDefinition() {
+	public void acceptsFootnoteReferencesWithTheirDefinitions() {
 		// This is the content of a document of the recorded corpus. Company internal names
 		// are replaced by generic ones of the same length, so the expected offsets are
 		// still the recorded ones.
@@ -174,17 +174,10 @@ public class MarkdownLinkValidatorTest {
 				    Other footnote.
 				""";
 
-		assertEquals(
-				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
-								IssueSeverity.ERROR, missingReferenceDefinitionMessage("^1"), 1, 30, 32),
-						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
-								IssueSeverity.ERROR, missingReferenceDefinitionMessage("^2"), 1, 44, 46),
-						new ValidationIssue(MarkdownIssueTypes.LINK_MISSING_REFERENCE_DEFINITION,
-								IssueSeverity.ERROR, missingReferenceDefinitionMessage("^other"), 2, 78, 84)),
-				this.service.validateMarkdown(markdown),
-				"A footnote reference is read as a shortcut reference link, while its footnote definition"
-						+ " is not read as a link reference definition, so it is reported although it is defined."
-						+ " This reproduces FluentMark, see issue I-04.");
+		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
+				"A footnote reference is a footnote reference, not a reference link without a definition."
+						+ " FluentMark reads it as one and reports it, see issue I-04, which the parser"
+						+ " makes impossible to repeat here.");
 	}
 
 	@Test

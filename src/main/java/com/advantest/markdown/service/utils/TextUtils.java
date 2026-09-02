@@ -20,7 +20,7 @@ public final class TextUtils {
 	 * @param offset the offset to determine the line for
 	 * @return the line number, starting at 1
 	 */
-	public static int getLineNumberForOffset(String text, int offset) {
+	public static int getLineNumberForOffset(CharSequence text, int offset) {
 		int lineNumber = 1;
 		int lastOffsetToLookAt = Math.min(offset, text.length());
 

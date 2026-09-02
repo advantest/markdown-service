@@ -37,16 +37,11 @@ public class MarkdownValidation {
 
 	private final Map<Class<?>, List<MarkdownValidator>> validatorsByNodeType = new ConcurrentHashMap<>();
 
-	// TODO S-2.2: these two still work on the document text and are to be moved onto MarkdownValidator
-	private final MarkdownLinkValidator linkValidator = new MarkdownLinkValidator();
-
-	private final MarkdownAnchorValidator anchorValidator = new MarkdownAnchorValidator();
-
 	/**
 	 * Creates a validation applying the built-in validators.
 	 */
 	public MarkdownValidation() {
-		this(List.of());
+		this(List.of(new MarkdownLinkValidator(), new MarkdownAnchorValidator()));
 	}
 
 	/**
@@ -86,9 +81,7 @@ public class MarkdownValidation {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 
-		String markdownSourceCode = document.getChars().toString();
-		List<ValidationIssue> issues = new ArrayList<>(this.linkValidator.validate(markdownSourceCode));
-		issues.addAll(this.anchorValidator.validate(markdownSourceCode));
+		List<ValidationIssue> issues = new ArrayList<>();
 
 		visit(document, Collections.newSetFromMap(new IdentityHashMap<>()), issues);
 

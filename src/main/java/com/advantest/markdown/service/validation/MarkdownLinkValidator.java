@@ -10,17 +10,40 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.utils.TextUtils;
+import com.vladsch.flexmark.ast.Image;
+import com.vladsch.flexmark.ast.ImageRef;
+import com.vladsch.flexmark.ast.Link;
+import com.vladsch.flexmark.ast.LinkRef;
+import com.vladsch.flexmark.ast.Paragraph;
+import com.vladsch.flexmark.ast.Reference;
+import com.vladsch.flexmark.ast.Text;
+import com.vladsch.flexmark.util.ast.Document;
+import com.vladsch.flexmark.util.ast.Node;
+import com.vladsch.flexmark.util.sequence.BasedSequence;
 
 /**
  * Checks the links, images and link reference definitions in Markdown source code.
+ * 
+ * <p>Which construct is checked is decided by the parser, the rules themselves still work on the
+ * text of the construct: the parser reads the target of <code>[label](   )</code> as an empty one,
+ * while the rule is to mark the blanks that are there, so the rule needs the text.</p>
+ * 
+ * <p>A link reference definition without a target, e.g. <code>[label]:</code>, is not a definition
+ * for the parser and is therefore looked for in the paragraph it ends up in.</p>
  */
-class MarkdownLinkValidator {
+class MarkdownLinkValidator implements MarkdownValidator {
+
+	private static final Set<Class<? extends Node>> TRIGGERING_NODE_TYPES = Set.of(
+			Link.class, Image.class, LinkRef.class, ImageRef.class,
+			Reference.class, Paragraph.class, Text.class, Document.class);
 
 	private static final String MESSAGE_EMPTY_LINK_TARGET = "The target file path or URL is empty.";
 
@@ -30,34 +53,100 @@ class MarkdownLinkValidator {
 			+ " and use that reference link label in your link,"
 			+ " e.g. \"[your link text][ReferenceLinkLabel]\" or \"[ReferenceLinkLabel]\".";
 
-	/**
-	 * Checks the given Markdown source code.
-	 * 
-	 * @param markdownSourceCode the Markdown source code to be checked, must not be <code>null</code>
-	 * @return the problems found, in no particular order, never <code>null</code>
-	 */
-	List<ValidationIssue> validate(String markdownSourceCode) {
+	@Override
+	public Set<Class<? extends Node>> getTriggeringNodeTypes() {
+		return TRIGGERING_NODE_TYPES;
+	}
+
+	@Override
+	public List<ValidationIssue> validate(Node node) {
+		BasedSequence sourceCode = node.getDocument().getChars();
 		List<ValidationIssue> issues = new ArrayList<>();
 
-		MarkdownParsingTools.findLinksAndImages(markdownSourceCode)
-				.forEach(link -> checkLinkTarget(link, markdownSourceCode, false, issues));
-		MarkdownParsingTools.findLinkReferenceDefinitions(markdownSourceCode)
-				.forEach(definition -> {
-					checkLinkReferenceDefinitionIdentifier(definition, markdownSourceCode, issues);
-					checkLinkTarget(definition, markdownSourceCode, true, issues);
-				});
-		checkLinkReferenceDefinitionIdentifiersAreUnique(markdownSourceCode, issues);
-
-		Stream.concat(
-				MarkdownParsingTools.findFullAndCollapsedReferenceLinks(markdownSourceCode),
-				MarkdownParsingTools.findShortcutReferenceLinks(markdownSourceCode))
-				.forEach(referenceLink -> checkReferenceLinkLabel(referenceLink, markdownSourceCode, issues));
+		if (node instanceof Document document) {
+			checkLinkReferenceDefinitionIdentifiersAreUnique(document, sourceCode, issues);
+		} else if (node instanceof Reference || node instanceof Paragraph) {
+			findLinkReferenceDefinitionsIn(node, sourceCode).forEach(definition -> {
+				checkLinkReferenceDefinitionIdentifier(definition, sourceCode, issues);
+				checkLinkTarget(definition, sourceCode, true, issues);
+			});
+		} else if (node instanceof Text) {
+			checkLinksTheParserLeftAsText(node, sourceCode, issues);
+		} else if (node instanceof Link || node instanceof Image) {
+			findLinkOrImage(node, sourceCode)
+					.ifPresent(link -> checkLinkTarget(link, sourceCode, false, issues));
+		} else {
+			findReferenceLink(node, sourceCode)
+					.ifPresent(referenceLink -> checkReferenceLinkLabel(referenceLink, sourceCode, issues));
+		}
 
 		return issues;
 	}
 
+	/**
+	 * Checks the links the parser did not read as links, e.g. a reference link whose label it does
+	 * not accept. Text nodes hold the plain text between the constructs the parser did read, so a
+	 * link found here is not reported by one of the other checks a second time.
+	 */
+	private void checkLinksTheParserLeftAsText(Node node, BasedSequence sourceCode,
+			List<ValidationIssue> issues) {
+
+		int startOffset = node.getStartOffset();
+		int endOffset = node.getEndOffset();
+
+		MarkdownParsingTools.findLinksAndImages(sourceCode, startOffset, endOffset)
+				.forEach(link -> checkLinkTarget(link, sourceCode, false, issues));
+
+		Stream.concat(
+				MarkdownParsingTools.findFullAndCollapsedReferenceLinks(sourceCode, startOffset, endOffset),
+				MarkdownParsingTools.findShortcutReferenceLinks(sourceCode, startOffset, endOffset))
+				.forEach(referenceLink -> checkReferenceLinkLabel(referenceLink, sourceCode, issues));
+	}
+
+	private static Optional<RegexMatch> findLinkOrImage(Node node, BasedSequence sourceCode) {
+		return MarkdownParsingTools
+				.findLinksAndImages(sourceCode, node.getStartOffset(), node.getEndOffset())
+				.filter(match -> describesTheWholeNode(match, node))
+				.findFirst();
+	}
+
+	private static Optional<RegexMatch> findReferenceLink(Node node, BasedSequence sourceCode) {
+		int startOffset = node.getStartOffset();
+		int endOffset = node.getEndOffset();
+
+		Optional<RegexMatch> fullOrCollapsedLink = MarkdownParsingTools
+				.findFullAndCollapsedReferenceLinks(sourceCode, startOffset, endOffset)
+				.filter(match -> describesTheWholeNode(match, node))
+				.findFirst();
+
+		if (fullOrCollapsedLink.isPresent()) {
+			return fullOrCollapsedLink;
+		}
+
+		return MarkdownParsingTools.findShortcutReferenceLinks(sourceCode, startOffset, endOffset)
+				.filter(match -> describesTheWholeNode(match, node))
+				.findFirst();
+	}
+
+	/**
+	 * Tells whether the given match is the node itself and not something nested in it. The
+	 * expressions for links do not know the exclamation mark of an image, so a match may start
+	 * one character behind the node.
+	 */
+	private static boolean describesTheWholeNode(RegexMatch match, Node node) {
+		int startOffset = node.getStartOffset();
+		boolean image = node instanceof Image || node instanceof ImageRef;
+
+		return match.startIndex == startOffset || (image && match.startIndex == startOffset + 1);
+	}
+
+	private static Stream<RegexMatch> findLinkReferenceDefinitionsIn(Node node, BasedSequence sourceCode) {
+		return MarkdownParsingTools
+				.findLinkReferenceDefinitions(sourceCode, node.getStartOffset(), node.getEndOffset());
+	}
+
 	private void checkLinkReferenceDefinitionIdentifier(RegexMatch linkReferenceDefinition,
-			String markdownSourceCode, List<ValidationIssue> issues) {
+			BasedSequence markdownSourceCode, List<ValidationIssue> issues) {
 
 		RegexMatch labelMatch = linkReferenceDefinition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_LABEL);
 		if (labelMatch == null
@@ -71,15 +160,11 @@ class MarkdownLinkValidator {
 				labelMatch.startIndex, labelMatch.endIndex));
 	}
 
-	private void checkLinkReferenceDefinitionIdentifiersAreUnique(String markdownSourceCode,
-			List<ValidationIssue> issues) {
+	private void checkLinkReferenceDefinitionIdentifiersAreUnique(Document document,
+			BasedSequence markdownSourceCode, List<ValidationIssue> issues) {
 
 		Map<String, List<RegexMatch>> identifiers = new LinkedHashMap<>();
-		MarkdownParsingTools.findLinkReferenceDefinitions(markdownSourceCode)
-				.map(definition -> definition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_LABEL))
-				.forEach(labelMatch -> identifiers
-						.computeIfAbsent(labelMatch.matchedText, identifier -> new ArrayList<>(2))
-						.add(labelMatch));
+		collectLinkReferenceDefinitionIdentifiers(document, markdownSourceCode, identifiers);
 
 		identifiers.entrySet().stream()
 				.filter(identifier -> identifier.getValue().size() > 1)
@@ -103,6 +188,28 @@ class MarkdownLinkValidator {
 				});
 	}
 
+	/**
+	 * Collects the identifiers of all link reference definitions of the document, in document
+	 * order. A definition belongs to the whole document, so a reference is defined no matter where
+	 * in the document the definition stands.
+	 */
+	private static void collectLinkReferenceDefinitionIdentifiers(Node node, BasedSequence markdownSourceCode,
+			Map<String, List<RegexMatch>> identifiers) {
+
+		for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+			if (child instanceof Reference || child instanceof Paragraph) {
+				findLinkReferenceDefinitionsIn(child, markdownSourceCode)
+						.map(definition -> definition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_LABEL))
+						.filter(labelMatch -> labelMatch != null)
+						.forEach(labelMatch -> identifiers
+								.computeIfAbsent(labelMatch.matchedText, identifier -> new ArrayList<>(2))
+								.add(labelMatch));
+			} else {
+				collectLinkReferenceDefinitionIdentifiers(child, markdownSourceCode, identifiers);
+			}
+		}
+	}
+
 	private static String invalidLinkReferenceDefinitionIdentifierMessage(String identifier) {
 		return "The link reference definition identifier \"" + identifier + "\" is invalid."
 				// The double space is the one FluentMark produces, see issue I-01.
@@ -112,7 +219,7 @@ class MarkdownLinkValidator {
 				+ " colons (\":\"), periods (\".\"), slashes (\"/\"), spaces (\" \").";
 	}
 
-	private void checkLinkTarget(RegexMatch linkStatement, String markdownSourceCode,
+	private void checkLinkTarget(RegexMatch linkStatement, BasedSequence markdownSourceCode,
 			boolean targetInLinkReferenceDefinition, List<ValidationIssue> issues) {
 
 		RegexMatch targetMatch = linkStatement.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
@@ -148,7 +255,7 @@ class MarkdownLinkValidator {
 				endOffset));
 	}
 
-	private void checkReferenceLinkLabel(RegexMatch referenceLink, String markdownSourceCode,
+	private void checkReferenceLinkLabel(RegexMatch referenceLink, BasedSequence markdownSourceCode,
 			List<ValidationIssue> issues) {
 
 		RegexMatch targetMatch = referenceLink.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
@@ -188,7 +295,7 @@ class MarkdownLinkValidator {
 			return;
 		}
 
-		if (MarkdownParsingTools.findLinkReferenceDefinition(markdownSourceCode, linkLabel).isPresent()) {
+		if (MarkdownParsingTools.findLinkReferenceDefinition(markdownSourceCode.toString(), linkLabel).isPresent()) {
 			return;
 		}
 
