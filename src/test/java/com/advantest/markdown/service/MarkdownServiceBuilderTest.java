@@ -19,8 +19,8 @@ import org.junit.jupiter.api.Test;
 
 import com.advantest.flexmark.ext.jira.tickets.JiraTicketExtension;
 import com.advantest.markdown.MarkdownCustomization;
-import com.advantest.markdown.resources.ResourceResolver;
-import com.advantest.markdown.resources.UnresolvedResource;
+import com.advantest.resources.ResourceResolver;
+import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.html.AttributeProvider;
 import com.vladsch.flexmark.html.AttributeProviderFactory;
 import com.vladsch.flexmark.html.HtmlRenderer;

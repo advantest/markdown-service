@@ -27,9 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
-import com.advantest.markdown.resources.LocalFileSystemResource;
-import com.advantest.markdown.resources.LocalFileSystemResourceResolver;
-import com.advantest.markdown.resources.Resource;
+import com.advantest.resources.LocalFileSystemResource;
+import com.advantest.resources.LocalFileSystemResourceResolver;
+import com.advantest.resources.Resource;
 import com.vladsch.flexmark.util.ast.Document;
 
 class MarkdownServiceTest {

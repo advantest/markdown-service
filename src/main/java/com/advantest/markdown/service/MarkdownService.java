@@ -10,10 +10,10 @@ import java.util.List;
 
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
-import com.advantest.markdown.resources.LocalFileSystemResourceResolver;
-import com.advantest.markdown.resources.Resource;
-import com.advantest.markdown.resources.ResourceResolver;
-import com.advantest.markdown.resources.UnresolvedResource;
+import com.advantest.resources.LocalFileSystemResourceResolver;
+import com.advantest.resources.Resource;
+import com.advantest.resources.ResourceResolver;
+import com.advantest.resources.UnresolvedResource;
 import com.advantest.markdown.service.validation.MarkdownValidation;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.vladsch.flexmark.util.ast.Document;
@@ -221,7 +221,7 @@ public class MarkdownService {
 		private final MarkdownParserAndHtmlRenderer.Builder parserAndRendererBuilder =
 				MarkdownParserAndHtmlRenderer.builder();
 
-		private ResourceResolver resourceResolver = new LocalFileSystemResourceResolver();
+		private ResourceResolver resourceResolver;
 
 		private Builder() {
 		}
@@ -304,7 +304,10 @@ public class MarkdownService {
 		 * @return the newly created service, never <code>null</code>
 		 */
 		public MarkdownService build() {
-			return new MarkdownService(this.parserAndRendererBuilder.build(), this.resourceResolver);
+			ResourceResolver resolver = this.resourceResolver != null
+					? this.resourceResolver
+					: new LocalFileSystemResourceResolver();
+			return new MarkdownService(this.parserAndRendererBuilder.build(), resolver);
 		}
 
 	}
