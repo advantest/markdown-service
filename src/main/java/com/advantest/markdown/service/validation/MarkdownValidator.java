@@ -6,41 +6,71 @@
  */
 package com.advantest.markdown.service.validation;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+
+import com.vladsch.flexmark.util.ast.Node;
 
 /**
- * Applies the validation rules to Markdown source code.
+ * A rule checking one kind of Markdown construct.
  * 
- * <p>The rules reproduce those of the FluentMark Eclipse plug-ins, including their messages and
- * the text ranges they mark, so that both report the same problems for the same document.</p>
+ * <p>A validator does not search the document. It names the node types it is triggered by, and
+ * {@link MarkdownValidation} hands it every node of those types the document contains, one at a
+ * time. Nodes below a node its {@link #getIgnoredNodes() node filter} rejects are not offered.</p>
  * 
- * <p>The rules themselves live in validators this one is composed of, each covering one kind of
- * Markdown construct.</p>
+ * <p>A validator checking the whole document at once, e.g. one comparing all link reference
+ * definitions with each other, is triggered by {@link com.vladsch.flexmark.util.ast.Document} and
+ * is called once. A validator looking for something the parser does not model as a node of its
+ * own, e.g. a malformed link, is triggered by {@link com.vladsch.flexmark.ast.Text} or
+ * {@link com.vladsch.flexmark.ast.Paragraph} and searches the text it is given.</p>
+ * 
+ * <p>Implementations are stateless and are used for more than one document. Something worth
+ * remembering for the duration of one validation run belongs to the document, which is a
+ * {@link com.vladsch.flexmark.util.data.MutableDataHolder} and takes it under a
+ * {@link com.vladsch.flexmark.util.data.DataKey}.</p>
  */
-public class MarkdownValidator {
-
-	private final MarkdownLinkValidator linkValidator = new MarkdownLinkValidator();
-
-	private final MarkdownAnchorValidator anchorValidator = new MarkdownAnchorValidator();
+public interface MarkdownValidator {
 
 	/**
-	 * Checks the given Markdown source code.
+	 * Tells which node types this validator is triggered by. Subtypes of the returned types
+	 * trigger it as well.
 	 * 
-	 * @param markdownSourceCode the Markdown source code to be checked, must not be <code>null</code>
-	 * @return the problems found, ordered by start offset, never <code>null</code> and not modifiable
+	 * @return the node types, never <code>null</code> and never empty
 	 */
-	public List<ValidationIssue> validate(String markdownSourceCode) {
-		if (markdownSourceCode == null) {
-			throw new IllegalArgumentException("Argument must not be null.");
-		}
+	Set<Class<? extends Node>> getTriggeringNodeTypes();
 
-		List<ValidationIssue> issues = new ArrayList<>(this.linkValidator.validate(markdownSourceCode));
-		issues.addAll(this.anchorValidator.validate(markdownSourceCode));
-
-		issues.sort(Comparator.comparingInt(ValidationIssue::startOffset));
-		return List.copyOf(issues);
+	/**
+	 * Tells whether this validator checks the given node, which is of one of the
+	 * {@link #getTriggeringNodeTypes() triggering node types}.
+	 * 
+	 * <p>Implement this only to sort out nodes the node type alone cannot distinguish, e.g. a
+	 * heading that carries an anchor identifier. The default accepts all of them.</p>
+	 * 
+	 * @param node the node to be decided about, never <code>null</code>
+	 * @return <code>true</code> if {@link #validate(Node)} is to be called for that node
+	 */
+	default boolean isValidatorFor(Node node) {
+		return true;
 	}
+
+	/**
+	 * Tells which nodes this validator does not look into.
+	 * 
+	 * <p>The default hides everything that is not Markdown code. A validator checking one of the
+	 * embedded languages, e.g. the links in comments, returns another filter.</p>
+	 * 
+	 * @return the node filter, never <code>null</code>
+	 */
+	default NodeFilter getIgnoredNodes() {
+		return NodeFilters.MARKDOWN_CODE;
+	}
+
+	/**
+	 * Checks the given node.
+	 * 
+	 * @param node the node to be checked, never <code>null</code>
+	 * @return the problems found, {@link List#of() empty} if there are none, never <code>null</code>
+	 */
+	List<ValidationIssue> validate(Node node);
 
 }

@@ -12,7 +12,7 @@ import java.util.List;
 
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
-import com.advantest.markdown.service.validation.MarkdownValidator;
+import com.advantest.markdown.service.validation.MarkdownValidation;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
@@ -38,7 +38,7 @@ public class MarkdownService {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
-	private final MarkdownValidator validator = new MarkdownValidator();
+	private final MarkdownValidation validation = new MarkdownValidation();
 
 	/**
 	 * Creates a service using the default Markdown parser and HTML renderer configuration.
@@ -136,7 +136,7 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return this.validator.validate(markdownSourceCode);
+		return this.validation.validate(parseMarkdown(markdownSourceCode));
 	}
 
 	/**
