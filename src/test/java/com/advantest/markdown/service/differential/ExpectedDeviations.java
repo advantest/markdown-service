@@ -128,6 +128,29 @@ final class ExpectedDeviations {
 				.findFirst();
 	}
 
+	private static final List<DeclaredDeviation> DIFFERENT_MESSAGES = List.of(
+			new DeclaredDeviation(
+					new Deviation("V-07", "a target carrying a link title cannot be resolved at all,"
+							+ " so the message names the target and not a location"),
+					finding -> finding.issueTypeId().equals(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST)
+							&& finding.markedText().contains("\"")));
+
+	/**
+	 * Tells whether a finding is reported by both runs but with a different message, and which
+	 * decision says so. Such a finding is taken out of the comparison on both sides: it is neither
+	 * missing nor surplus, only worded differently.
+	 * 
+	 * @param finding the finding together with the document it belongs to
+	 * @return the deviation explaining the different message, or empty if the messages are expected
+	 *         to be equal
+	 */
+	static Optional<Deviation> explainingDifferentMessageOf(RecordedFindingInContext finding) {
+		return DIFFERENT_MESSAGES.stream()
+				.filter(declared -> declared.recognises().test(finding))
+				.map(DeclaredDeviation::deviation)
+				.findFirst();
+	}
+
 	private ExpectedDeviations() {
 		// utility class, not meant to be instantiated
 	}

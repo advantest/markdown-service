@@ -34,6 +34,8 @@ import org.junit.jupiter.api.TestFactory;
 import com.advantest.markdown.service.MarkdownService;
 import com.advantest.markdown.service.differential.ExpectedDeviations.Deviation;
 import com.advantest.markdown.service.validation.ValidationIssue;
+import com.advantest.resources.LocalFileSystemResource;
+import com.advantest.resources.Resource;
 
 /**
  * Compares this service with a recorded validation run of the FluentMark Eclipse plug-ins.
@@ -147,7 +149,9 @@ public class MarkdownValidationDifferentialTest {
 		List<RecordedFinding> recordedFindings = recording.findingsOf(file);
 		List<ComparableFinding> expectedFindings =
 				withoutExpectedDeviations(toComparableFindings(recordedFindings), markdownSourceCode);
-		List<ComparableFinding> actualFindings = producedFindings(markdownSourceCode);
+		List<ComparableFinding> actualFindings =
+				withoutDifferentlyWordedFindings(producedFindings(markdownSourceCode, markdownFile),
+						markdownSourceCode);
 
 		SUMMARY.count(recordedFindings, expectedFindings, actualFindings);
 
@@ -166,18 +170,45 @@ public class MarkdownValidationDifferentialTest {
 		List<ComparableFinding> expected = new ArrayList<>(recordedFindings.size());
 
 		for (ComparableFinding finding : recordedFindings) {
-			Optional<Deviation> deviation = ExpectedDeviations.explainingAbsenceOf(
-					new ExpectedDeviations.RecordedFindingInContext(finding.issueTypeId(),
-							finding.startOffset(), finding.endOffset(), markdownSourceCode));
+			Optional<Deviation> deviation = ExpectedDeviations.explainingAbsenceOf(contextOf(finding, markdownSourceCode));
 
 			if (deviation.isPresent()) {
 				SUMMARY.countDeviation(deviation.get());
+				continue;
+			}
+
+			Optional<Deviation> differentMessage =
+					ExpectedDeviations.explainingDifferentMessageOf(contextOf(finding, markdownSourceCode));
+
+			if (differentMessage.isPresent()) {
+				SUMMARY.countDeviation(differentMessage.get());
 			} else {
 				expected.add(finding);
 			}
 		}
 
 		return expected;
+	}
+
+	/**
+	 * Drops the findings this service words differently on purpose, so that they are not reported
+	 * as surplus. Their recorded counterparts are dropped and counted by
+	 * {@link #withoutExpectedDeviations(List, String)}.
+	 */
+	private static List<ComparableFinding> withoutDifferentlyWordedFindings(List<ComparableFinding> findings,
+			String markdownSourceCode) {
+
+		return findings.stream()
+				.filter(finding -> ExpectedDeviations
+						.explainingDifferentMessageOf(contextOf(finding, markdownSourceCode)).isEmpty())
+				.toList();
+	}
+
+	private static ExpectedDeviations.RecordedFindingInContext contextOf(ComparableFinding finding,
+			String markdownSourceCode) {
+
+		return new ExpectedDeviations.RecordedFindingInContext(finding.issueTypeId(),
+				finding.startOffset(), finding.endOffset(), markdownSourceCode);
 	}
 
 	private static List<ComparableFinding> toComparableFindings(List<RecordedFinding> recordedFindings) {
@@ -189,8 +220,10 @@ public class MarkdownValidationDifferentialTest {
 				.toList();
 	}
 
-	private List<ComparableFinding> producedFindings(String markdownSourceCode) {
-		return this.service.validateMarkdown(markdownSourceCode).stream()
+	private List<ComparableFinding> producedFindings(String markdownSourceCode, Path markdownFile) {
+		Resource documentResource = LocalFileSystemResource.of(markdownFile);
+
+		return this.service.validateMarkdown(markdownSourceCode, documentResource).stream()
 				.map(MarkdownValidationDifferentialTest::toComparableFinding)
 				.sorted(ComparableFinding.ORDER)
 				.toList();
