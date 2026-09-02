@@ -32,6 +32,7 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 
 import com.advantest.markdown.service.MarkdownService;
+import com.advantest.markdown.service.differential.ExpectedDeviations.Deviation;
 import com.advantest.markdown.service.validation.ValidationIssue;
 
 /**
@@ -48,7 +49,9 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * 
  * <p>Only the findings of the rules that have been ported are compared, see
  * {@link PortedValidationRules}. Everything the service does report is compared, though: a finding
- * it invents is a difference, whatever it is about.</p>
+ * it invents is a difference, whatever it is about. The differences that were decided are declared
+ * in {@link ExpectedDeviations}, taken out of the comparison and counted in the report, so that the
+ * comparison keeps failing on every difference nobody decided.</p>
  * 
  * <p>The corpus and the recording are not part of this repository and are not published, so their
  * locations have no default and have to be given as system properties. The build therefore leaves
@@ -137,14 +140,44 @@ public class MarkdownValidationDifferentialTest {
 				"The recording names " + file + ", but there is no such file under the corpus root "
 						+ corpusRoot + ".");
 
+		// the recorded offsets count every character of the file, carriage returns included,
+		// so the source code must reach the service exactly as it is stored
+		String markdownSourceCode = new String(Files.readAllBytes(markdownFile), StandardCharsets.UTF_8);
+
 		List<RecordedFinding> recordedFindings = recording.findingsOf(file);
-		List<ComparableFinding> expectedFindings = toComparableFindings(recordedFindings);
-		List<ComparableFinding> actualFindings = producedFindings(markdownFile);
+		List<ComparableFinding> expectedFindings =
+				withoutExpectedDeviations(toComparableFindings(recordedFindings), markdownSourceCode);
+		List<ComparableFinding> actualFindings = producedFindings(markdownSourceCode);
 
 		SUMMARY.count(recordedFindings, expectedFindings, actualFindings);
 
 		assertEquals(render(expectedFindings), render(actualFindings),
 				"The service does not report " + file + " the way the recorded run did.");
+	}
+
+	/**
+	 * Drops the recorded findings that this service is meant not to produce, so that only the
+	 * differences nobody decided fail the comparison. Each of them is counted, so that the report
+	 * keeps stating how many findings were let go and why.
+	 */
+	private static List<ComparableFinding> withoutExpectedDeviations(List<ComparableFinding> recordedFindings,
+			String markdownSourceCode) {
+
+		List<ComparableFinding> expected = new ArrayList<>(recordedFindings.size());
+
+		for (ComparableFinding finding : recordedFindings) {
+			Optional<Deviation> deviation = ExpectedDeviations.explainingAbsenceOf(
+					new ExpectedDeviations.RecordedFindingInContext(finding.issueTypeId(),
+							finding.startOffset(), finding.endOffset(), markdownSourceCode));
+
+			if (deviation.isPresent()) {
+				SUMMARY.countDeviation(deviation.get());
+			} else {
+				expected.add(finding);
+			}
+		}
+
+		return expected;
 	}
 
 	private static List<ComparableFinding> toComparableFindings(List<RecordedFinding> recordedFindings) {
@@ -156,11 +189,7 @@ public class MarkdownValidationDifferentialTest {
 				.toList();
 	}
 
-	private List<ComparableFinding> producedFindings(Path markdownFile) throws IOException {
-		// the recorded offsets count every character of the file, carriage returns included,
-		// so the source code must reach the service exactly as it is stored
-		String markdownSourceCode = new String(Files.readAllBytes(markdownFile), StandardCharsets.UTF_8);
-
+	private List<ComparableFinding> producedFindings(String markdownSourceCode) {
 		return this.service.validateMarkdown(markdownSourceCode).stream()
 				.map(MarkdownValidationDifferentialTest::toComparableFinding)
 				.sorted(ComparableFinding.ORDER)
@@ -242,9 +271,14 @@ public class MarkdownValidationDifferentialTest {
 		private final Map<String, int[]> countsPerIssueType = new LinkedHashMap<>();
 		private final Map<String, Integer> notCoveredPerMessage = new LinkedHashMap<>();
 		private int notCoveredFindings;
+		private final Map<Deviation, Integer> deviations = new LinkedHashMap<>();
 
 		synchronized void countSkippedFile() {
 			this.skippedFiles++;
+		}
+
+		synchronized void countDeviation(Deviation deviation) {
+			this.deviations.merge(deviation, 1, Integer::sum);
 		}
 
 		synchronized void count(List<RecordedFinding> recorded, List<ComparableFinding> expected,
@@ -327,8 +361,28 @@ public class MarkdownValidationDifferentialTest {
 							entry.getKey(), entry.getValue()[0], entry.getValue()[1], entry.getValue()[2])));
 
 			appendNotCovered(report);
+			appendDeviations(report);
 
 			System.out.println(report);
+		}
+
+		/**
+		 * Lists the recorded findings that this service is meant not to produce. They are left out
+		 * of the comparison, so without this the report would claim a parity that was in part
+		 * decided rather than reached.
+		 */
+		private void appendDeviations(StringBuilder report) {
+			if (this.deviations.isEmpty()) {
+				return;
+			}
+
+			int total = this.deviations.values().stream().mapToInt(Integer::intValue).sum();
+			report.append(String.format("%n  recorded findings not produced on purpose: %d%n", total));
+
+			this.deviations.entrySet().stream()
+					.sorted(Map.Entry.comparingByKey(Comparator.comparing(Deviation::id)))
+					.forEach(entry -> report.append(String.format("  %4d %s %s%n",
+							entry.getValue(), entry.getKey().id(), entry.getKey().description())));
 		}
 
 		/**
