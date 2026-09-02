@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 
 import com.advantest.flexmark.ext.jira.tickets.JiraTicketExtension;
 import com.advantest.markdown.MarkdownCustomization;
+import com.advantest.markdown.resources.ResourceResolver;
+import com.advantest.markdown.resources.UnresolvedResource;
 import com.vladsch.flexmark.html.AttributeProvider;
 import com.vladsch.flexmark.html.AttributeProviderFactory;
 import com.vladsch.flexmark.html.HtmlRenderer;
@@ -163,6 +165,21 @@ class MarkdownServiceBuilderTest {
 		assertThrows(IllegalArgumentException.class,
 				() -> builder.withOption((NullableDataKey<String>) null, "value"));
 		assertThrows(IllegalArgumentException.class, () -> builder.withCustomization((MarkdownCustomization) null));
+		assertThrows(IllegalArgumentException.class, () -> builder.withResourceResolver(null));
+	}
+
+	@Test
+	void builderTakesTheResourceResolverOfTheEnvironment() {
+		ResourceResolver ownResolver = (linkTarget, document) -> new UnresolvedResource(linkTarget);
+
+		MarkdownService service = MarkdownService.builder()
+				.withResourceResolver(ownResolver)
+				.build();
+
+		assertNotNull(service);
+		// the resolver is only asked for by the rules about linked files, which are still to come,
+		// so all we can check here is that a service with it validates as before
+		assertTrue(service.validateMarkdown("[label]()").size() == 1);
 	}
 
 }

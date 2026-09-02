@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.advantest.markdown.resources.ResourceResolver;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 
@@ -38,10 +39,14 @@ public class MarkdownValidation {
 	private final Map<Class<?>, List<MarkdownValidator>> validatorsByNodeType = new ConcurrentHashMap<>();
 
 	/**
-	 * Creates a validation applying the built-in validators.
+	 * Creates a validation applying the built-in validators, resolving everything a document
+	 * refers to with the given resolver.
+	 * 
+	 * @param resourceResolver the resolver of everything a document refers to, must not be
+	 *                         <code>null</code>
 	 */
-	public MarkdownValidation() {
-		this(List.of(new MarkdownLinkValidator(), new MarkdownAnchorValidator()));
+	public MarkdownValidation(ResourceResolver resourceResolver) {
+		this(List.of(new MarkdownLinkValidator(resourceResolver), new MarkdownAnchorValidator()));
 	}
 
 	/**

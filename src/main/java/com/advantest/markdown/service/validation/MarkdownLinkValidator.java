@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.advantest.markdown.resources.ResourceResolver;
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.utils.TextUtils;
@@ -52,6 +53,31 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			+ " \"[ReferenceLinkLabel]: https://plantuml.com\""
 			+ " and use that reference link label in your link,"
 			+ " e.g. \"[your link text][ReferenceLinkLabel]\" or \"[ReferenceLinkLabel]\".";
+
+	private final ResourceResolver resourceResolver;
+
+	/**
+	 * Creates the validator, resolving everything a link points to with the given resolver.
+	 * 
+	 * @param resourceResolver the resolver of the surrounding environment, must not be
+	 *                         <code>null</code>
+	 */
+	MarkdownLinkValidator(ResourceResolver resourceResolver) {
+		if (resourceResolver == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
+		this.resourceResolver = resourceResolver;
+	}
+
+	/**
+	 * Returns the resolver answering where a link target is found. It is used by the rules about
+	 * the files and directories a link points to.
+	 * 
+	 * @return the resolver, never <code>null</code>
+	 */
+	ResourceResolver getResourceResolver() {
+		return this.resourceResolver;
+	}
 
 	@Override
 	public Set<Class<? extends Node>> getTriggeringNodeTypes() {

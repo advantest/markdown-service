@@ -6,12 +6,14 @@
  */
 package com.advantest.markdown.service;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.List;
 
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
+import com.advantest.markdown.resources.LocalFileSystemResourceResolver;
+import com.advantest.markdown.resources.Resource;
+import com.advantest.markdown.resources.ResourceResolver;
+import com.advantest.markdown.resources.UnresolvedResource;
 import com.advantest.markdown.service.validation.MarkdownValidation;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.vladsch.flexmark.util.ast.Document;
@@ -33,31 +35,44 @@ import com.vladsch.flexmark.util.misc.Extension;
  *         .withOption(SomeExtension.SOME_OPTION, "some value")
  *         .build();
  * </pre>
+ * 
+ * <p>Markdown documents refer to other documents, to images and to directories. Where those live
+ * is nothing this service knows: a {@link ResourceResolver} of the surrounding environment answers
+ * it, and the same resolver also created the {@link Resource} a document itself came from. Every
+ * method taking Markdown source code therefore has a variant taking that resource as well; the
+ * variants without it read a document of unknown origin, whose references cannot be resolved.</p>
+ * 
+ * @see ResourceResolver
  */
 public class MarkdownService {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
-	private final MarkdownValidation validation = new MarkdownValidation();
+	private final MarkdownValidation validation;
 
 	/**
-	 * Creates a service using the default Markdown parser and HTML renderer configuration.
-	 * Use {@link #builder()} if you need to customize the parser and renderer.
+	 * Creates a service using the default Markdown parser and HTML renderer configuration
+	 * and resolving references in the local file system.
+	 * Use {@link #builder()} if you need to customize the parser, the renderer or the resolver.
 	 */
 	public MarkdownService() {
-		this(new MarkdownParserAndHtmlRenderer());
+		this(new MarkdownParserAndHtmlRenderer(), new LocalFileSystemResourceResolver());
 	}
 
 	/**
-	 * Creates a service delegating to the given Markdown parser and HTML renderer.
+	 * Creates a service delegating to the given Markdown parser and HTML renderer and resolving
+	 * references with the given resolver.
 	 * 
 	 * @param parserAndRenderer the parser and renderer to delegate to, must not be <code>null</code>
+	 * @param resourceResolver the resolver of everything a document refers to, must not be
+	 *                         <code>null</code>
 	 */
-	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer) {
-		if (parserAndRenderer == null) {
-			throw new IllegalArgumentException("Argument must not be null.");
+	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer, ResourceResolver resourceResolver) {
+		if (parserAndRenderer == null || resourceResolver == null) {
+			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.parserAndRenderer = parserAndRenderer;
+		this.validation = new MarkdownValidation(resourceResolver);
 	}
 
 	/**
@@ -73,6 +88,9 @@ public class MarkdownService {
 	 * Reads the given Markdown source code and parses it, i.e. creates the source code's
 	 * abstract syntax tree representation, a so called {@link Document}.
 	 * 
+	 * <p>The parsed document does not know where it came from, hence everything it refers to stays
+	 * unresolved. Use {@link #parseMarkdown(String, Resource)} whenever the origin is known.</p>
+	 * 
 	 * @param markdownSourceCode the Markdown source code to be parsed
 	 * @return the parsed abstract syntax tree's root, never <code>null</code>
 	 * @see MarkdownParserAndHtmlRenderer#parseMarkdown(String)
@@ -82,17 +100,19 @@ public class MarkdownService {
 	}
 
 	/**
-	 * Reads the given Markdown file and parses it, i.e. creates the source code's
-	 * abstract syntax tree representation, a so called {@link Document}.
+	 * Reads the given Markdown source code and parses it, i.e. creates the source code's
+	 * abstract syntax tree representation, a so called {@link Document}, which remembers the
+	 * resource the source code came from.
 	 * 
-	 * @param markdownFile file to be parsed, must have file extension .md
-	 * @return the parsed abstract syntax tree, never <code>null</code>
-	 * @throws IOException if reading the file fails
-	 * @throws IllegalArgumentException if the given file is not a readable Markdown file with file extension .md
-	 * @see MarkdownParserAndHtmlRenderer#parseMarkdown(File)
+	 * @param markdownSourceCode the Markdown source code to be parsed
+	 * @param documentResource the resource the source code came from, must not be <code>null</code>,
+	 *                         pass {@link UnresolvedResource#UNKNOWN_DOCUMENT} if it is unknown
+	 * @return the parsed abstract syntax tree's root, never <code>null</code>
+	 * @throws IllegalArgumentException if the given resource is <code>null</code>
+	 * @see MarkdownParserAndHtmlRenderer#parseMarkdown(String, Resource)
 	 */
-	public Document parseMarkdown(File markdownFile) throws IOException {
-		return this.parserAndRenderer.parseMarkdown(markdownFile);
+	public Document parseMarkdown(String markdownSourceCode, Resource documentResource) {
+		return this.parserAndRenderer.parseMarkdown(markdownSourceCode, documentResource);
 	}
 
 	/**
@@ -118,25 +138,73 @@ public class MarkdownService {
 	}
 
 	/**
-	 * Checks the given Markdown source code and reports the problems found in it, e.g. links
+	 * Convenience method for parsing Markdown source code that came from the given resource
+	 * and then translating it to HTML.
+	 * 
+	 * @param markdownSourceCode the Markdown source code to be parsed and translated to HTML
+	 * @param documentResource the resource the source code came from, must not be <code>null</code>,
+	 *                         pass {@link UnresolvedResource#UNKNOWN_DOCUMENT} if it is unknown
+	 * @return the resulting HTML source code
+	 * @throws IllegalArgumentException if the given resource is <code>null</code>
+	 * @see MarkdownParserAndHtmlRenderer#parseMarkdownAndRenderHtml(String, Resource)
+	 */
+	public String parseMarkdownAndRenderHtml(String markdownSourceCode, Resource documentResource) {
+		return this.parserAndRenderer.parseMarkdownAndRenderHtml(markdownSourceCode, documentResource);
+	}
+
+	/**
+	 * Checks the given parsed Markdown document and reports the problems found in it, e.g. links
 	 * that cannot be resolved.
 	 * 
-	 * <p>The source code is validated as it is, without access to a file system: only problems
-	 * that are visible within the given text are found. Checks that need the document's
-	 * surroundings, e.g. whether a linked file exists, are not performed here.</p>
+	 * <p>Everything the document refers to is resolved relative to the resource the document came
+	 * from, i.e. the one given when it was parsed. A document of unknown origin resolves nothing,
+	 * and every reference of it is reported as a problem of its own.</p>
 	 * 
 	 * <p>The returned issues are ordered by their start offset, so that two validation runs over
 	 * equal source code return equal lists.</p>
 	 * 
+	 * @param markdownDocument the parsed Markdown document to be checked, must not be <code>null</code>
+	 * @return the problems found, ordered by start offset, empty if there are none,
+	 *         never <code>null</code> and not modifiable
+	 * @throws IllegalArgumentException if the given document is <code>null</code>
+	 */
+	public List<ValidationIssue> validateMarkdown(Document markdownDocument) {
+		return this.validation.validate(markdownDocument);
+	}
+
+	/**
+	 * Convenience method parsing the given Markdown source code of unknown origin and checking it.
+	 * 
 	 * @param markdownSourceCode the Markdown source code to be checked, must not be <code>null</code>
 	 * @return the problems found, ordered by start offset, empty if there are none,
 	 *         never <code>null</code> and not modifiable
+	 * @throws IllegalArgumentException if the given source code is <code>null</code>
+	 * @see #validateMarkdown(Document)
 	 */
 	public List<ValidationIssue> validateMarkdown(String markdownSourceCode) {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 		return this.validation.validate(parseMarkdown(markdownSourceCode));
+	}
+
+	/**
+	 * Convenience method parsing the given Markdown source code that came from the given resource
+	 * and checking it.
+	 * 
+	 * @param markdownSourceCode the Markdown source code to be checked, must not be <code>null</code>
+	 * @param documentResource the resource the source code came from, must not be <code>null</code>,
+	 *                         pass {@link UnresolvedResource#UNKNOWN_DOCUMENT} if it is unknown
+	 * @return the problems found, ordered by start offset, empty if there are none,
+	 *         never <code>null</code> and not modifiable
+	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
+	 * @see #validateMarkdown(Document)
+	 */
+	public List<ValidationIssue> validateMarkdown(String markdownSourceCode, Resource documentResource) {
+		if (markdownSourceCode == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
+		return this.validation.validate(parseMarkdown(markdownSourceCode, documentResource));
 	}
 
 	/**
@@ -153,7 +221,26 @@ public class MarkdownService {
 		private final MarkdownParserAndHtmlRenderer.Builder parserAndRendererBuilder =
 				MarkdownParserAndHtmlRenderer.builder();
 
+		private ResourceResolver resourceResolver = new LocalFileSystemResourceResolver();
+
 		private Builder() {
+		}
+
+		/**
+		 * Sets the resolver answering where the documents, images and directories a Markdown
+		 * document refers to are found. Without this, references are resolved in the local file
+		 * system.
+		 * 
+		 * @param resolver the resolver of the surrounding environment, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the given resolver is <code>null</code>
+		 */
+		public Builder withResourceResolver(ResourceResolver resolver) {
+			if (resolver == null) {
+				throw new IllegalArgumentException("Argument must not be null.");
+			}
+			this.resourceResolver = resolver;
+			return this;
 		}
 
 		/**
@@ -217,7 +304,7 @@ public class MarkdownService {
 		 * @return the newly created service, never <code>null</code>
 		 */
 		public MarkdownService build() {
-			return new MarkdownService(this.parserAndRendererBuilder.build());
+			return new MarkdownService(this.parserAndRendererBuilder.build(), this.resourceResolver);
 		}
 
 	}

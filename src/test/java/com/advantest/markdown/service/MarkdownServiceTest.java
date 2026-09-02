@@ -6,6 +6,7 @@
  */
 package com.advantest.markdown.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -15,7 +16,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -27,6 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
+import com.advantest.markdown.resources.LocalFileSystemResource;
+import com.advantest.markdown.resources.LocalFileSystemResourceResolver;
+import com.advantest.markdown.resources.Resource;
 import com.vladsch.flexmark.util.ast.Document;
 
 class MarkdownServiceTest {
@@ -37,7 +40,7 @@ class MarkdownServiceTest {
 	@BeforeEach
 	void setUp() {
 		this.delegate = spy(new MarkdownParserAndHtmlRenderer());
-		this.service = new MarkdownService(this.delegate);
+		this.service = new MarkdownService(this.delegate, new LocalFileSystemResourceResolver());
 	}
 
 	@Test
@@ -49,15 +52,27 @@ class MarkdownServiceTest {
 	}
 
 	@Test
-	void parseMarkdownFromFileDelegates(@TempDir Path tempDir) throws IOException {
+	void parseMarkdownWithDocumentResourceDelegates(@TempDir Path tempDir) throws IOException {
 		Path markdownFilePath = tempDir.resolve("example.md");
 		Files.writeString(markdownFilePath, "# Title", StandardCharsets.UTF_8);
-		File markdownFile = markdownFilePath.toFile();
+		Resource documentResource = LocalFileSystemResource.of(markdownFilePath);
 
-		Document document = this.service.parseMarkdown(markdownFile);
+		Document document = this.service.parseMarkdown("# Title", documentResource);
 
 		assertNotNull(document);
-		verify(this.delegate).parseMarkdown(markdownFile);
+		assertEquals(documentResource, MarkdownParserAndHtmlRenderer.KEY_DOCUMENT_RESOURCE.get(document));
+		verify(this.delegate).parseMarkdown("# Title", documentResource);
+	}
+
+	@Test
+	void parseMarkdownAndRenderHtmlWithDocumentResourceDelegates(@TempDir Path tempDir) {
+		Resource documentResource = LocalFileSystemResource.of(tempDir.resolve("example.md"));
+
+		String html = this.service.parseMarkdownAndRenderHtml("# Title", documentResource);
+
+		assertNotNull(html);
+		assertFalse(html.isBlank());
+		verify(this.delegate).parseMarkdownAndRenderHtml("# Title", documentResource);
 	}
 
 	@Test
@@ -81,13 +96,11 @@ class MarkdownServiceTest {
 	}
 
 	@Test
-	void parseMarkdownFromFilePropagatesRejectionOfNonMarkdownFile(@TempDir Path tempDir) throws IOException {
-		Path textFilePath = tempDir.resolve("example.txt");
-		Files.writeString(textFilePath, "# Title", StandardCharsets.UTF_8);
-		File textFile = textFilePath.toFile();
-
-		assertThrows(IllegalArgumentException.class, () -> this.service.parseMarkdown(textFile));
-		verify(this.delegate).parseMarkdown(textFile);
+	void parseMarkdownRejectsAMissingDocumentResource() {
+		assertThrows(IllegalArgumentException.class, () -> this.service.parseMarkdown("# Title", null));
+		assertThrows(IllegalArgumentException.class,
+				() -> this.service.parseMarkdownAndRenderHtml("# Title", null));
+		assertThrows(IllegalArgumentException.class, () -> this.service.validateMarkdown("# Title", null));
 	}
 
 	@Test
@@ -115,8 +128,11 @@ class MarkdownServiceTest {
 	}
 
 	@Test
-	void constructorRejectsNullDelegate() {
-		assertThrows(IllegalArgumentException.class, () -> new MarkdownService(null));
+	void constructorRejectsNullArguments() {
+		assertThrows(IllegalArgumentException.class,
+				() -> new MarkdownService(null, new LocalFileSystemResourceResolver()));
+		assertThrows(IllegalArgumentException.class,
+				() -> new MarkdownService(new MarkdownParserAndHtmlRenderer(), null));
 	}
 
 }
