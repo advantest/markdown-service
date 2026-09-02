@@ -8,13 +8,16 @@ package com.advantest.markdown.service.parsing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 
@@ -406,6 +409,71 @@ public class MarkdownParsingToolsTest {
 		assertTrue(match.isEmpty());
 	}
 	
-	// TODO Add tests for anchor search
+	@Test
+	public void anchorIdentifiersAreCollectedFromHeadings() {
+		String markdownCode = "# Title {#the-title}\r\n\r\nSome text.\r\n\r\n## A section {#a.section}\r\n";
+		
+		Set<String> anchors = MarkdownParsingTools.findValidSectionAnchorsInMarkdownCode(markdownCode);
+		
+		assertEquals(Set.of("the-title", "a.section"), anchors);
+	}
+	
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"# Title {#1st-heading}",
+			"# Title {#}",
+			"# Title {# with blank}",
+			"# A heading without an anchor",
+			"Some text that is no heading at all."
+	})
+	public void invalidOrAbsentAnchorIdentifiersAreNotCollected(String markdownCode) {
+		assertTrue(MarkdownParsingTools.findValidSectionAnchorsInMarkdownCode(markdownCode).isEmpty());
+	}
+	
+	@Test
+	public void anAnchorIdentifierThatIsNoStringIsInvalid() {
+		assertFalse(MarkdownParsingTools.isValidAnchorIdentifier(null));
+	}
+	
+	@Test
+	public void aLinkReferenceDefinitionLabelThatIsNoStringIsInvalid() {
+		assertFalse(MarkdownParsingTools.isValidLinkReferenceDefinitionIdentifier(null));
+	}
+	
+	@Test
+	public void aLinkReferenceDefinitionIsFoundByItsLabel() {
+		String markdownCode = "[first]: https://www.example.com\n[second]: ../some/file.md\n";
+		
+		Optional<RegexMatch> match = MarkdownParsingTools.findLinkReferenceDefinition(markdownCode, "second");
+		
+		assertTrue(match.isPresent());
+		assertEquals("../some/file.md", getTarget(match.get()));
+	}
+	
+	@Test
+	public void aLinkReferenceDefinitionOfAnotherLabelIsNotFound() {
+		String markdownCode = "[first]: https://www.example.com\n";
+		
+		assertTrue(MarkdownParsingTools.findLinkReferenceDefinition(markdownCode, "second").isEmpty());
+	}
+	
+	@ParameterizedTest
+	@NullAndEmptySource
+	@ValueSource(strings = { "   " })
+	public void aLinkReferenceDefinitionIsNotSearchedWithoutALabel(String linkLabel) {
+		assertThrows(IllegalArgumentException.class,
+				() -> MarkdownParsingTools.findLinkReferenceDefinition("[first]: https://www.example.com", linkLabel));
+	}
+	
+	@Test
+	public void textThatIsNoStringIsNotSearched() {
+		assertThrows(IllegalArgumentException.class, () -> MarkdownParsingTools.findLinksAndImages(null));
+	}
+	
+	@Test
+	public void aPartOfTextThatIsNoStringIsNotSearched() {
+		assertThrows(IllegalArgumentException.class, () -> MarkdownParsingTools.findLinksAndImages(null, 0, 0));
+	}
+	
 	// TODO Add tests for findings sets of links in longer texts
 }
