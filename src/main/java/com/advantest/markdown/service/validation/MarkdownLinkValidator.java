@@ -267,7 +267,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 		String linkTarget = targetMatch.matchedText;
 		if (!linkTarget.isBlank()) {
-			checkTargetFileExists(targetMatch, document, issues);
+			checkTargetResourceExists(targetMatch, document, issues);
 			return;
 		}
 
@@ -303,7 +303,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * can only be looked for once the target itself is found, which is why only the path is
 	 * checked here.</p>
 	 */
-	private void checkTargetFileExists(RegexMatch targetMatch, Document document,
+	private void checkTargetResourceExists(RegexMatch targetMatch, Document document,
 			List<ValidationIssue> issues) {
 
 		LinkTarget target = LinkTarget.of(targetMatch.matchedText);
@@ -327,13 +327,13 @@ class MarkdownLinkValidator implements MarkdownValidator {
 				IssueSeverity.ERROR,
 				documentLocationIsUnknown
 						? unknownDocumentLocationMessage(target.path())
-						: missingTargetFileMessage(target.path(), targetResource),
+						: missingTargetResourceMessage(target.path(), targetResource),
 				TextUtils.getLineNumberForOffset(document, startOffset),
 				startOffset,
 				startOffset + target.path().length()));
 	}
 
-	private static String missingTargetFileMessage(String targetPath, Resource targetResource) {
+	private static String missingTargetResourceMessage(String targetPath, Resource targetResource) {
 		return String.format("The referenced file or directory '%s' does not exist. Target path: %s",
 				withoutCurrentDirectorySegments(targetPath), targetResource.getResolvedPath());
 	}
