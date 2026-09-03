@@ -311,26 +311,36 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			return;
 		}
 
+		int startOffset = targetMatch.startIndex;
+		int endOffset = startOffset + target.path().length();
+		int lineNumber = TextUtils.getLineNumberForOffset(document, startOffset);
+
 		Resource documentResource = MarkdownParserAndHtmlRenderer.getDocumentResource(document);
+		if (UnresolvedResource.UNKNOWN_DOCUMENT.equals(documentResource)) {
+			// a target is resolved relative to the document, so without knowing where the document
+			// is there is nothing to look for
+			issues.add(new ValidationIssue(
+					MarkdownIssueTypes.LINK_UNKNOWN_DOCUMENT_LOCATION,
+					IssueSeverity.ERROR,
+					unknownDocumentLocationMessage(target.path()),
+					lineNumber,
+					startOffset,
+					endOffset));
+			return;
+		}
+
 		Resource targetResource = this.resourceResolver.resolve(target.path(), documentResource);
 		if (targetResource.exists()) {
 			return;
 		}
 
-		boolean documentLocationIsUnknown = UnresolvedResource.UNKNOWN_DOCUMENT.equals(documentResource);
-		int startOffset = targetMatch.startIndex;
-
 		issues.add(new ValidationIssue(
-				documentLocationIsUnknown
-						? MarkdownIssueTypes.LINK_UNKNOWN_DOCUMENT_LOCATION
-						: MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
+				MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
 				IssueSeverity.ERROR,
-				documentLocationIsUnknown
-						? unknownDocumentLocationMessage(target.path())
-						: missingTargetResourceMessage(target.path(), targetResource),
-				TextUtils.getLineNumberForOffset(document, startOffset),
+				missingTargetResourceMessage(target.path(), targetResource),
+				lineNumber,
 				startOffset,
-				startOffset + target.path().length()));
+				endOffset));
 	}
 
 	private static String missingTargetResourceMessage(String targetPath, Resource targetResource) {
