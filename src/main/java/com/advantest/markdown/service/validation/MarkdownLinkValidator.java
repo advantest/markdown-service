@@ -267,7 +267,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 		String linkTarget = targetMatch.matchedText;
 		if (!linkTarget.isBlank()) {
-			checkTargetResourceExists(targetMatch, document, issues);
+			checkTargetResource(targetMatch, document, issues);
 			return;
 		}
 
@@ -303,7 +303,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * can only be looked for once the target itself is found, which is why only the path is
 	 * checked here.</p>
 	 */
-	private void checkTargetResourceExists(RegexMatch targetMatch, Document document,
+	private void checkTargetResource(RegexMatch targetMatch, Document document,
 			List<ValidationIssue> issues) {
 
 		LinkTarget target = LinkTarget.of(targetMatch.matchedText);
