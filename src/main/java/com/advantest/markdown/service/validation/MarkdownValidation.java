@@ -22,9 +22,6 @@ import com.vladsch.flexmark.util.ast.Node;
 /**
  * Applies the validation rules to a parsed Markdown document.
  * 
- * <p>The rules reproduce those of the FluentMark Eclipse plug-ins, including their messages and
- * the text ranges they mark, so that both report the same problems for the same document.</p>
- * 
  * <p>The rules themselves live in {@link MarkdownValidator}s this one is composed of, each
  * covering one kind of Markdown construct. This class walks the document once and offers every
  * node to the validators triggered by it, leaving out what a validator

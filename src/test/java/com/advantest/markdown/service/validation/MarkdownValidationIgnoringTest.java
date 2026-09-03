@@ -78,7 +78,7 @@ public class MarkdownValidationIgnoringTest {
 	public void aLinkBetweenInlineHtmlTagsIsReported() {
 		assertReported("Some text with <em>" + BROKEN_LINK + "</em> in it.\n",
 				"Only the tags themselves are HTML. What stands between them is Markdown code and is"
-						+ " checked, which FluentMark does not do, see decision D-24.");
+						+ " therefore checked.");
 	}
 
 	@Test
@@ -97,7 +97,7 @@ public class MarkdownValidationIgnoringTest {
 	public void aLinkInAnInlineFormulaIsNotReported() {
 		assertNotReported("Some text with $" + BROKEN_LINK + "$ in it.\n",
 				"A formula is not Markdown code. The parser reads its content as Markdown all the same,"
-						+ " see issue F-02, so ignoring the formula node is what keeps the link away.");
+						+ " so ignoring the formula node is what keeps the link away.");
 	}
 
 	@Test
@@ -110,8 +110,7 @@ public class MarkdownValidationIgnoringTest {
 	public void aLinkInAFormulaClosedOnItsOwnLineIsReportedAsAKnownDeviation() {
 		assertReported("Some text.\n\n$$\n" + BROKEN_LINK + "\n$$\n",
 				"The parser does not recognise a display formula whose closing delimiter starts a line,"
-						+ " see issue F-01, so there is no formula node to ignore and the paragraph is"
-						+ " checked. FluentMark shields the formula and reports nothing. This test"
-						+ " documents the deviation and is inverted once F-01 is fixed.");
+						+ " so there is no formula node to ignore and the paragraph is checked. This test"
+						+ " documents the shortcoming and is inverted once the parser is fixed.");
 	}
 }

@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-
 import com.advantest.markdown.service.validation.IssueSeverity;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
 import com.advantest.markdown.service.validation.ValidationIssue;
@@ -20,8 +19,8 @@ import com.advantest.markdown.service.validation.ValidationIssue;
 /**
  * Tests the validation rules checking Markdown link targets.
  * 
- * <p>Every expected issue is compared as a whole, message included, because the service has to
- * report exactly what the FluentMark Eclipse plug-ins report today. The expected offsets are
+ * <p>Every expected issue is compared as a whole, message included, because a message is what a
+ * reader gets to see. The expected offsets are
  * computed from the Markdown source code instead of being written down as numbers, so that a test
  * states which text range it expects to be marked.</p>
  */
@@ -175,9 +174,7 @@ public class MarkdownLinkValidatorTest {
 				""";
 
 		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
-				"A footnote reference is a footnote reference, not a reference link without a definition."
-						+ " FluentMark reads it as one and reports it, see issue I-04, which the parser"
-						+ " makes impossible to repeat here.");
+				"A footnote reference is a footnote reference, not a reference link without a definition.");
 	}
 
 	@Test
@@ -256,7 +253,6 @@ public class MarkdownLinkValidatorTest {
 
 	@Test
 	public void reportsTaskListItemsAsReferenceLinks() {
-		// The lines are taken from a document of the recorded corpus.
 		String markdown = "* [ ] unchecked\n* [x] checked item\n";
 
 		int uncheckedStart = markdown.indexOf("[ ]") + "[".length();
@@ -271,8 +267,7 @@ public class MarkdownLinkValidatorTest {
 								2, checkedStart, checkedStart + "x".length())),
 				this.service.validateMarkdown(markdown),
 				"The check box of a task list item is read as a shortcut reference link,"
-						+ " so every task list item is reported."
-						+ " This reproduces FluentMark, see issue I-05.");
+						+ " so every task list item is reported. This is a known shortcoming.");
 	}
 
 	@Test
@@ -420,7 +415,7 @@ public class MarkdownLinkValidatorTest {
 
 	private static String invalidLinkReferenceDefinitionIdentifierMessage(String identifier) {
 		return "The link reference definition identifier \"" + identifier + "\" is invalid."
-				// The double space is the one FluentMark produces, see issue I-01.
+				// the double space is deliberate, it is part of the message this rule reports
 				+ " It has to contain at least one non-space character "
 				+ " and is allowed to contain any number of the following characters:"
 				+ " letters ([A-Za-z]), digits ([0-9]), hyphens (\"-\"), underscores (\"_\"),"

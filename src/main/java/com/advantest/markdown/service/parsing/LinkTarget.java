@@ -33,9 +33,7 @@ public record LinkTarget(String scheme, String path, String fragment) {
 	 * Splits the given link target into its parts.
 	 * 
 	 * <p>A target of a Markdown document is not necessarily a valid URI &ndash; a path with a blank
-	 * in it is the everyday example &ndash; so a target the URI syntax rejects is split by hand.
-	 * Both ways are the ones FluentMark uses, so that the rules built on them keep reporting what
-	 * they report today.</p>
+	 * in it is the everyday example &ndash; so a target the URI syntax rejects is split by hand.</p>
 	 * 
 	 * @param linkTarget the target of a link, image or link reference definition, must not be
 	 *                   <code>null</code>
@@ -56,10 +54,9 @@ public record LinkTarget(String scheme, String path, String fragment) {
 	}
 
 	/**
-	 * Splits a target the URI syntax rejects. The fragment keeps its leading <code>#</code> in
-	 * FluentMark here, which is what makes its anchor rules unreachable for every well formed
-	 * target; this splits both ways alike, so that the parts mean the same whichever way a target
-	 * took.
+	 * Splits a target the URI syntax rejects, so that its parts mean the same as those of a target
+	 * the URI syntax accepts: a fragment without its leading <code>#</code>, a scheme without its
+	 * colon, and the rest as the path.
 	 */
 	private static LinkTarget splitByHand(String linkTarget) {
 		String scheme = null;
@@ -84,8 +81,9 @@ public record LinkTarget(String scheme, String path, String fragment) {
 	}
 
 	/**
-	 * Answers whether the target names a file or directory, i.e. something the file system of the
-	 * environment resolves rather than a web address or another scheme of its own.
+	 * Answers whether the target names a resource of the environment this code runs in, i.e.
+	 * something a {@link com.advantest.resources.ResourceResolver} is asked to resolve rather than
+	 * something the scheme of the target hands to somebody else, e.g. a web address to a browser.
 	 * 
 	 * @return <code>true</code> if the target has no scheme and a path to resolve
 	 */

@@ -250,7 +250,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 	private static String invalidLinkReferenceDefinitionIdentifierMessage(String identifier) {
 		return "The link reference definition identifier \"" + identifier + "\" is invalid."
-				// The double space is the one FluentMark produces, see issue I-01.
+				// the double space is deliberate, it is part of the message this rule reports
 				+ " It has to contain at least one non-space character "
 				+ " and is allowed to contain any number of the following characters:"
 				+ " letters ([A-Za-z]), digits ([0-9]), hyphens (\"-\"), underscores (\"_\"),"
@@ -295,9 +295,9 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	/**
-	 * Checks that the file or directory a link points to is there. Only a target without a scheme
-	 * names a file; everything else is resolved by whoever owns its scheme, e.g. a web address by
-	 * the environment, and is not this rule's business.
+	 * Checks that the resource a link points to is there. Only a target without a scheme names a
+	 * resource of this environment; everything else is resolved by whoever owns its scheme, e.g. a
+	 * web address by a browser, and is not this rule's business.
 	 * 
 	 * <p>The fragment of a target names a place inside the target, e.g. a section of a document. It
 	 * can only be looked for once the target itself is found, which is why only the path is
@@ -346,9 +346,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 	/**
 	 * Drops the <code>./</code> segments of a path, which say "this directory" and therefore say
-	 * nothing. A message reads better without them, and this is what FluentMark quotes as well,
-	 * because Eclipse canonicalizes a path before its message names it. The offsets keep counting
-	 * the target as it is written in the document.
+	 * nothing. A message names the target the way a reader would write it, while the offsets keep
+	 * counting the target as it stands in the document.
 	 */
 	private static String withoutCurrentDirectorySegments(String targetPath) {
 		String path = targetPath;

@@ -20,8 +20,8 @@ import com.advantest.markdown.service.validation.ValidationIssue;
 /**
  * Tests the validation rules checking the anchor identifiers declared in Markdown headings.
  * 
- * <p>Every expected issue is compared as a whole, message included, because the service has to
- * report exactly what the FluentMark Eclipse plug-ins report today. The marked text range always
+ * <p>Every expected issue is compared as a whole, message included, because a message is what a
+ * reader gets to see. The marked text range always
  * starts at the number sign of the anchor declaration and ends behind the identifier, so the
  * closing brace stays unmarked.</p>
  */
@@ -140,7 +140,7 @@ public class MarkdownAnchorValidatorTest {
 						new ValidationIssue(MarkdownIssueTypes.ANCHOR_INVALID_IDENTIFIER, IssueSeverity.ERROR,
 								invalidAnchorIdentifierMessage(""), 13, 159, 160)),
 				this.service.validateMarkdown(markdown),
-				"The service has to find the same anchor problems FluentMark recorded for this document.");
+				"Every anchor problem of a document is reported, and each of them once per declaration.");
 	}
 
 	private static String invalidAnchorIdentifierMessage(String anchorIdentifier) {
