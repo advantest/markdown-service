@@ -11,6 +11,11 @@ this repository, in addition to what a task asks for.
 - **One concern per commit.** A commit does one thing, and its message says that thing. If a change
   brings an unrelated fix along, that fix goes into its own commit — a reader looking for it later
   will not find it under a message that never mentions it.
+- **Commit a rename on its own.** Renaming a type, a method or a field touches every place that
+  uses it, so a rename mixed with other work buries that work in noise. Where several things are
+  renamed at once, each rename gets its own commit, or at least a commit that holds nothing but
+  renames — a reviewer can then read one name change at a time instead of a change set nobody
+  reads to the end.
 - Write the commit message in whole sentences, saying what the commit achieves rather than which
   files it touches.
 
