@@ -6,12 +6,16 @@
  */
 package com.advantest.markdown.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
 import com.advantest.markdown.service.validation.IssueSeverity;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
 import com.advantest.markdown.service.validation.ValidationIssue;
@@ -129,6 +133,54 @@ public class MarkdownLinkValidatorTest {
 
 		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
 				"A link reference definition with a target must not be reported.");
+	}
+
+	/**
+	 * A target may be anything an author writes between the brackets, and a validator has to cope
+	 * with all of it. A target that no rule has anything to say about is accepted, and none of them
+	 * may make the validation fail.
+	 */
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"https://example.com",
+			"https://example.com/search?test=true&value=4",
+			"https://example.com/search?test=true&value=4#results",
+			"https://example.com:8443/a/b/c?query=a+b",
+			"http://example.com/a%20path/with%20blanks.html",
+			"ftp://example.com/archive.zip",
+			"mailto:someone@example.com",
+			"mailto:someone@example.com?subject=Hello",
+			"file:///C:/documents/overview.md",
+			"urn:isbn:0451450523",
+			"#a-section-of-this-document",
+			"#doSomething(int,boolean)" })
+	public void acceptsATargetNoRuleHasAnythingToSayAbout(String linkTarget) {
+		String markdown = "See the [something](" + linkTarget + ") for details.\n";
+
+		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
+				"Nothing is wrong with this target: " + linkTarget);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"overview.md",
+			"path/with/slash/",
+			"../../overview.md",
+			"./../../some/path/to/../../other/dir/file.txt",
+			"../src/com/example/project/SomeClass.java#isCool",
+			"../../../simple-java-project/src/com/example/project/x/SomeClass.java"
+					+ "#doSomething(int,boolean,Character[],List<Map<K,V>>)",
+			"a document with blanks.md",
+			"documents/overview.md#a-section",
+			"C:\\documents\\overview.md",
+			"\\\\server\\share\\overview.md",
+			"?query=only",
+			"](unbalanced brackets" })
+	public void copesWithAnyTargetAnAuthorWrites(String linkTarget) {
+		String markdown = "See the [something](" + linkTarget + ") for details.\n";
+
+		assertDoesNotThrow(() -> this.service.validateMarkdown(markdown),
+				"A target the validation cannot resolve is reported, never thrown about: " + linkTarget);
 	}
 
 	@Test

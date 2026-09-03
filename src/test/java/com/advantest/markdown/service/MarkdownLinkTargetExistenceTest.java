@@ -16,6 +16,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.advantest.markdown.service.validation.IssueSeverity;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
@@ -56,6 +58,65 @@ public class MarkdownLinkTargetExistenceTest {
 
 		assertTrue(this.service.validateMarkdown(markdown, documentResource()).isEmpty(),
 				"A link may point to a directory as well.");
+	}
+
+	/**
+	 * A target is resolved against the directory of the document, so a document lying two levels
+	 * below the temporary directory can reach a file next to that directory in several ways. Every
+	 * one of them has to arrive at the same file.
+	 */
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"../../target.txt",
+			"./../../target.txt",
+			"../.././target.txt",
+			"../sub/../../target.txt",
+			"../../some/dir/../../target.txt",
+			"./../../some/path/../../target.txt" })
+	public void acceptsALinkClimbingOutOfTheDocumentDirectory(String linkTarget) throws IOException {
+		Files.writeString(this.documentDirectory.resolve("target.txt"), "content\n");
+		Path deepDirectory = Files.createDirectories(this.documentDirectory.resolve("sub").resolve("deeper"));
+		Files.createDirectory(this.documentDirectory.resolve("sub").resolve("dir"));
+
+		String markdown = "See the [target](" + linkTarget + ") for details.\n";
+
+		assertTrue(this.service.validateMarkdown(markdown, documentResourceIn(deepDirectory)).isEmpty(),
+				"Every way of writing the path of that file leads to the same file: " + linkTarget);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"../missing.txt",
+			"../../missing.txt",
+			"./../../missing.txt",
+			"../../some/path/to/../../other/dir/missing.txt",
+			"../../../../../../../../../../missing.txt" })
+	public void reportsALinkClimbingOutOfTheDocumentDirectoryToNowhere(String linkTarget) throws IOException {
+		Path deepDirectory = Files.createDirectories(this.documentDirectory.resolve("sub").resolve("deeper"));
+
+		String markdown = "See the [target](" + linkTarget + ") for details.\n";
+
+		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResourceIn(deepDirectory));
+
+		assertEquals(1, issues.size(), "The file is nowhere, however far the path climbs: " + linkTarget);
+		assertEquals(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST, issues.get(0).issueTypeId());
+		assertEquals(markdown.indexOf(linkTarget), issues.get(0).startOffset(),
+				"The marked range covers the target as it is written.");
+		assertEquals(markdown.indexOf(linkTarget) + linkTarget.length(), issues.get(0).endOffset());
+	}
+
+	@Test
+	public void namesTheResolvedPathOfATargetClimbingOutOfTheDocumentDirectory() throws IOException {
+		Path deepDirectory = Files.createDirectories(this.documentDirectory.resolve("sub").resolve("deeper"));
+
+		String markdown = "See the [target](../../some/dir/../missing.txt) for details.\n";
+
+		String message = this.service.validateMarkdown(markdown, documentResourceIn(deepDirectory))
+				.get(0).message();
+
+		assertTrue(message.endsWith("Resolved target path: "
+				+ this.documentDirectory.resolve("some").resolve("missing.txt").toString()),
+				"The resolved path is the one that was looked for, with the climbing done: " + message);
 	}
 
 	@Test
@@ -157,7 +218,11 @@ public class MarkdownLinkTargetExistenceTest {
 	}
 
 	private Resource documentResource() {
-		return LocalFileSystemResource.of(this.documentDirectory.resolve("document.md"));
+		return documentResourceIn(this.documentDirectory);
+	}
+
+	private static Resource documentResourceIn(Path directory) {
+		return LocalFileSystemResource.of(directory.resolve("document.md"));
 	}
 
 }
