@@ -16,6 +16,10 @@ this repository, in addition to what a task asks for.
   renamed at once, each rename gets its own commit, or at least a commit that holds nothing but
   renames — a reviewer can then read one name change at a time instead of a change set nobody
   reads to the end.
+- **Split first, run the tests afterwards.** Where a change falls into several commits — rename this,
+  extract that, then add the feature — the split is worth more than every single commit compiling.
+  Cut the change into its commits and let the test suite run over the result; a commit in the middle
+  of such a series is not expected to be green on its own.
 - Write the commit message in whole sentences, saying what the commit achieves rather than which
   files it touches.
 
