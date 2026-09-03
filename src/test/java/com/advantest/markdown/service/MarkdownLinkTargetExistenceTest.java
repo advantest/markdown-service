@@ -54,7 +54,7 @@ public class MarkdownLinkTargetExistenceTest {
 	public void acceptsALinkToAnExistingDirectory() throws IOException {
 		Files.createDirectory(this.documentDirectory.resolve("documents"));
 
-		String markdown = "See the [documents](documents) for details.\n";
+		String markdown = "See the [documents](documents/) for details.\n";
 
 		assertTrue(this.service.validateMarkdown(markdown, documentResource()).isEmpty(),
 				"A link may point to a directory as well.");

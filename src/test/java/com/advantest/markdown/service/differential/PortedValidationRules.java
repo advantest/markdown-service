@@ -49,6 +49,12 @@ final class PortedValidationRules {
 			new Rule(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
 					message -> message.startsWith("The referenced file or directory")
 							&& message.contains("does not exist. Resolved target path:")),
+			new Rule(MarkdownIssueTypes.LINK_FILE_PATH_WITH_TRAILING_SLASH,
+					message -> message.startsWith("The file path")
+							&& message.contains("ends with a '/'")),
+			new Rule(MarkdownIssueTypes.LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
+					message -> message.startsWith("The given path")
+							&& message.contains("is a directory, not a file.")),
 			new Rule(MarkdownIssueTypes.ANCHOR_INVALID_IDENTIFIER,
 					message -> message.startsWith("The anchor identifier") && message.contains("is invalid.")),
 			new Rule(MarkdownIssueTypes.ANCHOR_DUPLICATE_IDENTIFIER,

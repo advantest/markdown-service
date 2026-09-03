@@ -295,9 +295,9 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	/**
-	 * Checks that the resource a link points to is there. Only a target without a scheme names a
-	 * resource of this environment; everything else is resolved by whoever owns its scheme, e.g. a
-	 * web address by a browser, and is not this rule's business.
+	 * Checks the resource a link points to. Only a target without a scheme names a resource of this
+	 * environment; everything else is resolved by whoever owns its scheme, e.g. a web address by a
+	 * browser, and is not this rule's business.
 	 * 
 	 * <p>The fragment of a target names a place inside the target, e.g. a section of a document. It
 	 * can only be looked for once the target itself is found, which is why only the path is
@@ -330,17 +330,63 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		}
 
 		Resource targetResource = this.resourceResolver.resolve(target.path(), documentResource);
-		if (targetResource.exists()) {
+		if (!targetResource.exists()) {
+			issues.add(new ValidationIssue(
+					MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
+					IssueSeverity.ERROR,
+					missingTargetResourceMessage(target.path(), targetResource),
+					lineNumber,
+					startOffset,
+					endOffset));
 			return;
 		}
 
-		issues.add(new ValidationIssue(
-				MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
-				IssueSeverity.ERROR,
-				missingTargetResourceMessage(target.path(), targetResource),
-				lineNumber,
-				startOffset,
-				endOffset));
+		checkTargetPathTellsWhatItPointsTo(target, targetResource, lineNumber, startOffset, endOffset, issues);
+	}
+
+	/**
+	 * Checks that the target path of a link says what it points to: a path ending with a slash
+	 * announces a directory, a path without one a file. A target that keeps its promise is what a
+	 * reader expects, and a target that does not is worth saying so even though it can be followed.
+	 * 
+	 * <p>The trailing slash is read from the target as it is written in the document, because a
+	 * resolved path drops it &ndash; the file system tells apart a file from a directory by what is
+	 * there, not by how the path was spelled.</p>
+	 */
+	private static void checkTargetPathTellsWhatItPointsTo(LinkTarget target, Resource targetResource,
+			int lineNumber, int startOffset, int endOffset, List<ValidationIssue> issues) {
+
+		boolean pathAnnouncesADirectory = target.path().endsWith("/");
+
+		if (targetResource.isFile() && pathAnnouncesADirectory) {
+			issues.add(new ValidationIssue(
+					MarkdownIssueTypes.LINK_FILE_PATH_WITH_TRAILING_SLASH,
+					IssueSeverity.ERROR,
+					filePathWithTrailingSlashMessage(target.path()),
+					lineNumber,
+					startOffset,
+					endOffset));
+		} else if (targetResource.isDirectory() && !pathAnnouncesADirectory) {
+			issues.add(new ValidationIssue(
+					MarkdownIssueTypes.LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
+					IssueSeverity.WARNING,
+					directoryPathWithoutTrailingSlashMessage(target.path()),
+					lineNumber,
+					startOffset,
+					endOffset));
+		}
+	}
+
+	private static String filePathWithTrailingSlashMessage(String targetPath) {
+		return String.format("The file path '%s' ends with a '/' which usually indicates a directory,"
+				+ " not a file. Please remove the trailing '/' if you mean a file.",
+				withoutCurrentDirectorySegments(targetPath));
+	}
+
+	private static String directoryPathWithoutTrailingSlashMessage(String targetPath) {
+		return String.format("The given path '%s' is a directory, not a file."
+				+ " Please add a trailing '/' if you really mean a directory.",
+				withoutCurrentDirectorySegments(targetPath));
 	}
 
 	private static String missingTargetResourceMessage(String targetPath, Resource targetResource) {

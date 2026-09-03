@@ -29,6 +29,20 @@ public final class MarkdownIssueTypes {
 	public static final String LINK_TARGET_DOES_NOT_EXIST = PREFIX + "link.targetDoesNotExist";
 
 	/**
+	 * A link or image points to a file, but its target path ends with a slash, which announces a
+	 * directory.
+	 */
+	public static final String LINK_FILE_PATH_WITH_TRAILING_SLASH =
+			PREFIX + "link.filePathWithTrailingSlash";
+
+	/**
+	 * A link or image points to a directory, but its target path does not end with a slash, so it
+	 * reads like the path of a file.
+	 */
+	public static final String LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH =
+			PREFIX + "link.directoryPathWithoutTrailingSlash";
+
+	/**
 	 * A link or image points to a file relative to the document containing it, but the location of
 	 * that document is unknown, so there is nothing the target could be resolved against.
 	 */
