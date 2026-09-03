@@ -307,7 +307,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			List<ValidationIssue> issues) {
 
 		LinkTarget target = LinkTarget.of(targetMatch.matchedText);
-		if (!target.namesAFile()) {
+		if (!target.isLocalResourcePath()) {
 			return;
 		}
 

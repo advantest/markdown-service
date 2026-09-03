@@ -26,7 +26,7 @@ public class LinkTargetTest {
 		assertNull(target.scheme(), "A file path has no scheme.");
 		assertEquals("documents/overview.md", target.path());
 		assertNull(target.fragment(), "A target without a hash tag has no fragment.");
-		assertTrue(target.namesAFile());
+		assertTrue(target.isLocalResourcePath());
 	}
 
 	@Test
@@ -34,7 +34,7 @@ public class LinkTargetTest {
 		LinkTarget target = LinkTarget.of("https://example.com/page.html");
 
 		assertEquals("https", target.scheme());
-		assertFalse(target.namesAFile(), "Whoever owns the scheme resolves the target, not the file system.");
+		assertFalse(target.isLocalResourcePath(), "Whoever owns the scheme resolves the target, not the file system.");
 	}
 
 	@Test
@@ -43,7 +43,7 @@ public class LinkTargetTest {
 
 		assertEquals("overview.md", target.path());
 		assertEquals("the-section", target.fragment(), "The fragment is read without its hash tag.");
-		assertTrue(target.namesAFile());
+		assertTrue(target.isLocalResourcePath());
 	}
 
 	@Test
@@ -51,7 +51,7 @@ public class LinkTargetTest {
 		LinkTarget target = LinkTarget.of("#the-section");
 
 		assertEquals("the-section", target.fragment());
-		assertFalse(target.namesAFile(), "A target pointing into the current document names no file.");
+		assertFalse(target.isLocalResourcePath(), "A target pointing into the current document names no file.");
 	}
 
 	@Test

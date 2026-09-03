@@ -89,7 +89,7 @@ public record LinkTarget(String scheme, String path, String fragment) {
 	 * 
 	 * @return <code>true</code> if the target has no scheme and a path to resolve
 	 */
-	public boolean namesAFile() {
+	public boolean isLocalResourcePath() {
 		return this.scheme == null && this.path != null && !this.path.isBlank();
 	}
 
