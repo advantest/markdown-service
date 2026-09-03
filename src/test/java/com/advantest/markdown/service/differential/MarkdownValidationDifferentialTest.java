@@ -213,9 +213,13 @@ public class MarkdownValidationDifferentialTest {
 
 	private static List<ComparableFinding> toComparableFindings(List<RecordedFinding> recordedFindings) {
 		return recordedFindings.stream()
-				.flatMap(finding -> PortedValidationRules.issueTypeIdOf(finding.message()).stream()
-						.map(issueTypeId -> new ComparableFinding(finding.lineNumber(), finding.startOffset(),
-								finding.endOffset(), finding.severity(), issueTypeId, finding.message())))
+				.flatMap(finding -> {
+					String message = RewordedMessages.asThisServiceWordsIt(finding.message());
+
+					return PortedValidationRules.issueTypeIdOf(message).stream()
+							.map(issueTypeId -> new ComparableFinding(finding.lineNumber(), finding.startOffset(),
+									finding.endOffset(), finding.severity(), issueTypeId, message));
+				})
 				.sorted(ComparableFinding.ORDER)
 				.toList();
 	}

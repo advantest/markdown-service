@@ -344,7 +344,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	private static String missingTargetResourceMessage(String targetPath, Resource targetResource) {
-		return String.format("The referenced file or directory '%s' does not exist. Target path: %s",
+		return String.format("The referenced file or directory '%s' does not exist. Resolved target path: %s",
 				withoutCurrentDirectorySegments(targetPath), targetResource.getResolvedPath());
 	}
 

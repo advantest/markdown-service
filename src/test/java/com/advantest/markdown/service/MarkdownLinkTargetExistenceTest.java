@@ -68,7 +68,7 @@ public class MarkdownLinkTargetExistenceTest {
 		assertEquals(
 				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST, IssueSeverity.ERROR,
 						"The referenced file or directory 'documents/overview.md' does not exist."
-								+ " Target path: " + expectedTargetPath,
+								+ " Resolved target path: " + expectedTargetPath,
 						1, expectedStart, expectedStart + "documents/overview.md".length())),
 				this.service.validateMarkdown(markdown, documentResource()),
 				"The message names the target as it is written and where it was looked for.");
@@ -149,7 +149,7 @@ public class MarkdownLinkTargetExistenceTest {
 
 		assertEquals(
 				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST, IssueSeverity.ERROR,
-						"The referenced file or directory 'overview.md' does not exist. Target path: "
+						"The referenced file or directory 'overview.md' does not exist. Resolved target path: "
 								+ this.documentDirectory.resolve("overview.md").toString(),
 						1, expectedStart, expectedStart + "overview.md".length())),
 				this.service.validateMarkdown(markdown, documentResource()),
