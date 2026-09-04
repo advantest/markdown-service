@@ -98,13 +98,13 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		} else if (node instanceof Reference || node instanceof Paragraph) {
 			findLinkReferenceDefinitionsIn(node).forEach(definition -> {
 				checkLinkReferenceDefinitionIdentifier(definition, document, issues);
-				checkLinkTarget(definition, document, true, issues);
+				checkLinkReferenceDefinitionTarget(definition, document, issues);
 			});
 		} else if (node instanceof Text) {
 			checkLinksTheParserLeftAsText(node, document, issues);
 		} else if (node instanceof Link || node instanceof Image) {
 			findLinkOrImage(node)
-					.ifPresent(link -> checkLinkTarget(link, document, false, issues));
+					.ifPresent(link -> checkLinkOrImageTarget(link, document, issues));
 		} else {
 			findReferenceLink(node)
 					.ifPresent(referenceLink -> checkReferenceLinkLabel(referenceLink, document, issues));
@@ -124,7 +124,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		int endOffset = node.getEndOffset();
 
 		MarkdownParsingTools.findLinksAndImages(sourceCode, startOffset, endOffset)
-				.forEach(link -> checkLinkTarget(link, document, false, issues));
+				.forEach(link -> checkLinkOrImageTarget(link, document, issues));
 
 		Stream.concat(
 				MarkdownParsingTools.findFullAndCollapsedReferenceLinks(sourceCode, startOffset, endOffset),
@@ -257,33 +257,66 @@ class MarkdownLinkValidator implements MarkdownValidator {
 				+ " colons (\":\"), periods (\".\"), slashes (\"/\"), spaces (\" \").";
 	}
 
-	private void checkLinkTarget(RegexMatch linkStatement, Document document,
-			boolean targetInLinkReferenceDefinition, List<ValidationIssue> issues) {
+	/**
+	 * Checks the target of a link or an image, i.e. of a statement of the form
+	 * <code>[label](target)</code> or <code>![label](target)</code>. A target that is not there
+	 * leaves nothing to mark, so the brackets around it are marked instead.
+	 */
+	private void checkLinkOrImageTarget(RegexMatch linkOrImage, Document document,
+			List<ValidationIssue> issues) {
 
-		RegexMatch targetMatch = linkStatement.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
+		RegexMatch targetMatch = linkOrImage.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
 		if (targetMatch == null) {
 			return;
 		}
 
-		String linkTarget = targetMatch.matchedText;
-		if (!linkTarget.isBlank()) {
+		if (!targetMatch.matchedText.isBlank()) {
 			checkTargetResource(targetMatch, document, issues);
 			return;
 		}
 
 		int startOffset = targetMatch.startIndex;
-		int endOffset = startOffset + linkTarget.length();
+		int endOffset = startOffset + targetMatch.matchedText.length();
 
-		if (linkTarget.isEmpty()) {
-			if (targetInLinkReferenceDefinition) {
-				// there is nothing to mark, so mark the link reference definition statement instead
-				startOffset = linkStatement.startIndex;
-			} else {
-				// there is nothing to mark, so mark the brackets surrounding the target as well
-				startOffset--;
-				endOffset++;
-			}
+		if (targetMatch.matchedText.isEmpty()) {
+			// there is nothing to mark, so mark the brackets surrounding the target as well
+			startOffset--;
+			endOffset++;
 		}
+
+		reportEmptyTarget(document, startOffset, endOffset, issues);
+	}
+
+	/**
+	 * Checks the target of a link reference definition, i.e. of a statement of the form
+	 * <code>[label]: target</code>. It names a target like a link does, so the target itself is
+	 * checked the same way, but a target that is not there leaves nothing to mark: the whole
+	 * statement is marked instead of the brackets a link would have around its target.
+	 */
+	private void checkLinkReferenceDefinitionTarget(RegexMatch linkReferenceDefinition, Document document,
+			List<ValidationIssue> issues) {
+
+		RegexMatch targetMatch =
+				linkReferenceDefinition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
+		if (targetMatch == null) {
+			return;
+		}
+
+		if (!targetMatch.matchedText.isBlank()) {
+			checkTargetResource(targetMatch, document, issues);
+			return;
+		}
+
+		int startOffset = targetMatch.matchedText.isEmpty()
+				? linkReferenceDefinition.startIndex
+				: targetMatch.startIndex;
+
+		reportEmptyTarget(document, startOffset,
+				targetMatch.startIndex + targetMatch.matchedText.length(), issues);
+	}
+
+	private static void reportEmptyTarget(Document document, int startOffset, int endOffset,
+			List<ValidationIssue> issues) {
 
 		issues.add(new ValidationIssue(
 				MarkdownIssueTypes.LINK_EMPTY_TARGET,
