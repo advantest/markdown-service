@@ -43,6 +43,12 @@ public final class MarkdownIssueTypes {
 			PREFIX + "link.directoryPathWithoutTrailingSlash";
 
 	/**
+	 * A link or image points to a file or directory by a path that names it on its own, e.g.
+	 * <code>/usr/share/doc/guide.md</code>, which leads nowhere on another machine.
+	 */
+	public static final String LINK_ABSOLUTE_TARGET_PATH = PREFIX + "link.absoluteTargetPath";
+
+	/**
 	 * A link or image points to a file relative to the document containing it, but the location of
 	 * that document is unknown, so there is nothing the target could be resolved against.
 	 */

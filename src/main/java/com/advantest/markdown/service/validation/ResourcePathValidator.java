@@ -12,8 +12,8 @@ import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.parsing.LinkTarget;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.utils.TextUtils;
+import com.advantest.resources.RelativePathResourceResolver;
 import com.advantest.resources.Resource;
-import com.advantest.resources.ResourceResolver;
 import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.util.ast.Document;
 
@@ -21,14 +21,14 @@ import com.vladsch.flexmark.util.ast.Document;
  * Checks what a target written as a path points to: whether the resource is there, and whether the
  * path says what it points to.
  * 
- * <p>A path names no scheme, so it says nothing about where it is looked for. Where that is, is
- * the business of the resolver this validator was created with, and the rules hold wherever the
- * documents live &ndash; that a path ending with a slash announces a directory is a convention of
- * writing a path in prose and not of any one file system.</p>
+ * <p>A path meant as seen from the document carrying it says nothing about where it is looked for.
+ * Where that is, is the business of the resolver this validator was created with, and the rules
+ * hold wherever the documents live &ndash; that a path ending with a slash announces a directory is
+ * a convention of writing a path in prose and not of any one file system.</p>
  */
 class ResourcePathValidator {
 
-	private final ResourceResolver resourceResolver;
+	private final RelativePathResourceResolver resourceResolver;
 
 	/**
 	 * Creates the validator, resolving what a path points to with the given resolver.
@@ -36,7 +36,7 @@ class ResourcePathValidator {
 	 * @param resourceResolver the resolver answering for the paths this validator is given, must
 	 *                         not be <code>null</code>
 	 */
-	ResourcePathValidator(ResourceResolver resourceResolver) {
+	ResourcePathValidator(RelativePathResourceResolver resourceResolver) {
 		if (resourceResolver == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}

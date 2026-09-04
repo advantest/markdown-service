@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 
 import com.advantest.flexmark.ext.jira.tickets.JiraTicketExtension;
 import com.advantest.markdown.MarkdownCustomization;
+import com.advantest.markdown.service.validation.MarkdownIssueTypes;
+import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.resources.RelativePathResourceResolver;
 import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.html.AttributeProvider;
@@ -187,7 +189,7 @@ class MarkdownServiceBuilderTest {
 	}
 
 	@Test
-	void builderLeavesAnAbsolutePathAloneWhereTheDocumentsAreReadFromSomewhereElse() {
+	void builderReportsAPathNamingItsResourceOnItsOwnWhereverTheDocumentsComeFrom() {
 		RelativePathResourceResolver ownResolver =
 				(linkTarget, document) -> new UnresolvedResource(linkTarget);
 
@@ -195,8 +197,11 @@ class MarkdownServiceBuilderTest {
 				.withRelativePathResourceResolver(ownResolver)
 				.build();
 
-		// nobody resolves a path naming its resource on its own, so nothing is said about it
-		assertTrue(service.validateMarkdown("[label](/absolute/path/guide.md)").isEmpty());
+		// such a path leads to the resource on one machine only, wherever the documents come from
+		List<ValidationIssue> issues = service.validateMarkdown("[label](/absolute/path/guide.md)");
+
+		assertEquals(1, issues.size());
+		assertEquals(MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
 	}
 
 	@Test

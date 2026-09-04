@@ -56,7 +56,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 	private final ResourcePathValidator resourcePathValidator;
 
-	private final Optional<ResourcePathValidator> absolutePathValidator;
+	private final AbsolutePathValidator absolutePathValidator = new AbsolutePathValidator();
 
 	/**
 	 * Creates the validator, resolving everything a link points to with the given resolvers.
@@ -69,7 +69,6 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 		this.resourcePathValidator = new ResourcePathValidator(resourceResolvers.relativePathResolver());
-		this.absolutePathValidator = resourceResolvers.absolutePathResolver().map(ResourcePathValidator::new);
 	}
 
 	@Override
@@ -318,9 +317,10 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 	/**
 	 * Hands the resource a link points to over to the validator answering for the way the target
-	 * is written. A target written as a path is meant as seen from the document carrying it, or
-	 * names its resource on its own; everything else names a scheme and is resolved by whoever
-	 * owns that scheme, e.g. a web address by a browser.
+	 * is written. A target written as a path is meant as seen from the document carrying it, and
+	 * is looked for; a target naming its resource on its own is reported, because it leads there
+	 * on one machine only; everything else names a scheme and is resolved by whoever owns that
+	 * scheme, e.g. a web address by a browser.
 	 */
 	private void checkTargetResource(RegexMatch targetMatch, Document document,
 			List<ValidationIssue> issues) {
@@ -330,8 +330,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		if (ResourceResolverRegistry.isRelativePath(targetReference)) {
 			this.resourcePathValidator.checkTargetResource(targetMatch, document, issues);
 		} else if (ResourceResolverRegistry.isAbsolutePathWithoutScheme(targetReference)) {
-			this.absolutePathValidator.ifPresent(
-					validator -> validator.checkTargetResource(targetMatch, document, issues));
+			this.absolutePathValidator.checkTargetPath(targetMatch, document, issues);
 		}
 	}
 
