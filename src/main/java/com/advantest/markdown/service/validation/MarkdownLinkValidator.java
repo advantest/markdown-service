@@ -54,9 +54,9 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			+ " and use that reference link label in your link,"
 			+ " e.g. \"[your link text][ReferenceLinkLabel]\" or \"[ReferenceLinkLabel]\".";
 
-	private final ResourcePathValidator relativePathTargets;
+	private final ResourcePathValidator resourcePathValidator;
 
-	private final Optional<ResourcePathValidator> absolutePathTargets;
+	private final Optional<ResourcePathValidator> absolutePathValidator;
 
 	/**
 	 * Creates the validator, resolving everything a link points to with the given resolvers.
@@ -68,8 +68,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		if (resourceResolvers == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		this.relativePathTargets = new ResourcePathValidator(resourceResolvers.relativePathResolver());
-		this.absolutePathTargets = resourceResolvers.absolutePathResolver().map(ResourcePathValidator::new);
+		this.resourcePathValidator = new ResourcePathValidator(resourceResolvers.relativePathResolver());
+		this.absolutePathValidator = resourceResolvers.absolutePathResolver().map(ResourcePathValidator::new);
 	}
 
 	@Override
@@ -328,9 +328,9 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		String targetReference = targetMatch.matchedText;
 
 		if (ResourceResolverRegistry.isRelativePath(targetReference)) {
-			this.relativePathTargets.checkTargetResource(targetMatch, document, issues);
+			this.resourcePathValidator.checkTargetResource(targetMatch, document, issues);
 		} else if (ResourceResolverRegistry.isAbsolutePathWithoutScheme(targetReference)) {
-			this.absolutePathTargets.ifPresent(
+			this.absolutePathValidator.ifPresent(
 					validator -> validator.checkTargetResource(targetMatch, document, issues));
 		}
 	}
