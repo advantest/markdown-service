@@ -32,7 +32,7 @@ import com.advantest.resources.Resource;
  * <p>Both rules only speak about a target that is there — a target that is nowhere is reported by
  * the existence rule instead, and what its path announces is then beside the point.</p>
  */
-public class MarkdownLinkTargetShapeTest {
+public class LocalFileSystemPathShapeTest {
 
 	private final MarkdownService service = new MarkdownService();
 
