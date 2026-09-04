@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.markdown.service.validation.uri.UriValidator;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 
@@ -43,7 +44,23 @@ public class MarkdownValidation {
 	 *                          <code>null</code>
 	 */
 	public MarkdownValidation(ResourceResolverRegistry resourceResolvers) {
-		this(List.of(new MarkdownLinkValidator(resourceResolvers), new MarkdownAnchorValidator()));
+		this(resourceResolvers, List.of());
+	}
+
+	/**
+	 * Creates a validation applying the built-in validators, resolving everything a document
+	 * refers to with the given resolvers and handing a target naming a scheme to the given
+	 * validators.
+	 * 
+	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
+	 *                          <code>null</code>
+	 * @param uriValidators the validators of a target naming a scheme, the first one saying it is
+	 *                      responsible answers for a target, must not be <code>null</code>
+	 */
+	public MarkdownValidation(ResourceResolverRegistry resourceResolvers,
+			List<UriValidator> uriValidators) {
+		this(List.of(new MarkdownLinkValidator(resourceResolvers, uriValidators),
+				new MarkdownAnchorValidator()));
 	}
 
 	/**

@@ -20,6 +20,8 @@ import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.validation.resource.AbsolutePathValidator;
 import com.advantest.markdown.service.validation.resource.RelativePathValidator;
+import com.advantest.markdown.service.validation.uri.UriTarget;
+import com.advantest.markdown.service.validation.uri.UriValidator;
 import com.advantest.markdown.service.utils.TextUtils;
 import com.vladsch.flexmark.ast.Image;
 import com.vladsch.flexmark.ast.ImageRef;
@@ -60,17 +62,34 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 	private final AbsolutePathValidator absolutePathValidator = new AbsolutePathValidator();
 
+	private final List<UriValidator> uriValidators;
+
 	/**
-	 * Creates the validator, resolving everything a link points to with the given resolvers.
+	 * Creates the validator, resolving everything a link points to with the given resolvers and
+	 * checking no target naming a scheme.
 	 * 
 	 * @param resourceResolvers the resolvers of the surrounding environment, must not be
 	 *                          <code>null</code>
 	 */
 	MarkdownLinkValidator(ResourceResolverRegistry resourceResolvers) {
-		if (resourceResolvers == null) {
-			throw new IllegalArgumentException("Argument must not be null.");
+		this(resourceResolvers, List.of());
+	}
+
+	/**
+	 * Creates the validator, resolving everything a link points to with the given resolvers and
+	 * handing a target naming a scheme to the given validators.
+	 * 
+	 * @param resourceResolvers the resolvers of the surrounding environment, must not be
+	 *                          <code>null</code>
+	 * @param uriValidators the validators of a target naming a scheme, the first one saying it is
+	 *                      responsible answers for a target, must not be <code>null</code>
+	 */
+	MarkdownLinkValidator(ResourceResolverRegistry resourceResolvers, List<UriValidator> uriValidators) {
+		if (resourceResolvers == null || uriValidators == null) {
+			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.relativePathValidator = new RelativePathValidator(resourceResolvers.relativePathResolver());
+		this.uriValidators = List.copyOf(uriValidators);
 	}
 
 	@Override
@@ -321,8 +340,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * Hands the resource a link points to over to the validator answering for the way the target
 	 * is written. A target written as a path is meant as seen from the document carrying it, and
 	 * is looked for; a target naming its resource on its own is reported, because it leads there
-	 * on one machine only; everything else names a scheme and is resolved by whoever owns that
-	 * scheme, e.g. a web address by a browser.
+	 * on one machine only; everything else names a scheme and is checked by the validator
+	 * answering for that scheme, e.g. a web address by one asking whether the address is there.
 	 */
 	private void checkTargetResource(RegexMatch targetMatch, Document document,
 			List<ValidationIssue> issues) {
@@ -333,6 +352,33 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			this.relativePathValidator.checkTargetResource(targetMatch, document, issues);
 		} else if (ResourceResolverRegistry.isAbsolutePathWithoutScheme(targetReference)) {
 			this.absolutePathValidator.checkTargetPath(targetMatch, document, issues);
+		} else {
+			checkTargetUri(targetMatch, document, issues);
+		}
+	}
+
+	/**
+	 * Hands a target naming a scheme to the first registered validator saying that it answers for
+	 * it. A target no validator claims is left alone: nothing here knows what the scheme means,
+	 * and a target nobody understands is not a target that is wrong.
+	 */
+	private void checkTargetUri(RegexMatch targetMatch, Document document,
+			List<ValidationIssue> issues) {
+
+		if (this.uriValidators.isEmpty()) {
+			return;
+		}
+
+		int startOffset = targetMatch.startIndex;
+		int endOffset = startOffset + targetMatch.matchedText.length();
+		UriTarget target = UriTarget.of(targetMatch.matchedText,
+				TextUtils.getLineNumberForOffset(document, startOffset), startOffset, endOffset);
+
+		for (UriValidator validator : this.uriValidators) {
+			if (validator.isResponsibleFor(target)) {
+				issues.addAll(validator.validate(target));
+				return;
+			}
 		}
 	}
 
