@@ -15,15 +15,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
-import com.advantest.markdown.service.parsing.LinkTarget;
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.utils.TextUtils;
-import com.advantest.resources.Resource;
-import com.advantest.resources.ResourceResolver;
-import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.ast.Image;
 import com.vladsch.flexmark.ast.ImageRef;
 import com.vladsch.flexmark.ast.Link;
@@ -61,6 +56,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 	private final ResourceResolverRegistry resourceResolvers;
 
+	private final LocalFileSystemResourceValidator localFileSystemResources;
+
 	/**
 	 * Creates the validator, resolving everything a link points to with the given resolvers.
 	 * 
@@ -72,6 +69,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 		this.resourceResolvers = resourceResolvers;
+		this.localFileSystemResources = new LocalFileSystemResourceValidator(resourceResolvers);
 	}
 
 	/**
@@ -329,136 +327,17 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	/**
-	 * Checks the resource a link points to. Only a target without a scheme names a resource of this
-	 * environment; everything else is resolved by whoever owns its scheme, e.g. a web address by a
-	 * browser, and is not this rule's business.
-	 * 
-	 * <p>The fragment of a target names a place inside the target, e.g. a section of a document. It
-	 * can only be looked for once the target itself is found, which is why only the path is
-	 * checked here.</p>
+	 * Hands the resource a link points to over to the validator answering for the environment it
+	 * is in. Only a target without a scheme, or with a drive letter for one, names a resource of
+	 * the environment this code runs in; everything else is resolved by whoever owns its scheme,
+	 * e.g. a web address by a browser.
 	 */
 	private void checkTargetResource(RegexMatch targetMatch, Document document,
 			List<ValidationIssue> issues) {
 
-		String targetReference = targetMatch.matchedText;
-		if (!ResourceResolverRegistry.namesAResourceOfThisEnvironment(targetReference)) {
-			// a reference naming a scheme is checked by whoever answers for that scheme
-			return;
+		if (ResourceResolverRegistry.namesAResourceOfThisEnvironment(targetMatch.matchedText)) {
+			this.localFileSystemResources.checkTargetResource(targetMatch, document, issues);
 		}
-
-		LinkTarget target = LinkTarget.of(targetReference);
-		if (target.path() == null || target.path().isBlank()) {
-			// the reference names a place inside the document it is written in, not a resource
-			return;
-		}
-
-		Optional<ResourceResolver> resolver = this.resourceResolvers.resolverFor(targetReference);
-		if (resolver.isEmpty()) {
-			return;
-		}
-
-		int startOffset = targetMatch.startIndex;
-		int endOffset = startOffset + target.path().length();
-		int lineNumber = TextUtils.getLineNumberForOffset(document, startOffset);
-
-		Resource documentResource = MarkdownParserAndHtmlRenderer.getDocumentResource(document);
-		if (UnresolvedResource.UNKNOWN_DOCUMENT.equals(documentResource)) {
-			// a target is resolved relative to the document, so without knowing where the document
-			// is there is nothing to look for
-			issues.add(new ValidationIssue(
-					MarkdownIssueTypes.LINK_UNKNOWN_DOCUMENT_LOCATION,
-					IssueSeverity.ERROR,
-					unknownDocumentLocationMessage(target.path()),
-					lineNumber,
-					startOffset,
-					endOffset));
-			return;
-		}
-
-		Resource targetResource = resolver.get().resolve(targetReference, documentResource);
-		if (!targetResource.exists()) {
-			issues.add(new ValidationIssue(
-					MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
-					IssueSeverity.ERROR,
-					missingTargetResourceMessage(target.path(), targetResource),
-					lineNumber,
-					startOffset,
-					endOffset));
-			return;
-		}
-
-		checkTargetPathTellsWhatItPointsTo(target, targetResource, lineNumber, startOffset, endOffset, issues);
-	}
-
-	/**
-	 * Checks that the target path of a link says what it points to: a path ending with a slash
-	 * announces a directory, a path without one a file. A target that keeps its promise is what a
-	 * reader expects, and a target that does not is worth saying so even though it can be followed.
-	 * 
-	 * <p>The trailing slash is read from the target as it is written in the document, because a
-	 * resolved path drops it &ndash; the file system tells apart a file from a directory by what is
-	 * there, not by how the path was spelled.</p>
-	 */
-	private static void checkTargetPathTellsWhatItPointsTo(LinkTarget target, Resource targetResource,
-			int lineNumber, int startOffset, int endOffset, List<ValidationIssue> issues) {
-
-		boolean pathAnnouncesADirectory = target.path().endsWith("/");
-
-		if (targetResource.isFile() && pathAnnouncesADirectory) {
-			issues.add(new ValidationIssue(
-					MarkdownIssueTypes.LINK_FILE_PATH_WITH_TRAILING_SLASH,
-					IssueSeverity.ERROR,
-					filePathWithTrailingSlashMessage(target.path()),
-					lineNumber,
-					startOffset,
-					endOffset));
-		} else if (targetResource.isDirectory() && !pathAnnouncesADirectory) {
-			issues.add(new ValidationIssue(
-					MarkdownIssueTypes.LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
-					IssueSeverity.WARNING,
-					directoryPathWithoutTrailingSlashMessage(target.path()),
-					lineNumber,
-					startOffset,
-					endOffset));
-		}
-	}
-
-	private static String filePathWithTrailingSlashMessage(String targetPath) {
-		return String.format("The file path '%s' ends with a '/' which usually indicates a directory,"
-				+ " not a file. Please remove the trailing '/' if you mean a file.",
-				withoutCurrentDirectorySegments(targetPath));
-	}
-
-	private static String directoryPathWithoutTrailingSlashMessage(String targetPath) {
-		return String.format("The given path '%s' is a directory, not a file."
-				+ " Please add a trailing '/' if you really mean a directory.",
-				withoutCurrentDirectorySegments(targetPath));
-	}
-
-	private static String missingTargetResourceMessage(String targetPath, Resource targetResource) {
-		return String.format("The referenced file or directory '%s' does not exist. Resolved target path: %s",
-				withoutCurrentDirectorySegments(targetPath), targetResource.getResolvedPath());
-	}
-
-	private static String unknownDocumentLocationMessage(String targetPath) {
-		return String.format("The referenced file or directory '%s' cannot be resolved,"
-				+ " because the location of the document containing this link is unknown.",
-				withoutCurrentDirectorySegments(targetPath));
-	}
-
-	/**
-	 * Drops the <code>./</code> segments of a path, which say "this directory" and therefore say
-	 * nothing. A message names the target the way a reader would write it, while the offsets keep
-	 * counting the target as it stands in the document.
-	 */
-	private static String withoutCurrentDirectorySegments(String targetPath) {
-		String path = targetPath;
-
-		while (path.startsWith("./")) {
-			path = path.substring(2);
-		}
-
-		return path.replace("/./", "/");
 	}
 
 	private void checkReferenceLinkLabel(RegexMatch referenceLink, Document document,
