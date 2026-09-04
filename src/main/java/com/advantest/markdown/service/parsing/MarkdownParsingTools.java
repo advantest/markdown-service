@@ -9,6 +9,7 @@ package com.advantest.markdown.service.parsing;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -287,13 +288,16 @@ public final class MarkdownParsingTools {
 	 * @param markdownCode Markdown source code
 	 * @param startOffset the offset the search starts at
 	 * @param endOffset the offset the search ends at
-	 * @return the detected regular expression matches, with offsets counted in the whole source code
+	 * @return the detected regular expression matches, with offsets counted in the whole source code,
+	 *         never holding <code>null</code>
 	 * 
 	 * @see #findValidSectionAnchorsInMarkdownCode(String)
 	 */
 	public static Stream<RegexMatch> findHeadingAnchorIds(CharSequence markdownCode, int startOffset, int endOffset) {
 		return findMatchesIn(markdownCode, startOffset, endOffset, HEADING_PATTERN, CAPTURING_GROUP_ANCHOR)
-				.map(match -> match.subMatches.get(CAPTURING_GROUP_ANCHOR));
+				.map(match -> match.subMatches.get(CAPTURING_GROUP_ANCHOR))
+				// a capturing group that took no part in the match has no sub match
+				.filter(Objects::nonNull);
 	}
 	
 	/**
