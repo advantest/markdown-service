@@ -54,8 +54,25 @@ public final class MarkdownIssueTypes {
 	 */
 	public static final String LINK_UNKNOWN_DOCUMENT_LOCATION = PREFIX + "link.unknownDocumentLocation";
 
-	/** A reference link has an empty label, e.g. <code>[label][]</code> used as a full reference link. */
-	public static final String LINK_EMPTY_REFERENCE_LABEL = PREFIX + "link.emptyReferenceLabel";
+	/**
+	 * A link or image points to a web address that is none, e.g. because it names another scheme
+	 * than <code>http</code> or <code>https</code> or because the address cannot be read at all.
+	 */
+	public static final String LINK_INVALID_WEB_ADDRESS = PREFIX + "link.invalidWebAddress";
+
+	/**
+	 * A link or image points to a web address that did not answer, e.g. because no host of that
+	 * name exists or because nothing answered in time.
+	 */
+	public static final String LINK_WEB_ADDRESS_DOES_NOT_ANSWER = PREFIX + "link.webAddressDoesNotAnswer";
+
+	/**
+	 * A link or image points to a web address that answered, but with a status code saying that
+	 * it leads nowhere, e.g. <code>404</code>.
+	 */
+	public static final String LINK_WEB_ADDRESS_NOT_REACHABLE = PREFIX + "link.webAddressNotReachable";
+
+	/** A reference link has an empty label, e.g. <code>[label][]</code> used as a full reference link. */	public static final String LINK_EMPTY_REFERENCE_LABEL = PREFIX + "link.emptyReferenceLabel";
 
 	/** A reference link refers to a label that no link reference definition in the document defines. */
 	public static final String LINK_MISSING_REFERENCE_DEFINITION = PREFIX + "link.missingReferenceDefinition";
