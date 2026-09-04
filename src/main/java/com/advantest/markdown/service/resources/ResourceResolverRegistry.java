@@ -13,51 +13,66 @@ import java.util.List;
 import java.util.Optional;
 
 import com.advantest.markdown.service.parsing.LinkTarget;
+import com.advantest.resources.AbsoluteLocalPathResolver;
 import com.advantest.resources.FileSchemeUriResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
+import com.advantest.resources.RelativePathResourceResolver;
 import com.advantest.resources.ResourceResolver;
 import com.advantest.resources.UriResolver;
 
 /**
  * Knows which resolver answers for a reference written in a document.
  * 
- * <p>Two kinds of reference are told apart. A reference without a scheme, e.g.
- * <code>../images/logo.png</code>, names a resource of the environment this code runs in, and
- * there is one resolver for that environment or there is none. A reference naming a scheme, e.g.
- * <code>https://example.org/guide</code>, is offered to the registered {@link UriResolver}s, the
- * last registered one that says it is responsible answering for it, so that a resolver added later
- * can claim what a more general one would have taken.</p>
+ * <p>Three kinds of reference are told apart. A reference without a scheme and without a leading
+ * separator, e.g. <code>../images/logo.png</code>, has a meaning only together with the document
+ * carrying it, and the one registered {@link RelativePathResourceResolver} says what that meaning
+ * is. A reference that is an absolute path, e.g. <code>/usr/share/doc/guide.md</code> or
+ * <code>C:\documents\guide.md</code>, names its resource on its own; there is a resolver for it
+ * where the documents live in a file system, and there is none where they do not. Everything else
+ * names a scheme and is offered to the registered {@link UriResolver}s, the last registered one
+ * that says it is responsible answering for it, so that a resolver added later can claim what a
+ * more general one would have taken.</p>
  * 
  * <p>A reference whose scheme is a single letter is a drive letter of a file system, e.g.
- * <code>C:/docs/guide.md</code>, and therefore names a resource of this environment. No scheme in
- * use is a single letter, so nothing is taken away from the resolvers of a scheme by reading it
- * that way.</p>
+ * <code>C:/docs/guide.md</code>, and therefore an absolute path. No scheme in use is a single
+ * letter, so nothing is taken away from the resolvers of a scheme by reading it that way.</p>
  * 
  * <p>A reference nobody answers for is left alone: it is not this environment's business, and
  * saying anything about it would be guessing.</p>
  */
 public final class ResourceResolverRegistry {
 
-	private final ResourceResolver localFileSystemResolver;
+	private final RelativePathResourceResolver relativePathResolver;
+
+	private final ResourceResolver absolutePathResolver;
 
 	private final List<UriResolver> uriResolvers;
 
 	/**
 	 * Creates a registry with the given resolvers.
 	 * 
-	 * @param localFileSystemResolver the resolver of the environment this code runs in, or
-	 *                                <code>null</code> if references to it are not resolved at all
+	 * @param relativePathResolver the resolver saying what a path means as seen from the document
+	 *                             carrying it, must not be <code>null</code>
+	 * @param absolutePathResolver the resolver of a path naming its resource on its own, or
+	 *                             <code>null</code> if such a path is not resolved at all
 	 * @param uriResolvers the resolvers of references naming a scheme, in the order in which they
 	 *                     were registered, must not be <code>null</code>
-	 * @throws IllegalArgumentException if the list of URI resolvers is <code>null</code> or
-	 *                                  contains <code>null</code>
+	 * @throws IllegalArgumentException if the resolver of a path is <code>null</code> or if the
+	 *                                  list of URI resolvers is <code>null</code> or contains
+	 *                                  <code>null</code>
 	 */
-	public ResourceResolverRegistry(ResourceResolver localFileSystemResolver, List<UriResolver> uriResolvers) {
+	public ResourceResolverRegistry(RelativePathResourceResolver relativePathResolver,
+			ResourceResolver absolutePathResolver, List<UriResolver> uriResolvers) {
+
+		if (relativePathResolver == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
 		if (uriResolvers == null || uriResolvers.stream().anyMatch(resolver -> resolver == null)) {
 			throw new IllegalArgumentException("Argument must be a list without null elements.");
 		}
 
-		this.localFileSystemResolver = localFileSystemResolver;
+		this.relativePathResolver = relativePathResolver;
+		this.absolutePathResolver = absolutePathResolver;
 
 		List<UriResolver> lastRegisteredFirst = new ArrayList<>(uriResolvers);
 		Collections.reverse(lastRegisteredFirst);
@@ -66,8 +81,8 @@ public final class ResourceResolverRegistry {
 
 	/**
 	 * Creates the registry used when nothing else is asked for: references are resolved in the file
-	 * system of the machine this code runs on, whether they name it with the <code>file</code>
-	 * scheme or not.
+	 * system of the machine this code runs on, whether they are written as a path or with the
+	 * <code>file</code> scheme.
 	 * 
 	 * @return the newly created registry, never <code>null</code>
 	 */
@@ -77,19 +92,37 @@ public final class ResourceResolverRegistry {
 
 	/**
 	 * Creates a registry resolving references with the given resolver of the local file system,
-	 * whether they name it with the <code>file</code> scheme or not.
+	 * whether they are written as a path or with the <code>file</code> scheme.
 	 * 
-	 * @param localFileSystemResolver the resolver of the local file system, must not be
-	 *                                <code>null</code>
+	 * @param relativePathResolver the resolver of the local file system, must not be
+	 *                             <code>null</code>
 	 * @return the newly created registry, never <code>null</code>
 	 * @throws IllegalArgumentException if the given resolver is <code>null</code>
 	 */
-	public static ResourceResolverRegistry ofLocalFileSystem(ResourceResolver localFileSystemResolver) {
-		if (localFileSystemResolver == null) {
+	public static ResourceResolverRegistry ofLocalFileSystem(RelativePathResourceResolver relativePathResolver) {
+		if (relativePathResolver == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return new ResourceResolverRegistry(localFileSystemResolver,
-				List.of(new FileSchemeUriResolver(localFileSystemResolver)));
+		return new ResourceResolverRegistry(relativePathResolver, new AbsoluteLocalPathResolver(),
+				List.of(new FileSchemeUriResolver(relativePathResolver)));
+	}
+
+	/**
+	 * Returns the resolver saying what a path means as seen from the document carrying it.
+	 * 
+	 * @return the resolver, never <code>null</code>
+	 */
+	public RelativePathResourceResolver relativePathResolver() {
+		return this.relativePathResolver;
+	}
+
+	/**
+	 * Returns the resolver of a path naming its resource on its own.
+	 * 
+	 * @return the resolver, or an empty {@link Optional} where such a path is not resolved at all
+	 */
+	public Optional<ResourceResolver> absolutePathResolver() {
+		return Optional.ofNullable(this.absolutePathResolver);
 	}
 
 	/**
@@ -105,8 +138,12 @@ public final class ResourceResolverRegistry {
 			throw new IllegalArgumentException("Argument must be a non-blank resource path or URI.");
 		}
 
-		if (namesAResourceOfThisEnvironment(targetResourcePathOrUri)) {
-			return Optional.ofNullable(this.localFileSystemResolver);
+		if (isRelativePath(targetResourcePathOrUri)) {
+			return Optional.of(this.relativePathResolver);
+		}
+
+		if (isAbsolutePathWithoutScheme(targetResourcePathOrUri)) {
+			return absolutePathResolver();
 		}
 
 		return uriResolverFor(targetResourcePathOrUri).map(ResourceResolver.class::cast);
@@ -141,15 +178,58 @@ public final class ResourceResolverRegistry {
 	}
 
 	/**
-	 * Tells whether the given reference names a resource of the environment this code runs in,
-	 * i.e. whether it names no scheme or a drive letter.
+	 * Tells whether the given reference is a path that is meant as seen from the document carrying
+	 * it, i.e. a path naming no scheme and starting with no separator.
 	 * 
 	 * @param targetResourcePathOrUri the reference as it is written in the document, must not be
 	 *                                <code>null</code>
-	 * @return <code>true</code> if and only if the reference names a resource of this environment
+	 * @return <code>true</code> if and only if the reference is such a path
 	 * @throws IllegalArgumentException if the given reference is <code>null</code>
 	 */
-	public static boolean namesAResourceOfThisEnvironment(String targetResourcePathOrUri) {
+	public static boolean isRelativePath(String targetResourcePathOrUri) {
+		return isPathWithoutScheme(targetResourcePathOrUri)
+				&& !isAbsolutePathWithoutScheme(targetResourcePathOrUri);
+	}
+
+	/**
+	 * Tells whether the given reference is a path naming its resource on its own, i.e. a path
+	 * starting with a separator, e.g. <code>/usr/share/doc/guide.md</code> or
+	 * <code>\\server\share\guide.md</code>, or a path led by a drive letter, e.g.
+	 * <code>C:\documents\guide.md</code>.
+	 * 
+	 * @param targetResourcePathOrUri the reference as it is written in the document, must not be
+	 *                                <code>null</code>
+	 * @return <code>true</code> if and only if the reference is such a path
+	 * @throws IllegalArgumentException if the given reference is <code>null</code>
+	 */
+	public static boolean isAbsolutePathWithoutScheme(String targetResourcePathOrUri) {
+		if (targetResourcePathOrUri == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
+
+		String scheme = LinkTarget.of(targetResourcePathOrUri).scheme();
+		if (scheme != null) {
+			// a scheme of a single letter is the drive letter of an absolute path
+			return scheme.length() == 1;
+		}
+
+		return targetResourcePathOrUri.startsWith("/") || targetResourcePathOrUri.startsWith("\\");
+	}
+
+	/**
+	 * Tells whether the given reference is a path rather than a URI, i.e. whether it names no
+	 * scheme or a drive letter.
+	 * 
+	 * @param targetResourcePathOrUri the reference as it is written in the document, must not be
+	 *                                <code>null</code>
+	 * @return <code>true</code> if and only if the reference is a path
+	 * @throws IllegalArgumentException if the given reference is <code>null</code>
+	 */
+	public static boolean isPathWithoutScheme(String targetResourcePathOrUri) {
+		if (targetResourcePathOrUri == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
+
 		String scheme = LinkTarget.of(targetResourcePathOrUri).scheme();
 		return scheme == null || scheme.length() == 1;
 	}

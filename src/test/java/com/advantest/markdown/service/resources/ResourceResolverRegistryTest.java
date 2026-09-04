@@ -20,15 +20,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import com.advantest.resources.AbsoluteLocalPathResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
+import com.advantest.resources.RelativePathResourceResolver;
 import com.advantest.resources.Resource;
 import com.advantest.resources.ResourceResolver;
 import com.advantest.resources.UnresolvedResource;
 import com.advantest.resources.UriResolver;
 
 /**
- * Checks which resolver is asked for which reference: the one of the environment this code runs in
- * for a reference without a scheme, and the one claiming a scheme for the rest.
+ * Checks which resolver is asked for which reference: the one saying what a path means as seen
+ * from the document carrying it, the one of a path naming its resource on its own, and the one
+ * claiming a scheme for the rest.
  */
 class ResourceResolverRegistryTest {
 
@@ -56,7 +59,7 @@ class ResourceResolverRegistryTest {
 
 	}
 
-	private final ResourceResolver localResolver = new LocalFileSystemResourceResolver();
+	private final RelativePathResourceResolver localResolver = new LocalFileSystemResourceResolver();
 
 	@ParameterizedTest
 	@ValueSource(strings = {
@@ -64,13 +67,24 @@ class ResourceResolverRegistryTest {
 			"../images/logo.png",
 			"path/with/slash/",
 			"guide.md#a-section",
+			"a file with blanks.md"
+	})
+	void readsAReferenceMeantAsSeenFromTheDocument(String reference) {
+		assertTrue(ResourceResolverRegistry.isRelativePath(reference), reference);
+		assertFalse(ResourceResolverRegistry.isAbsolutePathWithoutScheme(reference), reference);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
 			"/absolute/path/guide.md",
 			"C:/docs/guide.md",
 			"c:\\docs\\guide.md",
-			"a file with blanks.md"
+			"\\\\server\\share\\guide.md",
+			"/docs/a file with blanks.md"
 	})
-	void namesAResourceOfThisEnvironment(String reference) {
-		assertTrue(ResourceResolverRegistry.namesAResourceOfThisEnvironment(reference), reference);
+	void readsAReferenceNamingItsResourceOnItsOwn(String reference) {
+		assertTrue(ResourceResolverRegistry.isAbsolutePathWithoutScheme(reference), reference);
+		assertFalse(ResourceResolverRegistry.isRelativePath(reference), reference);
 	}
 
 	@ParameterizedTest
@@ -81,15 +95,26 @@ class ResourceResolverRegistryTest {
 			"file:///home/user/guide.md",
 			"ftp://example.org/guide.md"
 	})
-	void namesAResourceOfSomebodyElse(String reference) {
-		assertFalse(ResourceResolverRegistry.namesAResourceOfThisEnvironment(reference), reference);
+	void readsAReferenceNamingAScheme(String reference) {
+		assertFalse(ResourceResolverRegistry.isPathWithoutScheme(reference), reference);
+		assertFalse(ResourceResolverRegistry.isRelativePath(reference), reference);
+		assertFalse(ResourceResolverRegistry.isAbsolutePathWithoutScheme(reference), reference);
 	}
 
 	@Test
-	void asksTheResolverOfThisEnvironmentForAReferenceWithoutAScheme() {
+	void asksTheResolverOfAPathForAReferenceWithoutAScheme() {
 		ResourceResolverRegistry registry = ResourceResolverRegistry.ofLocalFileSystem(this.localResolver);
 
 		assertSame(this.localResolver, registry.resolverFor("../images/logo.png").orElseThrow());
+	}
+
+	@Test
+	void asksTheResolverOfAnAbsolutePathForAPathNamingItsResourceOnItsOwn() {
+		ResourceResolverRegistry registry = ResourceResolverRegistry.ofLocalFileSystem(this.localResolver);
+
+		ResourceResolver resolver = registry.resolverFor("/absolute/path/guide.md").orElseThrow();
+
+		assertTrue(resolver instanceof AbsoluteLocalPathResolver);
 	}
 
 	@Test
@@ -109,10 +134,12 @@ class ResourceResolverRegistryTest {
 	}
 
 	@Test
-	void asksNobodyForAReferenceOfThisEnvironmentWithoutAResolverForIt() {
-		ResourceResolverRegistry registry = new ResourceResolverRegistry(null, List.of());
+	void asksNobodyForAnAbsolutePathWhereSuchAPathMeansNothing() {
+		ResourceResolverRegistry registry = new ResourceResolverRegistry(this.localResolver, null, List.of());
 
-		assertEquals(Optional.empty(), registry.resolverFor("../images/logo.png"));
+		assertEquals(Optional.empty(), registry.resolverFor("/absolute/path/guide.md"));
+		assertEquals(Optional.empty(), registry.absolutePathResolver());
+		assertSame(this.localResolver, registry.relativePathResolver());
 	}
 
 	@Test
@@ -120,7 +147,7 @@ class ResourceResolverRegistryTest {
 		UriResolver general = new RecordingUriResolver("https://");
 		UriResolver specific = new RecordingUriResolver("https://tickets.example.org/");
 		ResourceResolverRegistry registry =
-				new ResourceResolverRegistry(this.localResolver, List.of(general, specific));
+				new ResourceResolverRegistry(this.localResolver, null, List.of(general, specific));
 
 		assertSame(specific, registry.resolverFor("https://tickets.example.org/ABC-1").orElseThrow());
 		assertSame(general, registry.resolverFor("https://example.org/guide").orElseThrow());
@@ -130,7 +157,7 @@ class ResourceResolverRegistryTest {
 	void asksNobodyForAReferenceTheUriSyntaxRejects() {
 		UriResolver everything = new RecordingUriResolver("");
 		ResourceResolverRegistry registry =
-				new ResourceResolverRegistry(this.localResolver, List.of(everything));
+				new ResourceResolverRegistry(this.localResolver, null, List.of(everything));
 
 		assertEquals(Optional.empty(), registry.resolverFor("https://example.org/a guide|.md"));
 	}
@@ -144,10 +171,16 @@ class ResourceResolverRegistryTest {
 		assertThrows(IllegalArgumentException.class, () -> registry.uriResolverFor(null));
 		assertThrows(IllegalArgumentException.class, () -> registry.uriResolverFor("  "));
 		assertThrows(IllegalArgumentException.class,
-				() -> ResourceResolverRegistry.namesAResourceOfThisEnvironment(null));
+				() -> ResourceResolverRegistry.isRelativePath(null));
+		assertThrows(IllegalArgumentException.class,
+				() -> ResourceResolverRegistry.isAbsolutePathWithoutScheme(null));
+		assertThrows(IllegalArgumentException.class,
+				() -> ResourceResolverRegistry.isPathWithoutScheme(null));
 		assertThrows(IllegalArgumentException.class, () -> ResourceResolverRegistry.ofLocalFileSystem(null));
 		assertThrows(IllegalArgumentException.class,
-				() -> new ResourceResolverRegistry(this.localResolver, null));
+				() -> new ResourceResolverRegistry(this.localResolver, null, null));
+		assertThrows(IllegalArgumentException.class,
+				() -> new ResourceResolverRegistry(null, null, List.of()));
 	}
 
 }
