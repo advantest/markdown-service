@@ -14,6 +14,7 @@ import java.util.Optional;
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.markdown.service.validation.uri.DefaultHttpUriValidator;
 import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriTarget;
@@ -342,6 +343,11 @@ public class MarkdownService {
 		 * answer, and it remembers every answer, so an address named by many documents is asked
 		 * about once.</p>
 		 * 
+		 * <p>Saying this also puts the shipped validator of web addresses to work: from now on a
+		 * target beginning with <code>http</code> or <code>https</code> is reported when it cannot
+		 * be read as an address, when it does not answer, or when it answers that there is nothing
+		 * there.</p>
+		 * 
 		 * @return this builder for method chaining, never <code>null</code>
 		 */
 		public Builder withUriReachabilityCheck() {
@@ -356,6 +362,9 @@ public class MarkdownService {
 		 * <p>There is one such check, so a later call replaces an earlier one. It is asked from
 		 * several threads at once and for the same address again and again, so it has to bear the
 		 * former and is expected to remember an answer rather than to ask again.</p>
+		 * 
+		 * <p>Saying this also puts the shipped validator of web addresses to work, the same way
+		 * {@link #withUriReachabilityCheck()} does.</p>
 		 * 
 		 * @param checker the check to be used, must not be <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
@@ -466,6 +475,12 @@ public class MarkdownService {
 			// few addresses can be put in front of one answering for all of them
 			List<UriValidator> validatorsAskedInOrder = new ArrayList<>(this.uriValidators);
 			Collections.reverse(validatorsAskedInOrder);
+
+			// the shipped validator of web addresses is asked last, so that a caller knowing a
+			// certain web address better answers for it instead
+			if (this.uriReachabilityChecker != null) {
+				validatorsAskedInOrder.add(new DefaultHttpUriValidator(this.uriReachabilityChecker));
+			}
 
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers,
 					this.uriReachabilityChecker, validatorsAskedInOrder);
