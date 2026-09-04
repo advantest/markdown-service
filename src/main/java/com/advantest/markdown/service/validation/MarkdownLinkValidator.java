@@ -54,8 +54,6 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			+ " and use that reference link label in your link,"
 			+ " e.g. \"[your link text][ReferenceLinkLabel]\" or \"[ReferenceLinkLabel]\".";
 
-	private final ResourceResolverRegistry resourceResolvers;
-
 	private final LocalFileSystemResourceValidator localFileSystemResources;
 
 	/**
@@ -68,18 +66,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		if (resourceResolvers == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		this.resourceResolvers = resourceResolvers;
 		this.localFileSystemResources = new LocalFileSystemResourceValidator(resourceResolvers);
-	}
-
-	/**
-	 * Returns the resolvers answering where a link target is found. They are used by the rules
-	 * about the files and directories a link points to.
-	 * 
-	 * @return the resolvers, never <code>null</code>
-	 */
-	ResourceResolverRegistry getResourceResolvers() {
-		return this.resourceResolvers;
 	}
 
 	@Override
