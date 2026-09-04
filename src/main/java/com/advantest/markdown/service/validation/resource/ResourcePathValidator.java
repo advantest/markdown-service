@@ -4,7 +4,11 @@
  * 
  * Copyright © 2026 Advantest Europe GmbH. All rights reserved.
  */
-package com.advantest.markdown.service.validation;
+package com.advantest.markdown.service.validation.resource;
+
+import com.advantest.markdown.service.validation.IssueSeverity;
+import com.advantest.markdown.service.validation.MarkdownIssueTypes;
+import com.advantest.markdown.service.validation.ValidationIssue;
 
 import java.util.List;
 
@@ -26,7 +30,7 @@ import com.vladsch.flexmark.util.ast.Document;
  * hold wherever the documents live &ndash; that a path ending with a slash announces a directory is
  * a convention of writing a path in prose and not of any one file system.</p>
  */
-class ResourcePathValidator {
+public class ResourcePathValidator {
 
 	private final RelativePathResourceResolver resourceResolver;
 
@@ -36,7 +40,7 @@ class ResourcePathValidator {
 	 * @param resourceResolver the resolver answering for the paths this validator is given, must
 	 *                         not be <code>null</code>
 	 */
-	ResourcePathValidator(RelativePathResourceResolver resourceResolver) {
+	public ResourcePathValidator(RelativePathResourceResolver resourceResolver) {
 		if (resourceResolver == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
@@ -57,7 +61,7 @@ class ResourcePathValidator {
 	 * @param issues the problems found so far, to which this validator adds its own, must not be
 	 *               <code>null</code>
 	 */
-	void checkTargetResource(RegexMatch targetMatch, Document document, List<ValidationIssue> issues) {
+	public void checkTargetResource(RegexMatch targetMatch, Document document, List<ValidationIssue> issues) {
 		String targetReference = targetMatch.matchedText;
 
 		LinkTarget target = LinkTarget.of(targetReference);

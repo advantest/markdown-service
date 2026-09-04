@@ -18,6 +18,8 @@ import java.util.stream.Stream;
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.markdown.service.validation.resource.AbsolutePathValidator;
+import com.advantest.markdown.service.validation.resource.ResourcePathValidator;
 import com.advantest.markdown.service.utils.TextUtils;
 import com.vladsch.flexmark.ast.Image;
 import com.vladsch.flexmark.ast.ImageRef;

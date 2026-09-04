@@ -4,7 +4,11 @@
  * 
  * Copyright © 2026 Advantest Europe GmbH. All rights reserved.
  */
-package com.advantest.markdown.service.validation;
+package com.advantest.markdown.service.validation.resource;
+
+import com.advantest.markdown.service.validation.IssueSeverity;
+import com.advantest.markdown.service.validation.MarkdownIssueTypes;
+import com.advantest.markdown.service.validation.ValidationIssue;
 
 import java.util.List;
 
@@ -27,7 +31,7 @@ import com.vladsch.flexmark.util.ast.Document;
  * <code>../guide/introduction.md</code>. It travels with the document, so it leads to the same
  * resource for every reader.</p>
  */
-class AbsolutePathValidator {
+public class AbsolutePathValidator {
 
 	/**
 	 * Reports the given target of a link, an image or a link reference definition, which names its
@@ -39,7 +43,7 @@ class AbsolutePathValidator {
 	 * @param issues the problems found so far, to which this validator adds its own, must not be
 	 *               <code>null</code>
 	 */
-	void checkTargetPath(RegexMatch targetMatch, Document document, List<ValidationIssue> issues) {
+	public void checkTargetPath(RegexMatch targetMatch, Document document, List<ValidationIssue> issues) {
 		LinkTarget target = LinkTarget.of(targetMatch.matchedText);
 		if (target.path() == null || target.path().isBlank()) {
 			return;
