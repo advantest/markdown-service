@@ -72,6 +72,12 @@ public final class MarkdownIssueTypes {
 	 */
 	public static final String LINK_WEB_ADDRESS_NOT_REACHABLE = PREFIX + "link.webAddressNotReachable";
 
+	/**
+	 * A link or image points to a target naming a scheme nothing knows, e.g.
+	 * <code>htp://example.org</code>, so the target is neither resolved nor checked by anyone.
+	 */
+	public static final String LINK_UNKNOWN_TARGET_SCHEME = PREFIX + "link.unknownTargetScheme";
+
 	/** A reference link has an empty label, e.g. <code>[label][]</code> used as a full reference link. */	public static final String LINK_EMPTY_REFERENCE_LABEL = PREFIX + "link.emptyReferenceLabel";
 
 	/** A reference link refers to a label that no link reference definition in the document defines. */

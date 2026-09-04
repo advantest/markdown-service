@@ -16,6 +16,7 @@ import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.validation.uri.DefaultHttpUriValidator;
 import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
+import com.advantest.markdown.service.validation.uri.UnknownSchemeUriValidator;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriTarget;
 import com.advantest.markdown.service.validation.uri.UriValidator;
@@ -107,8 +108,27 @@ public class MarkdownService {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.parserAndRenderer = parserAndRenderer;
-		this.validation = new MarkdownValidation(resourceResolvers, uriValidators);
+		this.validation = new MarkdownValidation(resourceResolvers, withShippedValidators(
+				uriValidators, uriReachabilityChecker));
 		this.uriReachabilityChecker = uriReachabilityChecker;
+	}
+
+	/**
+	 * Puts the validators this library ships behind the ones a caller registered, so that a caller
+	 * knowing a target better answers for it first. The web addresses are only checked where a
+	 * caller said that addresses may be asked about at all; a scheme nobody knows is reported
+	 * either way, because saying so costs nothing.
+	 */
+	private static List<UriValidator> withShippedValidators(List<UriValidator> registeredValidators,
+			UriReachabilityChecker uriReachabilityChecker) {
+
+		List<UriValidator> validatorsAskedInOrder = new ArrayList<>(registeredValidators);
+		if (uriReachabilityChecker != null) {
+			validatorsAskedInOrder.add(new DefaultHttpUriValidator(uriReachabilityChecker));
+		}
+		validatorsAskedInOrder.add(new UnknownSchemeUriValidator());
+
+		return List.copyOf(validatorsAskedInOrder);
 	}
 
 	/**
@@ -385,7 +405,9 @@ public class MarkdownService {
 		 * <p>Several validators may know the same scheme and tell each other apart by the host or
 		 * by the beginning of the address, so the one added last that says it is
 		 * {@link UriValidator#isResponsibleFor(UriTarget) responsible} answers for a target, and it
-		 * answers alone. A target no validator claims is left alone rather than reported.</p>
+		 * answers alone. A target naming a scheme this library knows and no validator claims is left
+		 * alone; a target naming a scheme nobody knows is reported, because nothing would ever look
+		 * at it.</p>
 		 * 
 		 * @param validator the validator to be added, must not be <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
@@ -475,12 +497,6 @@ public class MarkdownService {
 			// few addresses can be put in front of one answering for all of them
 			List<UriValidator> validatorsAskedInOrder = new ArrayList<>(this.uriValidators);
 			Collections.reverse(validatorsAskedInOrder);
-
-			// the shipped validator of web addresses is asked last, so that a caller knowing a
-			// certain web address better answers for it instead
-			if (this.uriReachabilityChecker != null) {
-				validatorsAskedInOrder.add(new DefaultHttpUriValidator(this.uriReachabilityChecker));
-			}
 
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers,
 					this.uriReachabilityChecker, validatorsAskedInOrder);
