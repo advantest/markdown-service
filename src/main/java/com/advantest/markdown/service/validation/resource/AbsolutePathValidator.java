@@ -54,7 +54,7 @@ public class AbsolutePathValidator {
 
 		issues.add(new ValidationIssue(
 				MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH,
-				IssueSeverity.WARNING,
+				IssueSeverity.ERROR,
 				absoluteTargetPathMessage(target.path()),
 				TextUtils.getLineNumberForOffset(document, startOffset),
 				startOffset,

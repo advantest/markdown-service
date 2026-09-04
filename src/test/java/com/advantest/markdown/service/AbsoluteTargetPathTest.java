@@ -61,7 +61,7 @@ public class AbsoluteTargetPathTest {
 
 		assertEquals(
 				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH,
-						IssueSeverity.WARNING,
+						IssueSeverity.ERROR,
 						"The path '/usr/share/doc/guide.md' names a file or directory of one machine,"
 								+ " so it leads nowhere for anybody else reading this document."
 								+ " Please use a path relative to this document instead.",
