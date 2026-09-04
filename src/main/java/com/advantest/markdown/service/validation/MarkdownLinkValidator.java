@@ -19,7 +19,7 @@ import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.validation.resource.AbsolutePathValidator;
-import com.advantest.markdown.service.validation.resource.ResourcePathValidator;
+import com.advantest.markdown.service.validation.resource.RelativePathValidator;
 import com.advantest.markdown.service.utils.TextUtils;
 import com.vladsch.flexmark.ast.Image;
 import com.vladsch.flexmark.ast.ImageRef;
@@ -56,7 +56,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			+ " and use that reference link label in your link,"
 			+ " e.g. \"[your link text][ReferenceLinkLabel]\" or \"[ReferenceLinkLabel]\".";
 
-	private final ResourcePathValidator resourcePathValidator;
+	private final RelativePathValidator relativePathValidator;
 
 	private final AbsolutePathValidator absolutePathValidator = new AbsolutePathValidator();
 
@@ -70,7 +70,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		if (resourceResolvers == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		this.resourcePathValidator = new ResourcePathValidator(resourceResolvers.relativePathResolver());
+		this.relativePathValidator = new RelativePathValidator(resourceResolvers.relativePathResolver());
 	}
 
 	@Override
@@ -330,7 +330,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		String targetReference = targetMatch.matchedText;
 
 		if (ResourceResolverRegistry.isRelativePath(targetReference)) {
-			this.resourcePathValidator.checkTargetResource(targetMatch, document, issues);
+			this.relativePathValidator.checkTargetResource(targetMatch, document, issues);
 		} else if (ResourceResolverRegistry.isAbsolutePathWithoutScheme(targetReference)) {
 			this.absolutePathValidator.checkTargetPath(targetMatch, document, issues);
 		}

@@ -33,7 +33,7 @@ import com.advantest.resources.Resource;
  * known document location yields is tested as well, because a caller is free to validate Markdown
  * source code that came from nowhere.</p>
  */
-public class ResourcePathExistenceTest {
+public class RelativePathExistenceTest {
 
 	private final MarkdownService service = new MarkdownService();
 
