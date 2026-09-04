@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Optional;
 
 import com.advantest.markdown.service.parsing.LinkTarget;
-import com.advantest.resources.AbsoluteLocalPathResolver;
 import com.advantest.resources.FileSchemeUriResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
 import com.advantest.resources.RelativePathResourceResolver;
@@ -27,11 +26,10 @@ import com.advantest.resources.UriResolver;
  * separator, e.g. <code>../images/logo.png</code>, has a meaning only together with the document
  * carrying it, and the one registered {@link RelativePathResourceResolver} says what that meaning
  * is. A reference that is an absolute path, e.g. <code>/usr/share/doc/guide.md</code> or
- * <code>C:\documents\guide.md</code>, names its resource on its own; there is a resolver for it
- * where the documents live in a file system, and there is none where they do not. Everything else
- * names a scheme and is offered to the registered {@link UriResolver}s, the last registered one
- * that says it is responsible answering for it, so that a resolver added later can claim what a
- * more general one would have taken.</p>
+ * <code>C:\documents\guide.md</code>, names its resource on one machine and nowhere else, so it is
+ * resolved by nobody. Everything else names a scheme and is offered to the registered
+ * {@link UriResolver}s, the last registered one that says it is responsible answering for it, so
+ * that a resolver added later can claim what a more general one would have taken.</p>
  * 
  * <p>A reference whose scheme is a single letter is a drive letter of a file system, e.g.
  * <code>C:/docs/guide.md</code>, and therefore an absolute path. No scheme in use is a single
@@ -44,8 +42,6 @@ public final class ResourceResolverRegistry {
 
 	private final RelativePathResourceResolver relativePathResolver;
 
-	private final ResourceResolver absolutePathResolver;
-
 	private final List<UriResolver> uriResolvers;
 
 	/**
@@ -53,8 +49,6 @@ public final class ResourceResolverRegistry {
 	 * 
 	 * @param relativePathResolver the resolver saying what a path means as seen from the document
 	 *                             carrying it, must not be <code>null</code>
-	 * @param absolutePathResolver the resolver of a path naming its resource on its own, or
-	 *                             <code>null</code> if such a path is not resolved at all
 	 * @param uriResolvers the resolvers of references naming a scheme, in the order in which they
 	 *                     were registered, must not be <code>null</code>
 	 * @throws IllegalArgumentException if the resolver of a path is <code>null</code> or if the
@@ -62,7 +56,7 @@ public final class ResourceResolverRegistry {
 	 *                                  <code>null</code>
 	 */
 	public ResourceResolverRegistry(RelativePathResourceResolver relativePathResolver,
-			ResourceResolver absolutePathResolver, List<UriResolver> uriResolvers) {
+			List<UriResolver> uriResolvers) {
 
 		if (relativePathResolver == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
@@ -72,7 +66,6 @@ public final class ResourceResolverRegistry {
 		}
 
 		this.relativePathResolver = relativePathResolver;
-		this.absolutePathResolver = absolutePathResolver;
 
 		List<UriResolver> lastRegisteredFirst = new ArrayList<>(uriResolvers);
 		Collections.reverse(lastRegisteredFirst);
@@ -103,7 +96,7 @@ public final class ResourceResolverRegistry {
 		if (relativePathResolver == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return new ResourceResolverRegistry(relativePathResolver, new AbsoluteLocalPathResolver(),
+		return new ResourceResolverRegistry(relativePathResolver,
 				List.of(new FileSchemeUriResolver(relativePathResolver)));
 	}
 
@@ -117,16 +110,10 @@ public final class ResourceResolverRegistry {
 	}
 
 	/**
-	 * Returns the resolver of a path naming its resource on its own.
-	 * 
-	 * @return the resolver, or an empty {@link Optional} where such a path is not resolved at all
-	 */
-	public Optional<ResourceResolver> absolutePathResolver() {
-		return Optional.ofNullable(this.absolutePathResolver);
-	}
-
-	/**
 	 * Returns the resolver answering for the given reference.
+	 * 
+	 * <p>A path naming its resource on its own reaches no resolver: it leads to the resource the
+	 * author meant on one machine and nowhere else, so it is reported rather than looked for.</p>
 	 * 
 	 * @param targetResourcePathOrUri the reference as it is written in the document, must be
 	 *                                neither <code>null</code> nor blank
@@ -143,7 +130,7 @@ public final class ResourceResolverRegistry {
 		}
 
 		if (isAbsolutePathWithoutScheme(targetResourcePathOrUri)) {
-			return absolutePathResolver();
+			return Optional.empty();
 		}
 
 		return uriResolverFor(targetResourcePathOrUri).map(ResourceResolver.class::cast);

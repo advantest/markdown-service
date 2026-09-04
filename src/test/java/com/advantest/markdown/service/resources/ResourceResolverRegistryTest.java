@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import com.advantest.resources.AbsoluteLocalPathResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
 import com.advantest.resources.RelativePathResourceResolver;
 import com.advantest.resources.Resource;
@@ -109,12 +108,11 @@ class ResourceResolverRegistryTest {
 	}
 
 	@Test
-	void asksTheResolverOfAnAbsolutePathForAPathNamingItsResourceOnItsOwn() {
+	void asksNobodyForAPathNamingItsResourceOnItsOwn() {
 		ResourceResolverRegistry registry = ResourceResolverRegistry.ofLocalFileSystem(this.localResolver);
 
-		ResourceResolver resolver = registry.resolverFor("/absolute/path/guide.md").orElseThrow();
-
-		assertTrue(resolver instanceof AbsoluteLocalPathResolver);
+		assertEquals(Optional.empty(), registry.resolverFor("/absolute/path/guide.md"));
+		assertEquals(Optional.empty(), registry.resolverFor("C:\\documents\\guide.md"));
 	}
 
 	@Test
@@ -134,11 +132,9 @@ class ResourceResolverRegistryTest {
 	}
 
 	@Test
-	void asksNobodyForAnAbsolutePathWhereSuchAPathMeansNothing() {
-		ResourceResolverRegistry registry = new ResourceResolverRegistry(this.localResolver, null, List.of());
+	void keepsTheResolverOfAPathItWasCreatedWith() {
+		ResourceResolverRegistry registry = new ResourceResolverRegistry(this.localResolver, List.of());
 
-		assertEquals(Optional.empty(), registry.resolverFor("/absolute/path/guide.md"));
-		assertEquals(Optional.empty(), registry.absolutePathResolver());
 		assertSame(this.localResolver, registry.relativePathResolver());
 	}
 
@@ -147,7 +143,7 @@ class ResourceResolverRegistryTest {
 		UriResolver general = new RecordingUriResolver("https://");
 		UriResolver specific = new RecordingUriResolver("https://tickets.example.org/");
 		ResourceResolverRegistry registry =
-				new ResourceResolverRegistry(this.localResolver, null, List.of(general, specific));
+				new ResourceResolverRegistry(this.localResolver, List.of(general, specific));
 
 		assertSame(specific, registry.resolverFor("https://tickets.example.org/ABC-1").orElseThrow());
 		assertSame(general, registry.resolverFor("https://example.org/guide").orElseThrow());
@@ -157,7 +153,7 @@ class ResourceResolverRegistryTest {
 	void asksNobodyForAReferenceTheUriSyntaxRejects() {
 		UriResolver everything = new RecordingUriResolver("");
 		ResourceResolverRegistry registry =
-				new ResourceResolverRegistry(this.localResolver, null, List.of(everything));
+				new ResourceResolverRegistry(this.localResolver, List.of(everything));
 
 		assertEquals(Optional.empty(), registry.resolverFor("https://example.org/a guide|.md"));
 	}
@@ -178,9 +174,9 @@ class ResourceResolverRegistryTest {
 				() -> ResourceResolverRegistry.isPathWithoutScheme(null));
 		assertThrows(IllegalArgumentException.class, () -> ResourceResolverRegistry.ofLocalFileSystem(null));
 		assertThrows(IllegalArgumentException.class,
-				() -> new ResourceResolverRegistry(this.localResolver, null, null));
+				() -> new ResourceResolverRegistry(this.localResolver, null));
 		assertThrows(IllegalArgumentException.class,
-				() -> new ResourceResolverRegistry(null, null, List.of()));
+				() -> new ResourceResolverRegistry(null, List.of()));
 	}
 
 }

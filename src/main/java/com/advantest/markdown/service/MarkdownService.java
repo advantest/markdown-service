@@ -12,7 +12,6 @@ import java.util.List;
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
-import com.advantest.resources.AbsoluteLocalPathResolver;
 import com.advantest.resources.FileSchemeUriResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
 import com.advantest.resources.RelativePathResourceResolver;
@@ -230,8 +229,6 @@ public class MarkdownService {
 
 		private RelativePathResourceResolver relativePathResolver;
 
-		private ResourceResolver absolutePathResolver;
-
 		private final List<UriResolver> uriResolvers = new ArrayList<>();
 
 		private Builder() {
@@ -244,9 +241,7 @@ public class MarkdownService {
 		 * @return this builder for method chaining, never <code>null</code>
 		 */
 		public Builder withLocalFileSystemResourceResolver() {
-			withRelativePathResourceResolver(new LocalFileSystemResourceResolver());
-			this.absolutePathResolver = new AbsoluteLocalPathResolver();
-			return this;
+			return withRelativePathResourceResolver(new LocalFileSystemResourceResolver());
 		}
 
 		/**
@@ -256,11 +251,10 @@ public class MarkdownService {
 		 * resolver, so a later call replaces an earlier one.
 		 * 
 		 * <p>A reference naming a file with the <code>file</code> scheme is handed to the same
-		 * resolver, because it is the same file however it is named. An absolute path, on the
-		 * other hand, is left unresolved unless the documents live in the file system of this
-		 * machine, which is what {@link #withLocalFileSystemResourceResolver()} says: a path
-		 * naming its resource on its own means nothing where the documents are read from
-		 * somewhere else.</p>
+		 * resolver, because it is the same file however it is named. A path naming its resource on
+		 * its own, on the other hand, reaches no resolver at all: it leads to the resource the
+		 * author meant on one machine and nowhere else, and is reported rather than looked
+		 * for.</p>
 		 * 
 		 * @param resolver the resolver of a reference without a scheme, must not be
 		 *                 <code>null</code>
@@ -272,7 +266,6 @@ public class MarkdownService {
 				throw new IllegalArgumentException("Argument must not be null.");
 			}
 			this.relativePathResolver = resolver;
-			this.absolutePathResolver = null;
 			return this;
 		}
 
@@ -361,16 +354,13 @@ public class MarkdownService {
 			RelativePathResourceResolver pathResolver = this.relativePathResolver != null
 					? this.relativePathResolver
 					: new LocalFileSystemResourceResolver();
-			ResourceResolver absolutePathResolver = this.relativePathResolver != null
-					? this.absolutePathResolver
-					: new AbsoluteLocalPathResolver();
 
 			List<UriResolver> allUriResolvers = new ArrayList<>();
 			allUriResolvers.add(new FileSchemeUriResolver(pathResolver));
 			allUriResolvers.addAll(this.uriResolvers);
 
 			ResourceResolverRegistry resolvers =
-					new ResourceResolverRegistry(pathResolver, absolutePathResolver, allUriResolvers);
+					new ResourceResolverRegistry(pathResolver, allUriResolvers);
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers);
 		}
 
