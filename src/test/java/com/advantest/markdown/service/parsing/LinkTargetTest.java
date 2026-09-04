@@ -7,7 +7,7 @@
 package com.advantest.markdown.service.parsing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,7 +29,6 @@ public class LinkTargetTest {
 		assertNull(target.scheme(), "A file path has no scheme.");
 		assertEquals("documents/overview.md", target.path());
 		assertNull(target.fragment(), "A target without a hash tag has no fragment.");
-		assertTrue(target.isLocalResourcePath());
 	}
 
 	@ParameterizedTest
@@ -46,8 +45,6 @@ public class LinkTargetTest {
 		LinkTarget target = LinkTarget.of(linkTarget);
 
 		assertEquals(expectedScheme, target.scheme());
-		assertFalse(target.isLocalResourcePath(),
-				"Whoever owns the scheme resolves the target, not the resource resolver.");
 	}
 
 	@ParameterizedTest
@@ -62,11 +59,11 @@ public class LinkTargetTest {
 			"a%20document%20with%20blanks.md",
 			"/absolute/path/overview.md",
 			"images/diagram.png" })
-	public void readsATargetWithoutASchemeAsALocalResourcePath(String linkTarget) {
+	public void readsATargetWithoutASchemeAsAPath(String linkTarget) {
 		LinkTarget target = LinkTarget.of(linkTarget);
 
 		assertNull(target.scheme());
-		assertTrue(target.isLocalResourcePath());
+		assertNotNull(target.path());
 	}
 
 	@ParameterizedTest
@@ -80,8 +77,6 @@ public class LinkTargetTest {
 
 		assertEquals(expectedPath, target.path());
 		assertEquals(expectedFragment, target.fragment(), "The fragment is read without its hash tag.");
-		assertTrue(target.isLocalResourcePath(),
-				"A fragment behind a path does not stop the path from naming a resource.");
 	}
 
 	@Test
@@ -94,7 +89,6 @@ public class LinkTargetTest {
 		assertEquals("doSomething(int,boolean,Character[],List<Map<K,V>>)", target.fragment(),
 				"A fragment may name a member of the target, and the URI syntax rejects such a target,"
 						+ " so it is split by hand.");
-		assertTrue(target.isLocalResourcePath());
 	}
 
 	@ParameterizedTest
@@ -106,8 +100,8 @@ public class LinkTargetTest {
 		LinkTarget target = LinkTarget.of(linkTarget);
 
 		assertEquals(linkTarget.substring(1), target.fragment());
-		assertFalse(target.isLocalResourcePath(),
-				"A target pointing into the current document names no resource to look for.");
+		assertTrue(target.path() == null || target.path().isEmpty(),
+				"A target pointing into the current document names no path.");
 	}
 
 	@ParameterizedTest
@@ -122,7 +116,6 @@ public class LinkTargetTest {
 
 		assertEquals("https", target.scheme());
 		assertEquals(expectedPath, target.path(), "The query is not part of the path.");
-		assertFalse(target.isLocalResourcePath());
 	}
 
 	@Test
@@ -152,22 +145,20 @@ public class LinkTargetTest {
 		assertNull(target.scheme());
 		assertEquals("documents/a file.md", target.path());
 		assertNull(target.fragment());
-		assertTrue(target.isLocalResourcePath());
 	}
 
 	@Test
 	public void readsADriveLetterAsAScheme() {
 		LinkTarget target = LinkTarget.of("C:\\documents\\overview.md");
 
-		assertEquals("C", target.scheme(), "A drive letter cannot be told apart from a scheme, so an"
-				+ " absolute path of a Windows file system names no resource to look for.");
-		assertFalse(target.isLocalResourcePath());
+		assertEquals("C", target.scheme(), "A drive letter and a scheme are written the same way, so the"
+				+ " drive letter of an absolute path of a Windows file system is read as a scheme.");
 	}
 
 	@ParameterizedTest
 	@ValueSource(strings = { "", "   " })
-	public void readsABlankTargetAsNamingNoResource(String linkTarget) {
-		assertFalse(LinkTarget.of(linkTarget).isLocalResourcePath());
+	public void readsABlankTargetAsNamingNoPath(String linkTarget) {
+		assertTrue(LinkTarget.of(linkTarget).path().isBlank());
 	}
 
 	@Test

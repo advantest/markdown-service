@@ -80,15 +80,4 @@ public record LinkTarget(String scheme, String path, String fragment) {
 		return new LinkTarget(scheme, path, fragment);
 	}
 
-	/**
-	 * Answers whether the target names a resource of the environment this code runs in, i.e.
-	 * something a {@link com.advantest.resources.ResourceResolver} is asked to resolve rather than
-	 * something the scheme of the target hands to somebody else, e.g. a web address to a browser.
-	 * 
-	 * @return <code>true</code> if the target has no scheme and a path to resolve
-	 */
-	public boolean isLocalResourcePath() {
-		return this.scheme == null && this.path != null && !this.path.isBlank();
-	}
-
 }
