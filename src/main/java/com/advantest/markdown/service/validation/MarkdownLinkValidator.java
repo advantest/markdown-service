@@ -54,7 +54,9 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			+ " and use that reference link label in your link,"
 			+ " e.g. \"[your link text][ReferenceLinkLabel]\" or \"[ReferenceLinkLabel]\".";
 
-	private final ResourcePathValidator resourcePathTargets;
+	private final ResourcePathValidator relativePathTargets;
+
+	private final Optional<ResourcePathValidator> absolutePathTargets;
 
 	/**
 	 * Creates the validator, resolving everything a link points to with the given resolvers.
@@ -66,7 +68,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		if (resourceResolvers == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		this.resourcePathTargets = new ResourcePathValidator(resourceResolvers);
+		this.relativePathTargets = new ResourcePathValidator(resourceResolvers.relativePathResolver());
+		this.absolutePathTargets = resourceResolvers.absolutePathResolver().map(ResourcePathValidator::new);
 	}
 
 	@Override
@@ -314,16 +317,21 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	/**
-	 * Hands the resource a link points to over to the validator answering for the environment it
-	 * is in. Only a target without a scheme, or with a drive letter for one, names a resource of
-	 * the environment this code runs in; everything else is resolved by whoever owns its scheme,
-	 * e.g. a web address by a browser.
+	 * Hands the resource a link points to over to the validator answering for the way the target
+	 * is written. A target written as a path is meant as seen from the document carrying it, or
+	 * names its resource on its own; everything else names a scheme and is resolved by whoever
+	 * owns that scheme, e.g. a web address by a browser.
 	 */
 	private void checkTargetResource(RegexMatch targetMatch, Document document,
 			List<ValidationIssue> issues) {
 
-		if (ResourceResolverRegistry.namesAResourceOfThisEnvironment(targetMatch.matchedText)) {
-			this.resourcePathTargets.checkTargetResource(targetMatch, document, issues);
+		String targetReference = targetMatch.matchedText;
+
+		if (ResourceResolverRegistry.isRelativePath(targetReference)) {
+			this.relativePathTargets.checkTargetResource(targetMatch, document, issues);
+		} else if (ResourceResolverRegistry.isAbsolutePathWithoutScheme(targetReference)) {
+			this.absolutePathTargets.ifPresent(
+					validator -> validator.checkTargetResource(targetMatch, document, issues));
 		}
 	}
 

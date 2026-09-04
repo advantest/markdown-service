@@ -7,12 +7,10 @@
 package com.advantest.markdown.service.validation;
 
 import java.util.List;
-import java.util.Optional;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.parsing.LinkTarget;
 import com.advantest.markdown.service.parsing.RegexMatch;
-import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.utils.TextUtils;
 import com.advantest.resources.Resource;
 import com.advantest.resources.ResourceResolver;
@@ -20,30 +18,29 @@ import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.util.ast.Document;
 
 /**
- * Checks what a reference of the environment this code runs in points to: whether the resource is
- * there, and whether the path says what it points to.
+ * Checks what a target written as a path points to: whether the resource is there, and whether the
+ * path says what it points to.
  * 
- * <p>Both questions are of a file system and of nowhere else. Whether a resource exists is asked
- * the resolver of the environment, so that the rule holds wherever the documents live. That a path
- * ending with a slash announces a directory, on the other hand, is a convention of writing a
- * relative path in prose, so it is asked only of a reference written that way and not of one naming
- * its scheme.</p>
+ * <p>A path names no scheme, so it says nothing about where it is looked for. Where that is, is
+ * the business of the resolver this validator was created with, and the rules hold wherever the
+ * documents live &ndash; that a path ending with a slash announces a directory is a convention of
+ * writing a path in prose and not of any one file system.</p>
  */
 class ResourcePathValidator {
 
-	private final ResourceResolverRegistry resourceResolvers;
+	private final ResourceResolver resourceResolver;
 
 	/**
-	 * Creates the validator, resolving what a reference points to with the given resolvers.
+	 * Creates the validator, resolving what a path points to with the given resolver.
 	 * 
-	 * @param resourceResolvers the resolvers of the surrounding environment, must not be
-	 *                          <code>null</code>
+	 * @param resourceResolver the resolver answering for the paths this validator is given, must
+	 *                         not be <code>null</code>
 	 */
-	ResourcePathValidator(ResourceResolverRegistry resourceResolvers) {
-		if (resourceResolvers == null) {
+	ResourcePathValidator(ResourceResolver resourceResolver) {
+		if (resourceResolver == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		this.resourceResolvers = resourceResolvers;
+		this.resourceResolver = resourceResolver;
 	}
 
 	/**
@@ -54,7 +51,8 @@ class ResourcePathValidator {
 	 * can only be looked for once the target itself is found, which is why only the resource is
 	 * checked here.</p>
 	 * 
-	 * @param targetMatch the target as it stands in the document, must not be <code>null</code>
+	 * @param targetMatch the target as it stands in the document, written as a path and not as a
+	 *                    URI, must not be <code>null</code>
 	 * @param document the document the target is written in, must not be <code>null</code>
 	 * @param issues the problems found so far, to which this validator adds its own, must not be
 	 *               <code>null</code>
@@ -65,11 +63,6 @@ class ResourcePathValidator {
 		LinkTarget target = LinkTarget.of(targetReference);
 		if (target.path() == null || target.path().isBlank()) {
 			// the reference names a place inside the document it is written in, not a resource
-			return;
-		}
-
-		Optional<ResourceResolver> resolver = this.resourceResolvers.resolverFor(targetReference);
-		if (resolver.isEmpty()) {
 			return;
 		}
 
@@ -91,7 +84,7 @@ class ResourcePathValidator {
 			return;
 		}
 
-		Resource targetResource = resolver.get().resolve(targetReference, documentResource);
+		Resource targetResource = this.resourceResolver.resolve(targetReference, documentResource);
 		if (!targetResource.exists()) {
 			issues.add(new ValidationIssue(
 					MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
@@ -103,10 +96,8 @@ class ResourcePathValidator {
 			return;
 		}
 
-		if (target.scheme() == null) {
-			checkTargetPathTellsWhatItPointsTo(target, targetResource, lineNumber, startOffset, endOffset,
-					issues);
-		}
+		checkTargetPathTellsWhatItPointsTo(target, targetResource, lineNumber, startOffset, endOffset,
+				issues);
 	}
 
 	/**
