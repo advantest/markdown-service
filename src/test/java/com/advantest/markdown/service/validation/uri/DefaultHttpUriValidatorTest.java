@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -213,6 +214,39 @@ class DefaultHttpUriValidatorTest {
 		assertEquals(7, issue.lineNumber());
 		assertEquals(120, issue.startOffset());
 		assertEquals(144, issue.endOffset());
+	}
+
+	@Test
+	void addressWrittenWithoutTheSecureSchemeIsCheckedTheSameWay() {
+		DefaultHttpUriValidator validator = validatorAnswering(new UriReachability.Answered(404));
+
+		List<ValidationIssue> issues = validator.validate(targetOf("http://example.org/gone"));
+
+		assertEquals(1, issues.size());
+		assertEquals("The referenced web address 'http://example.org/gone' is not reachable"
+				+ " (HTTP status code 404).", issues.get(0).message());
+	}
+
+	@Test
+	void addressThatCannotBeReadIsRecognizedWhicheverSchemeItNames() {
+		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+
+		assertTrue(validator.isResponsibleFor(targetOf("http://example.org/a guide")));
+		assertEquals(MarkdownIssueTypes.LINK_INVALID_WEB_ADDRESS,
+				validator.validate(targetOf("http://example.org/a guide")).get(0).issueTypeId());
+	}
+
+	@Test
+	void addressHandedOverAsNoneWithoutAReasonIsReportedWithoutOne() {
+		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		UriTarget targetSayingItIsNoUri =
+				new UriTarget("https://example.org/guide", Optional.empty(), 1, 0, 25);
+
+		List<ValidationIssue> issues = validator.validate(targetSayingItIsNoUri);
+
+		assertEquals(1, issues.size());
+		assertEquals("The referenced web address 'https://example.org/guide' seems not to be a valid"
+				+ " HTTP web address. ", issues.get(0).message());
 	}
 
 	private static DefaultHttpUriValidator validatorAnswering(UriReachability reachability) {
