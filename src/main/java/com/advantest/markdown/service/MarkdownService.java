@@ -7,6 +7,7 @@
 package com.advantest.markdown.service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,8 @@ import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
+import com.advantest.markdown.service.validation.uri.UriTarget;
+import com.advantest.markdown.service.validation.uri.UriValidator;
 import com.advantest.resources.FileSchemeUriResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
 import com.advantest.resources.RelativePathResourceResolver;
@@ -79,27 +82,31 @@ public class MarkdownService {
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers) {
-		this(parserAndRenderer, resourceResolvers, null);
+		this(parserAndRenderer, resourceResolvers, null, List.of());
 	}
 
 	/**
 	 * Creates a service delegating to the given Markdown parser and HTML renderer, resolving
-	 * references with the given resolvers and asking the given check whether an address is there.
+	 * references with the given resolvers, asking the given check whether an address is there and
+	 * handing a target naming a scheme to the given validators.
 	 * 
 	 * @param parserAndRenderer the parser and renderer to delegate to, must not be <code>null</code>
 	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
 	 *                          <code>null</code>
 	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
 	 *                               <code>null</code>, in which case no address is asked about
+	 * @param uriValidators the validators of a target naming a scheme, the first one saying it is
+	 *                      responsible answers for a target, must not be <code>null</code>
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers,
-			UriReachabilityChecker uriReachabilityChecker) {
-		if (parserAndRenderer == null || resourceResolvers == null) {
+			UriReachabilityChecker uriReachabilityChecker,
+			List<UriValidator> uriValidators) {
+		if (parserAndRenderer == null || resourceResolvers == null || uriValidators == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.parserAndRenderer = parserAndRenderer;
-		this.validation = new MarkdownValidation(resourceResolvers);
+		this.validation = new MarkdownValidation(resourceResolvers, uriValidators);
 		this.uriReachabilityChecker = uriReachabilityChecker;
 	}
 
@@ -264,6 +271,8 @@ public class MarkdownService {
 
 		private UriReachabilityChecker uriReachabilityChecker;
 
+		private final List<UriValidator> uriValidators = new ArrayList<>();
+
 		private Builder() {
 		}
 
@@ -361,6 +370,27 @@ public class MarkdownService {
 		}
 
 		/**
+		 * Adds a validator for targets naming a scheme, e.g. one checking the addresses of an
+		 * issue tracker.
+		 * 
+		 * <p>Several validators may know the same scheme and tell each other apart by the host or
+		 * by the beginning of the address, so the one added last that says it is
+		 * {@link UriValidator#isResponsibleFor(UriTarget) responsible} answers for a target, and it
+		 * answers alone. A target no validator claims is left alone rather than reported.</p>
+		 * 
+		 * @param validator the validator to be added, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the given validator is <code>null</code>
+		 */
+		public Builder withUriValidator(UriValidator validator) {
+			if (validator == null) {
+				throw new IllegalArgumentException("Argument must not be null.");
+			}
+			this.uriValidators.add(validator);
+			return this;
+		}
+
+		/**
 		 * Adds the given flexmark extension to the extensions already configured,
 		 * i.e. it does not replace or remove any of the default extensions.
 		 * 
@@ -431,8 +461,14 @@ public class MarkdownService {
 
 			ResourceResolverRegistry resolvers =
 					new ResourceResolverRegistry(pathResolver, allUriResolvers);
+
+			// the validator registered last is asked first, so that a validator answering for a
+			// few addresses can be put in front of one answering for all of them
+			List<UriValidator> validatorsAskedInOrder = new ArrayList<>(this.uriValidators);
+			Collections.reverse(validatorsAskedInOrder);
+
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers,
-					this.uriReachabilityChecker);
+					this.uriReachabilityChecker, validatorsAskedInOrder);
 		}
 
 	}
