@@ -54,7 +54,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			+ " and use that reference link label in your link,"
 			+ " e.g. \"[your link text][ReferenceLinkLabel]\" or \"[ReferenceLinkLabel]\".";
 
-	private final LocalFileSystemResourceValidator localFileSystemResources;
+	private final ResourcePathValidator resourcePathTargets;
 
 	/**
 	 * Creates the validator, resolving everything a link points to with the given resolvers.
@@ -66,7 +66,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		if (resourceResolvers == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		this.localFileSystemResources = new LocalFileSystemResourceValidator(resourceResolvers);
+		this.resourcePathTargets = new ResourcePathValidator(resourceResolvers);
 	}
 
 	@Override
@@ -323,7 +323,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			List<ValidationIssue> issues) {
 
 		if (ResourceResolverRegistry.namesAResourceOfThisEnvironment(targetMatch.matchedText)) {
-			this.localFileSystemResources.checkTargetResource(targetMatch, document, issues);
+			this.resourcePathTargets.checkTargetResource(targetMatch, document, issues);
 		}
 	}
 

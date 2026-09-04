@@ -29,7 +29,7 @@ import com.vladsch.flexmark.util.ast.Document;
  * relative path in prose, so it is asked only of a reference written that way and not of one naming
  * its scheme.</p>
  */
-class LocalFileSystemResourceValidator {
+class ResourcePathValidator {
 
 	private final ResourceResolverRegistry resourceResolvers;
 
@@ -39,7 +39,7 @@ class LocalFileSystemResourceValidator {
 	 * @param resourceResolvers the resolvers of the surrounding environment, must not be
 	 *                          <code>null</code>
 	 */
-	LocalFileSystemResourceValidator(ResourceResolverRegistry resourceResolvers) {
+	ResourcePathValidator(ResourceResolverRegistry resourceResolvers) {
 		if (resourceResolvers == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
