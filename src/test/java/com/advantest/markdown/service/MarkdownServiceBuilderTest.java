@@ -7,7 +7,9 @@
 package com.advantest.markdown.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,6 +23,9 @@ import com.advantest.flexmark.ext.jira.tickets.JiraTicketExtension;
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
 import com.advantest.markdown.service.validation.ValidationIssue;
+import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
+import com.advantest.markdown.service.validation.uri.UriReachability;
+import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.RelativePathResourceResolver;
 import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.html.AttributeProvider;
@@ -212,6 +217,53 @@ class MarkdownServiceBuilderTest {
 
 		assertNotNull(service);
 		assertTrue(service.validateMarkdown("[label]()").size() == 1);
+	}
+
+	@Test
+	void noAddressIsAskedAboutUnlessTheBuilderIsTold() {
+		MarkdownService service = MarkdownService.builder().build();
+
+		assertTrue(service.getUriReachabilityChecker().isEmpty());
+	}
+
+	@Test
+	void builderAsksAddressesWithTheShippedCheckWhenAskedTo() {
+		MarkdownService service = MarkdownService.builder()
+				.withUriReachabilityCheck()
+				.build();
+
+		assertInstanceOf(HttpUriReachabilityChecker.class,
+				service.getUriReachabilityChecker().orElseThrow());
+	}
+
+	@Test
+	void builderTakesACheckOfItsOwn() {
+		UriReachabilityChecker ownChecker = targetUri -> new UriReachability.Answered(200);
+
+		MarkdownService service = MarkdownService.builder()
+				.withUriReachabilityCheck(ownChecker)
+				.build();
+
+		assertSame(ownChecker, service.getUriReachabilityChecker().orElseThrow());
+	}
+
+	@Test
+	void laterCheckReplacesTheEarlierOne() {
+		UriReachabilityChecker ownChecker = targetUri -> new UriReachability.Answered(200);
+
+		MarkdownService service = MarkdownService.builder()
+				.withUriReachabilityCheck()
+				.withUriReachabilityCheck(ownChecker)
+				.build();
+
+		assertSame(ownChecker, service.getUriReachabilityChecker().orElseThrow());
+	}
+
+	@Test
+	void builderRefusesACheckThatIsNotThere() {
+		MarkdownService.Builder builder = MarkdownService.builder();
+
+		assertThrows(IllegalArgumentException.class, () -> builder.withUriReachabilityCheck(null));
 	}
 
 }

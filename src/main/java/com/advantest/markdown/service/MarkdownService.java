@@ -8,10 +8,13 @@ package com.advantest.markdown.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
+import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.FileSchemeUriResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
 import com.advantest.resources.RelativePathResourceResolver;
@@ -55,6 +58,8 @@ public class MarkdownService {
 
 	private final MarkdownValidation validation;
 
+	private final UriReachabilityChecker uriReachabilityChecker;
+
 	/**
 	 * Creates a service using the default Markdown parser and HTML renderer configuration
 	 * and resolving references in the local file system.
@@ -66,7 +71,7 @@ public class MarkdownService {
 
 	/**
 	 * Creates a service delegating to the given Markdown parser and HTML renderer and resolving
-	 * references with the given resolvers.
+	 * references with the given resolvers, without asking any address whether it is there.
 	 * 
 	 * @param parserAndRenderer the parser and renderer to delegate to, must not be <code>null</code>
 	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
@@ -74,11 +79,37 @@ public class MarkdownService {
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers) {
+		this(parserAndRenderer, resourceResolvers, null);
+	}
+
+	/**
+	 * Creates a service delegating to the given Markdown parser and HTML renderer, resolving
+	 * references with the given resolvers and asking the given check whether an address is there.
+	 * 
+	 * @param parserAndRenderer the parser and renderer to delegate to, must not be <code>null</code>
+	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
+	 *                          <code>null</code>
+	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
+	 *                               <code>null</code>, in which case no address is asked about
+	 */
+	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
+			ResourceResolverRegistry resourceResolvers,
+			UriReachabilityChecker uriReachabilityChecker) {
 		if (parserAndRenderer == null || resourceResolvers == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.parserAndRenderer = parserAndRenderer;
 		this.validation = new MarkdownValidation(resourceResolvers);
+		this.uriReachabilityChecker = uriReachabilityChecker;
+	}
+
+	/**
+	 * Tells which check this service asks whether an address is there.
+	 * 
+	 * @return the check, or {@link Optional#empty()} if no address is asked about at all
+	 */
+	Optional<UriReachabilityChecker> getUriReachabilityChecker() {
+		return Optional.ofNullable(this.uriReachabilityChecker);
 	}
 
 	/**
@@ -231,6 +262,8 @@ public class MarkdownService {
 
 		private final List<UriResolver> uriResolvers = new ArrayList<>();
 
+		private UriReachabilityChecker uriReachabilityChecker;
+
 		private Builder() {
 		}
 
@@ -287,6 +320,43 @@ public class MarkdownService {
 				throw new IllegalArgumentException("Argument must not be null.");
 			}
 			this.uriResolvers.add(resolver);
+			return this;
+		}
+
+		/**
+		 * Asks the addresses a document names whether they are there, with the shipped check.
+		 * 
+		 * <p>No address is asked about unless this method or
+		 * {@link #withUriReachabilityCheck(UriReachabilityChecker)} is called: asking costs time
+		 * and needs a network, which is nothing a caller should pay without saying so. The shipped
+		 * check gives an address about two seconds to accept the connection and about five to
+		 * answer, and it remembers every answer, so an address named by many documents is asked
+		 * about once.</p>
+		 * 
+		 * @return this builder for method chaining, never <code>null</code>
+		 */
+		public Builder withUriReachabilityCheck() {
+			return withUriReachabilityCheck(new HttpUriReachabilityChecker());
+		}
+
+		/**
+		 * Asks the addresses a document names whether they are there, with the given check, e.g.
+		 * one going through a proxy, one asking a service instead of the address itself, or one a
+		 * test answers for.
+		 * 
+		 * <p>There is one such check, so a later call replaces an earlier one. It is asked from
+		 * several threads at once and for the same address again and again, so it has to bear the
+		 * former and is expected to remember an answer rather than to ask again.</p>
+		 * 
+		 * @param checker the check to be used, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the given check is <code>null</code>
+		 */
+		public Builder withUriReachabilityCheck(UriReachabilityChecker checker) {
+			if (checker == null) {
+				throw new IllegalArgumentException("Argument must not be null.");
+			}
+			this.uriReachabilityChecker = checker;
 			return this;
 		}
 
@@ -361,7 +431,8 @@ public class MarkdownService {
 
 			ResourceResolverRegistry resolvers =
 					new ResourceResolverRegistry(pathResolver, allUriResolvers);
-			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers);
+			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers,
+					this.uriReachabilityChecker);
 		}
 
 	}
