@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import com.advantest.flexmark.ext.jira.tickets.JiraTicketExtension;
 import com.advantest.markdown.MarkdownCustomization;
-import com.advantest.resources.ResourceResolver;
+import com.advantest.resources.RelativePathResourceResolver;
 import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.html.AttributeProvider;
 import com.vladsch.flexmark.html.AttributeProviderFactory;
@@ -166,20 +166,37 @@ class MarkdownServiceBuilderTest {
 				() -> builder.withOption((NullableDataKey<String>) null, "value"));
 		assertThrows(IllegalArgumentException.class, () -> builder.withCustomization((MarkdownCustomization) null));
 		assertThrows(IllegalArgumentException.class, () -> builder.withUriResolver(null));
+		assertThrows(IllegalArgumentException.class,
+				() -> builder.withRelativePathResourceResolver(null));
 	}
 
 	@Test
-	void builderTakesTheResourceResolverOfTheEnvironment() {
-		ResourceResolver ownResolver = (linkTarget, document) -> new UnresolvedResource(linkTarget);
+	void builderTakesTheResolverOfAPathOfItsOwn() {
+		RelativePathResourceResolver ownResolver =
+				(linkTarget, document) -> new UnresolvedResource(linkTarget);
 
 		MarkdownService service = MarkdownService.builder()
-				.withLocalFileSystemResourceResolver(ownResolver)
+				.withRelativePathResourceResolver(ownResolver)
 				.build();
 
 		assertNotNull(service);
-		// the resolver is only asked for by the rules about linked files, which are still to come,
-		// so all we can check here is that a service with it validates as before
+		// the resolver is asked by the rules about the resource a link points to, which a target
+		// this short never reaches, so all we can check here is that a service with it validates
+		// as before
 		assertTrue(service.validateMarkdown("[label]()").size() == 1);
+	}
+
+	@Test
+	void builderLeavesAnAbsolutePathAloneWhereTheDocumentsAreReadFromSomewhereElse() {
+		RelativePathResourceResolver ownResolver =
+				(linkTarget, document) -> new UnresolvedResource(linkTarget);
+
+		MarkdownService service = MarkdownService.builder()
+				.withRelativePathResourceResolver(ownResolver)
+				.build();
+
+		// nobody resolves a path naming its resource on its own, so nothing is said about it
+		assertTrue(service.validateMarkdown("[label](/absolute/path/guide.md)").isEmpty());
 	}
 
 	@Test

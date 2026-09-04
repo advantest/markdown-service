@@ -12,8 +12,10 @@ import java.util.List;
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.resources.AbsoluteLocalPathResolver;
 import com.advantest.resources.FileSchemeUriResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
+import com.advantest.resources.RelativePathResourceResolver;
 import com.advantest.resources.Resource;
 import com.advantest.resources.ResourceResolver;
 import com.advantest.resources.UnresolvedResource;
@@ -226,7 +228,9 @@ public class MarkdownService {
 		private final MarkdownParserAndHtmlRenderer.Builder parserAndRendererBuilder =
 				MarkdownParserAndHtmlRenderer.builder();
 
-		private ResourceResolver localFileSystemResolver = new LocalFileSystemResourceResolver();
+		private RelativePathResourceResolver relativePathResolver;
+
+		private ResourceResolver absolutePathResolver;
 
 		private final List<UriResolver> uriResolvers = new ArrayList<>();
 
@@ -240,23 +244,35 @@ public class MarkdownService {
 		 * @return this builder for method chaining, never <code>null</code>
 		 */
 		public Builder withLocalFileSystemResourceResolver() {
-			return withLocalFileSystemResourceResolver(new LocalFileSystemResourceResolver());
+			withRelativePathResourceResolver(new LocalFileSystemResourceResolver());
+			this.absolutePathResolver = new AbsoluteLocalPathResolver();
+			return this;
 		}
 
 		/**
-		 * Resolves everything a Markdown document refers to with the given resolver of the local
-		 * file system. There is one such resolver or there is none, so a later call replaces an
-		 * earlier one.
+		 * Resolves a reference that names no scheme with the given resolver, which says what such
+		 * a reference means as seen from the document carrying it &ndash; a file next to that
+		 * document, or an address built from the address of that document. There is one such
+		 * resolver, so a later call replaces an earlier one.
 		 * 
-		 * @param resolver the resolver of the local file system, must not be <code>null</code>
+		 * <p>A reference naming a file with the <code>file</code> scheme is handed to the same
+		 * resolver, because it is the same file however it is named. An absolute path, on the
+		 * other hand, is left unresolved unless the documents live in the file system of this
+		 * machine, which is what {@link #withLocalFileSystemResourceResolver()} says: a path
+		 * naming its resource on its own means nothing where the documents are read from
+		 * somewhere else.</p>
+		 * 
+		 * @param resolver the resolver of a reference without a scheme, must not be
+		 *                 <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
 		 * @throws IllegalArgumentException if the given resolver is <code>null</code>
 		 */
-		Builder withLocalFileSystemResourceResolver(ResourceResolver resolver) {
+		public Builder withRelativePathResourceResolver(RelativePathResourceResolver resolver) {
 			if (resolver == null) {
 				throw new IllegalArgumentException("Argument must not be null.");
 			}
-			this.localFileSystemResolver = resolver;
+			this.relativePathResolver = resolver;
+			this.absolutePathResolver = null;
 			return this;
 		}
 
@@ -342,12 +358,19 @@ public class MarkdownService {
 		 * @return the newly created service, never <code>null</code>
 		 */
 		public MarkdownService build() {
-			List<UriResolver> resolversOfAScheme = new ArrayList<>();
-			resolversOfAScheme.add(new FileSchemeUriResolver(this.localFileSystemResolver));
-			resolversOfAScheme.addAll(this.uriResolvers);
+			RelativePathResourceResolver pathResolver = this.relativePathResolver != null
+					? this.relativePathResolver
+					: new LocalFileSystemResourceResolver();
+			ResourceResolver absolutePathResolver = this.relativePathResolver != null
+					? this.absolutePathResolver
+					: new AbsoluteLocalPathResolver();
+
+			List<UriResolver> allUriResolvers = new ArrayList<>();
+			allUriResolvers.add(new FileSchemeUriResolver(pathResolver));
+			allUriResolvers.addAll(this.uriResolvers);
 
 			ResourceResolverRegistry resolvers =
-					new ResourceResolverRegistry(this.localFileSystemResolver, resolversOfAScheme);
+					new ResourceResolverRegistry(pathResolver, absolutePathResolver, allUriResolvers);
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers);
 		}
 
