@@ -165,7 +165,7 @@ class MarkdownServiceBuilderTest {
 		assertThrows(IllegalArgumentException.class,
 				() -> builder.withOption((NullableDataKey<String>) null, "value"));
 		assertThrows(IllegalArgumentException.class, () -> builder.withCustomization((MarkdownCustomization) null));
-		assertThrows(IllegalArgumentException.class, () -> builder.withResourceResolver(null));
+		assertThrows(IllegalArgumentException.class, () -> builder.withUriResolver(null));
 	}
 
 	@Test
@@ -173,12 +173,22 @@ class MarkdownServiceBuilderTest {
 		ResourceResolver ownResolver = (linkTarget, document) -> new UnresolvedResource(linkTarget);
 
 		MarkdownService service = MarkdownService.builder()
-				.withResourceResolver(ownResolver)
+				.withLocalFileSystemResourceResolver(ownResolver)
 				.build();
 
 		assertNotNull(service);
 		// the resolver is only asked for by the rules about linked files, which are still to come,
 		// so all we can check here is that a service with it validates as before
+		assertTrue(service.validateMarkdown("[label]()").size() == 1);
+	}
+
+	@Test
+	void builderResolvesInTheLocalFileSystemWhenAskedTo() {
+		MarkdownService service = MarkdownService.builder()
+				.withLocalFileSystemResourceResolver()
+				.build();
+
+		assertNotNull(service);
 		assertTrue(service.validateMarkdown("[label]()").size() == 1);
 	}
 

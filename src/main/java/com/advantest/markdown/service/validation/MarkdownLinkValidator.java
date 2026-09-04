@@ -19,6 +19,7 @@ import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.parsing.LinkTarget;
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
+import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.utils.TextUtils;
 import com.advantest.resources.Resource;
 import com.advantest.resources.ResourceResolver;
@@ -58,29 +59,29 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			+ " and use that reference link label in your link,"
 			+ " e.g. \"[your link text][ReferenceLinkLabel]\" or \"[ReferenceLinkLabel]\".";
 
-	private final ResourceResolver resourceResolver;
+	private final ResourceResolverRegistry resourceResolvers;
 
 	/**
-	 * Creates the validator, resolving everything a link points to with the given resolver.
+	 * Creates the validator, resolving everything a link points to with the given resolvers.
 	 * 
-	 * @param resourceResolver the resolver of the surrounding environment, must not be
-	 *                         <code>null</code>
+	 * @param resourceResolvers the resolvers of the surrounding environment, must not be
+	 *                          <code>null</code>
 	 */
-	MarkdownLinkValidator(ResourceResolver resourceResolver) {
-		if (resourceResolver == null) {
+	MarkdownLinkValidator(ResourceResolverRegistry resourceResolvers) {
+		if (resourceResolvers == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		this.resourceResolver = resourceResolver;
+		this.resourceResolvers = resourceResolvers;
 	}
 
 	/**
-	 * Returns the resolver answering where a link target is found. It is used by the rules about
-	 * the files and directories a link points to.
+	 * Returns the resolvers answering where a link target is found. They are used by the rules
+	 * about the files and directories a link points to.
 	 * 
-	 * @return the resolver, never <code>null</code>
+	 * @return the resolvers, never <code>null</code>
 	 */
-	ResourceResolver getResourceResolver() {
-		return this.resourceResolver;
+	ResourceResolverRegistry getResourceResolvers() {
+		return this.resourceResolvers;
 	}
 
 	@Override
@@ -339,8 +340,20 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	private void checkTargetResource(RegexMatch targetMatch, Document document,
 			List<ValidationIssue> issues) {
 
-		LinkTarget target = LinkTarget.of(targetMatch.matchedText);
-		if (!target.isLocalResourcePath()) {
+		String targetReference = targetMatch.matchedText;
+		if (!ResourceResolverRegistry.namesAResourceOfThisEnvironment(targetReference)) {
+			// a reference naming a scheme is checked by whoever answers for that scheme
+			return;
+		}
+
+		LinkTarget target = LinkTarget.of(targetReference);
+		if (target.path() == null || target.path().isBlank()) {
+			// the reference names a place inside the document it is written in, not a resource
+			return;
+		}
+
+		Optional<ResourceResolver> resolver = this.resourceResolvers.resolverFor(targetReference);
+		if (resolver.isEmpty()) {
 			return;
 		}
 
@@ -362,7 +375,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			return;
 		}
 
-		Resource targetResource = this.resourceResolver.resolve(target.path(), documentResource);
+		Resource targetResource = resolver.get().resolve(targetReference, documentResource);
 		if (!targetResource.exists()) {
 			issues.add(new ValidationIssue(
 					MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,

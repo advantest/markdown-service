@@ -6,14 +6,18 @@
  */
 package com.advantest.markdown.service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
+import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.resources.FileSchemeUriResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
 import com.advantest.resources.Resource;
 import com.advantest.resources.ResourceResolver;
 import com.advantest.resources.UnresolvedResource;
+import com.advantest.resources.UriResolver;
 import com.advantest.markdown.service.validation.MarkdownValidation;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.vladsch.flexmark.util.ast.Document;
@@ -56,23 +60,24 @@ public class MarkdownService {
 	 * Use {@link #builder()} if you need to customize the parser, the renderer or the resolver.
 	 */
 	public MarkdownService() {
-		this(new MarkdownParserAndHtmlRenderer(), new LocalFileSystemResourceResolver());
+		this(new MarkdownParserAndHtmlRenderer(), ResourceResolverRegistry.ofLocalFileSystem());
 	}
 
 	/**
 	 * Creates a service delegating to the given Markdown parser and HTML renderer and resolving
-	 * references with the given resolver.
+	 * references with the given resolvers.
 	 * 
 	 * @param parserAndRenderer the parser and renderer to delegate to, must not be <code>null</code>
-	 * @param resourceResolver the resolver of everything a document refers to, must not be
-	 *                         <code>null</code>
+	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
+	 *                          <code>null</code>
 	 */
-	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer, ResourceResolver resourceResolver) {
-		if (parserAndRenderer == null || resourceResolver == null) {
+	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
+			ResourceResolverRegistry resourceResolvers) {
+		if (parserAndRenderer == null || resourceResolvers == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.parserAndRenderer = parserAndRenderer;
-		this.validation = new MarkdownValidation(resourceResolver);
+		this.validation = new MarkdownValidation(resourceResolvers);
 	}
 
 	/**
@@ -221,25 +226,58 @@ public class MarkdownService {
 		private final MarkdownParserAndHtmlRenderer.Builder parserAndRendererBuilder =
 				MarkdownParserAndHtmlRenderer.builder();
 
-		private ResourceResolver resourceResolver;
+		private ResourceResolver localFileSystemResolver = new LocalFileSystemResourceResolver();
+
+		private final List<UriResolver> uriResolvers = new ArrayList<>();
 
 		private Builder() {
 		}
 
 		/**
-		 * Sets the resolver answering where the documents, images and directories a Markdown
-		 * document refers to are found. Without this, references are resolved in the local file
-		 * system.
+		 * Resolves everything a Markdown document refers to in the file system of the machine this
+		 * code runs on, which is what happens anyway if nothing else is said. Say it to say it.
 		 * 
-		 * @param resolver the resolver of the surrounding environment, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 */
+		public Builder withLocalFileSystemResourceResolver() {
+			return withLocalFileSystemResourceResolver(new LocalFileSystemResourceResolver());
+		}
+
+		/**
+		 * Resolves everything a Markdown document refers to with the given resolver of the local
+		 * file system. There is one such resolver or there is none, so a later call replaces an
+		 * earlier one.
+		 * 
+		 * @param resolver the resolver of the local file system, must not be <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
 		 * @throws IllegalArgumentException if the given resolver is <code>null</code>
 		 */
-		public Builder withResourceResolver(ResourceResolver resolver) {
+		Builder withLocalFileSystemResourceResolver(ResourceResolver resolver) {
 			if (resolver == null) {
 				throw new IllegalArgumentException("Argument must not be null.");
 			}
-			this.resourceResolver = resolver;
+			this.localFileSystemResolver = resolver;
+			return this;
+		}
+
+		/**
+		 * Adds a resolver for references naming a scheme, e.g. addresses of a version control
+		 * system's web interface.
+		 * 
+		 * <p>Several resolvers may know the same scheme and tell each other apart by the host or by
+		 * the beginning of the address, so the one added last that says it is
+		 * {@link UriResolver#isResponsibleFor(java.net.URI) responsible} answers for a
+		 * reference.</p>
+		 * 
+		 * @param resolver the resolver to be added, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the given resolver is <code>null</code>
+		 */
+		public Builder withUriResolver(UriResolver resolver) {
+			if (resolver == null) {
+				throw new IllegalArgumentException("Argument must not be null.");
+			}
+			this.uriResolvers.add(resolver);
 			return this;
 		}
 
@@ -304,10 +342,13 @@ public class MarkdownService {
 		 * @return the newly created service, never <code>null</code>
 		 */
 		public MarkdownService build() {
-			ResourceResolver resolver = this.resourceResolver != null
-					? this.resourceResolver
-					: new LocalFileSystemResourceResolver();
-			return new MarkdownService(this.parserAndRendererBuilder.build(), resolver);
+			List<UriResolver> resolversOfAScheme = new ArrayList<>();
+			resolversOfAScheme.add(new FileSchemeUriResolver(this.localFileSystemResolver));
+			resolversOfAScheme.addAll(this.uriResolvers);
+
+			ResourceResolverRegistry resolvers =
+					new ResourceResolverRegistry(this.localFileSystemResolver, resolversOfAScheme);
+			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers);
 		}
 
 	}

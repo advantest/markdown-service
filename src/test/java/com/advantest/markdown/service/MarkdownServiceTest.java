@@ -27,8 +27,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
+import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.resources.LocalFileSystemResource;
-import com.advantest.resources.LocalFileSystemResourceResolver;
 import com.advantest.resources.Resource;
 import com.vladsch.flexmark.util.ast.Document;
 
@@ -40,7 +40,7 @@ class MarkdownServiceTest {
 	@BeforeEach
 	void setUp() {
 		this.delegate = spy(new MarkdownParserAndHtmlRenderer());
-		this.service = new MarkdownService(this.delegate, new LocalFileSystemResourceResolver());
+		this.service = new MarkdownService(this.delegate, ResourceResolverRegistry.ofLocalFileSystem());
 	}
 
 	@Test
@@ -130,7 +130,7 @@ class MarkdownServiceTest {
 	@Test
 	void constructorRejectsNullArguments() {
 		assertThrows(IllegalArgumentException.class,
-				() -> new MarkdownService(null, new LocalFileSystemResourceResolver()));
+				() -> new MarkdownService(null, ResourceResolverRegistry.ofLocalFileSystem()));
 		assertThrows(IllegalArgumentException.class,
 				() -> new MarkdownService(new MarkdownParserAndHtmlRenderer(), null));
 	}
