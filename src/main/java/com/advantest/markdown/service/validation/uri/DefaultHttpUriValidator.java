@@ -90,6 +90,17 @@ public class DefaultHttpUriValidator implements UriValidator {
 		};
 	}
 
+	/**
+	 * Tells whether the target names the scheme {@code http} or {@code https} in the URI it was read as.
+	 * <p>
+	 * A target only has such a scheme where its text could be read as a URI at all, so this question alone
+	 * would leave every mistyped address to nobody. A scheme is written in either case, so it is compared
+	 * in lower case, folded with {@link Locale#ROOT} so that the answer does not depend on the language of
+	 * the machine the library runs on.
+	 *
+	 * @param target the target to ask, never {@code null}
+	 * @return whether the target was read as a URI naming one of the two schemes
+	 */
 	private static boolean namesTheHttpScheme(UriTarget target) {
 		return target.scheme()
 				.map(scheme -> scheme.toLowerCase(Locale.ROOT))
@@ -97,11 +108,33 @@ public class DefaultHttpUriValidator implements UriValidator {
 				.isPresent();
 	}
 
+	/**
+	 * Tells whether the text begins with {@code http:} or {@code https:}, whatever it is written after it.
+	 * <p>
+	 * This is what claims an address the URI syntax refused, {@code https:/example.org} or
+	 * {@code https://example.org/a guide}: such a text has no scheme to read, so
+	 * {@link #namesTheHttpScheme(UriTarget)} says no about it, and without this question the address that
+	 * an author most likely mistyped would be claimed by no validator and pass silently.
+	 *
+	 * @param targetText the text the target was written with, never {@code null}
+	 * @return whether the text was meant as a web address, whether or not it can be read as one
+	 */
 	private static boolean beginsWithTheHttpScheme(String targetText) {
 		String address = targetText.toLowerCase(Locale.ROOT);
 		return address.startsWith(SCHEME_HTTP + ":") || address.startsWith(SCHEME_HTTPS + ":");
 	}
 
+	/**
+	 * Tells whether the text begins with {@code http://} or {@code https://}, the scheme and its separator.
+	 * <p>
+	 * This is the question {@link #validate(UriTarget)} asks first, and it separates the two reports it can
+	 * write: a text missing the separator is not a web address at all and is reported as one that has to be
+	 * written with {@code https://}, while a text carrying it is a web address whose remainder is then read
+	 * and asked about.
+	 *
+	 * @param targetText the text the target was written with, never {@code null}
+	 * @return whether the text begins with a complete web address scheme
+	 */
 	private static boolean startsWithHttpSchemeAndSeparator(String targetText) {
 		String address = targetText.toLowerCase(Locale.ROOT);
 		return address.startsWith(SCHEME_HTTP + "://") || address.startsWith(SCHEME_HTTPS + "://");
