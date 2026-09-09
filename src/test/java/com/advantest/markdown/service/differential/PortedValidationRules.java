@@ -6,6 +6,7 @@
  */
 package com.advantest.markdown.service.differential;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -15,10 +16,14 @@ import com.advantest.markdown.service.validation.MarkdownIssueTypes;
 /**
  * Recognizes the findings of a recorded FluentMark run that this service has a rule for.
  * 
- * <p>A recorded run reports far more than this service does — reachability of web addresses,
- * existence of referenced files, and the checks contributed by the proprietary extensions. Only the
- * findings of the rules that have been ported can be compared; everything else would show as a
- * difference forever and would hide the differences that matter.</p>
+ * <p>A recorded run reports more than this service does — the checks contributed by the proprietary
+ * extensions above all. Only the findings of the rules that have been ported can be compared;
+ * everything else would show as a difference forever and would hide the differences that
+ * matter.</p>
+ * 
+ * <p>Which rules those are depends on the run: the rules about web addresses ask the network, so
+ * they only count as ported where the run asks it as well, see
+ * {@link #of(boolean) of(webAddressesAreChecked)}.</p>
  * 
  * <p>The recording cannot tell the rules apart on its own: every Markdown finding carries the same
  * marker type, because that is what Eclipse needs, not what a rule is. The message is therefore the
@@ -60,8 +65,41 @@ final class PortedValidationRules {
 			new Rule(MarkdownIssueTypes.ANCHOR_DUPLICATE_IDENTIFIER,
 					message -> message.startsWith("The anchor identifier") && message.contains("is not unique.")));
 
-	private PortedValidationRules() {
-		// utility class, not meant to be instantiated
+	/**
+	 * The rules asking the network, which are only ported into a comparison that asks it as well.
+	 */
+	private static final List<Rule> RULES_ASKING_THE_NETWORK = List.of(
+			new Rule(MarkdownIssueTypes.LINK_INVALID_WEB_ADDRESS,
+					message -> message.startsWith("The referenced web address")
+							&& message.contains("seems not to be a valid HTTP web address.")),
+			new Rule(MarkdownIssueTypes.LINK_WEB_ADDRESS_DOES_NOT_ANSWER,
+					message -> message.startsWith("The referenced web address")
+							&& message.contains("seems not to exist. (Error message:")),
+			new Rule(MarkdownIssueTypes.LINK_WEB_ADDRESS_NOT_REACHABLE,
+					message -> message.startsWith("The referenced web address")
+							&& message.contains("is not reachable (HTTP status code")));
+
+	private final List<Rule> rules;
+
+	private PortedValidationRules(List<Rule> rules) {
+		this.rules = rules;
+	}
+
+	/**
+	 * Answers which rules a run compares by.
+	 * 
+	 * @param webAddressesAreChecked whether this run asks the network about a web address
+	 * @return the rules of this service that the recording can be compared against
+	 */
+	static PortedValidationRules of(boolean webAddressesAreChecked) {
+		if (!webAddressesAreChecked) {
+			return new PortedValidationRules(RULES);
+		}
+
+		List<Rule> allRules = new ArrayList<>(RULES);
+		allRules.addAll(RULES_ASKING_THE_NETWORK);
+
+		return new PortedValidationRules(List.copyOf(allRules));
 	}
 
 	/**
@@ -71,8 +109,8 @@ final class PortedValidationRules {
 	 * @return the issue type identifier this service reports the same problem as, or an empty
 	 *         optional if no rule of this service covers the finding yet
 	 */
-	static Optional<String> issueTypeIdOf(String message) {
-		return RULES.stream()
+	Optional<String> issueTypeIdOf(String message) {
+		return this.rules.stream()
 				.filter(rule -> rule.recognizesMessage().test(message))
 				.map(Rule::issueTypeId)
 				.findFirst();

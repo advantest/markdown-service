@@ -72,6 +72,23 @@ import com.advantest.resources.Resource;
  * <code>markdown.corpus.exclude</code> take a regular expression each and are matched against the
  * path of a file relative to the corpus root. A file outside the selection is skipped rather than
  * compared, so that a run over a part of the corpus keeps stating what it left out.</p>
+ * 
+ * <p>The optional property <code>markdown.corpus.checkWebAddresses</code> switches the rules about
+ * web addresses on. They ask the network, so a run without it stays offline, and its recorded
+ * findings then count as not covered rather than as missing. A run with it needs the network, and
+ * the corpus names addresses inside the company network, which only answer from inside it:</p>
+ * 
+ * <pre>
+ * mvn test -Dtest=MarkdownValidationDifferentialTest -DfailIfNoSpecifiedTests=false \
+ *          -Dmarkdown.corpus.root=&lt;corpus&gt; -Dmarkdown.recording.dir=&lt;recording&gt; \
+ *          -Dmarkdown.corpus.checkWebAddresses=true
+ * </pre>
+ * 
+ * <p>Such a run reports what the recorded run reported, apart from two kinds of difference that are
+ * neither of them a defect of a rule. An address a validator of the FluentMark extensions claims is
+ * asked about here and was not asked about there, so it is reported as surplus until those
+ * validators exist. And an address is a moving target: one that answers slowly enough is reported
+ * by whoever asked it on the slower day.</p>
  */
 public class MarkdownValidationDifferentialTest {
 
@@ -79,10 +96,30 @@ public class MarkdownValidationDifferentialTest {
 	private static final String RECORDING_DIRECTORY_PROPERTY = "markdown.recording.dir";
 	private static final String INCLUDE_PROPERTY = "markdown.corpus.include";
 	private static final String EXCLUDE_PROPERTY = "markdown.corpus.exclude";
+	private static final String WEB_ADDRESSES_PROPERTY = "markdown.corpus.checkWebAddresses";
+
+	private static final boolean WEB_ADDRESSES_ARE_CHECKED = Boolean.getBoolean(WEB_ADDRESSES_PROPERTY);
+
+	private static final PortedValidationRules PORTED_RULES =
+			PortedValidationRules.of(WEB_ADDRESSES_ARE_CHECKED);
 
 	private static final Summary SUMMARY = new Summary();
 
-	private final MarkdownService service = new MarkdownService();
+	/**
+	 * The service every case validates with, one for the whole run.
+	 * 
+	 * <p>Where the run asks about a web address, one checker serves every document, so that an
+	 * address named by several of them is asked about once.</p>
+	 */
+	private static final MarkdownService SERVICE = serviceOfThisRun();
+
+	private final MarkdownService service = SERVICE;
+
+	private static MarkdownService serviceOfThisRun() {
+		MarkdownService.Builder builder = MarkdownService.builder().withLocalFileSystemResourceResolver();
+
+		return WEB_ADDRESSES_ARE_CHECKED ? builder.withUriReachabilityCheck().build() : builder.build();
+	}
 
 	/**
 	 * A finding of either side, reduced to what both sides can state about it.
@@ -216,7 +253,7 @@ public class MarkdownValidationDifferentialTest {
 				.flatMap(finding -> {
 					String message = RewordedMessages.asThisServiceWordsIt(finding.message());
 
-					return PortedValidationRules.issueTypeIdOf(message).stream()
+					return PORTED_RULES.issueTypeIdOf(message).stream()
 							.map(issueTypeId -> new ComparableFinding(finding.lineNumber(), finding.startOffset(),
 									finding.endOffset(), finding.severity(), issueTypeId, message));
 				})
@@ -323,7 +360,7 @@ public class MarkdownValidationDifferentialTest {
 			this.comparedFiles++;
 
 			recorded.stream()
-					.filter(finding -> PortedValidationRules.issueTypeIdOf(finding.message()).isEmpty())
+					.filter(finding -> PORTED_RULES.issueTypeIdOf(finding.message()).isEmpty())
 					.forEach(this::countNotCovered);
 
 			List<ComparableFinding> missing = new ArrayList<>(expected);
