@@ -18,7 +18,7 @@ import java.util.Optional;
  * say about a text that is no address at all, and it is passed as a {@link URI} where the URI
  * syntax accepts it, so that it is read once instead of once per rule.</p>
  * 
- * @param text the target as it is written in the document, must neither be <code>null</code> nor
+ * @param uriText the target as it is written in the document, must neither be <code>null</code> nor
  *        blank
  * @param uri the target read as a URI, or {@link Optional#empty()} where the URI syntax rejects
  *        the text, must not be <code>null</code>
@@ -27,7 +27,7 @@ import java.util.Optional;
  * @param endOffset the character following the target, exclusive, must not be smaller than the
  *        start offset
  */
-public record UriTarget(String text, Optional<URI> uri, int lineNumber, int startOffset, int endOffset) {
+public record UriTarget(String uriText, Optional<URI> uri, int lineNumber, int startOffset, int endOffset) {
 
 	/**
 	 * Creates a target, rejecting incomplete or contradictory data.
@@ -36,7 +36,7 @@ public record UriTarget(String text, Optional<URI> uri, int lineNumber, int star
 	 *         allowed range
 	 */
 	public UriTarget {
-		if (text == null || text.isBlank()) {
+		if (uriText == null || uriText.isBlank()) {
 			throw new IllegalArgumentException("A target text is required.");
 		}
 		if (uri == null) {
@@ -58,7 +58,7 @@ public record UriTarget(String text, Optional<URI> uri, int lineNumber, int star
 	 * Creates a target from the text it is written with, reading it as a URI where that is
 	 * possible.
 	 * 
-	 * @param text the target as it is written in the document, must neither be <code>null</code>
+	 * @param uriText the target as it is written in the document, must neither be <code>null</code>
 	 *        nor blank
 	 * @param lineNumber the line the target is written in, starting at 1
 	 * @param startOffset the first character of the target in the document, starting at 0
@@ -67,8 +67,8 @@ public record UriTarget(String text, Optional<URI> uri, int lineNumber, int star
 	 * @throws IllegalArgumentException if an argument is <code>null</code>, blank or outside its
 	 *         allowed range
 	 */
-	public static UriTarget of(String text, int lineNumber, int startOffset, int endOffset) {
-		return new UriTarget(text, readAsUri(text), lineNumber, startOffset, endOffset);
+	public static UriTarget of(String uriText, int lineNumber, int startOffset, int endOffset) {
+		return new UriTarget(uriText, readAsUri(uriText), lineNumber, startOffset, endOffset);
 	}
 
 	/**
@@ -81,13 +81,13 @@ public record UriTarget(String text, Optional<URI> uri, int lineNumber, int star
 		return this.uri.map(URI::getScheme).filter(scheme -> !scheme.isBlank());
 	}
 
-	private static Optional<URI> readAsUri(String text) {
-		if (text == null || text.isBlank()) {
+	private static Optional<URI> readAsUri(String uriText) {
+		if (uriText == null || uriText.isBlank()) {
 			return Optional.empty();
 		}
 
 		try {
-			return Optional.of(new URI(text));
+			return Optional.of(new URI(uriText));
 		} catch (URISyntaxException exception) {
 			return Optional.empty();
 		}

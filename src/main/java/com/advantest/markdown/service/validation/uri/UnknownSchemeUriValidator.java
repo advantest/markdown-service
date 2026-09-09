@@ -102,7 +102,7 @@ public class UnknownSchemeUriValidator implements UriValidator {
 				IssueSeverity.WARNING,
 				String.format("The referenced target '%s' names the scheme '%s', which nothing knows here,"
 						+ " so the target is neither resolved nor checked. Please check the scheme for a"
-						+ " typing mistake.", target.text(), scheme),
+						+ " typing mistake.", target.uriText(), scheme),
 				target.lineNumber(),
 				target.startOffset(),
 				target.endOffset()));
@@ -119,7 +119,7 @@ public class UnknownSchemeUriValidator implements UriValidator {
 			return schemeOfUri.map(scheme -> scheme.toLowerCase(Locale.ROOT));
 		}
 
-		Matcher schemeInText = SCHEME_OF_TEXT.matcher(target.text());
+		Matcher schemeInText = SCHEME_OF_TEXT.matcher(target.uriText());
 		return schemeInText.find()
 				? Optional.of(schemeInText.group(1).toLowerCase(Locale.ROOT))
 				: Optional.empty();

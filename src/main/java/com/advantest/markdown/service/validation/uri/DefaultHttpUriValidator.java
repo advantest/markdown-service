@@ -58,7 +58,7 @@ public class DefaultHttpUriValidator implements UriValidator {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 
-		return namesTheHttpScheme(target) || beginsWithTheHttpScheme(target.text());
+		return namesTheHttpScheme(target) || beginsWithTheHttpScheme(target.uriText());
 	}
 
 	@Override
@@ -67,14 +67,14 @@ public class DefaultHttpUriValidator implements UriValidator {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 
-		if (!startsWithHttpSchemeAndSeparator(target.text())) {
+		if (!startsWithHttpSchemeAndSeparator(target.uriText())) {
 			return List.of(issue(target, MarkdownIssueTypes.LINK_INVALID_WEB_ADDRESS, IssueSeverity.ERROR,
-					noHttpAddressMessage(target.text())));
+					noHttpAddressMessage(target.uriText())));
 		}
 
 		if (target.uri().isEmpty()) {
 			return List.of(issue(target, MarkdownIssueTypes.LINK_INVALID_WEB_ADDRESS, IssueSeverity.ERROR,
-					unreadableAddressMessage(target.text())));
+					unreadableAddressMessage(target.uriText())));
 		}
 
 		UriReachability reachability = this.reachabilityChecker.check(target.uri().orElseThrow());
@@ -82,10 +82,10 @@ public class DefaultHttpUriValidator implements UriValidator {
 		return switch (reachability) {
 			case UriReachability.NotReached notReached -> List.of(
 					issue(target, MarkdownIssueTypes.LINK_WEB_ADDRESS_DOES_NOT_ANSWER, IssueSeverity.WARNING,
-							addressDoesNotAnswerMessage(target.text(), notReached.failureReason())));
+							addressDoesNotAnswerMessage(target.uriText(), notReached.failureReason())));
 			case UriReachability.Answered answered when answered.statusCode() >= 400 -> List.of(
 					issue(target, MarkdownIssueTypes.LINK_WEB_ADDRESS_NOT_REACHABLE, IssueSeverity.ERROR,
-							addressNotReachableMessage(target.text(), answered.statusCode())));
+							addressNotReachableMessage(target.uriText(), answered.statusCode())));
 			case UriReachability.Answered answered -> List.of();
 		};
 	}

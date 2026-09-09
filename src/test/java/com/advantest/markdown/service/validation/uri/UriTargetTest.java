@@ -35,7 +35,7 @@ class UriTargetTest {
 	void targetKeepsItsTextEvenWhereTheSyntaxRejectsIt() {
 		UriTarget target = UriTarget.of("https://example.org/a guide", 1, 0, 27);
 
-		assertEquals("https://example.org/a guide", target.text());
+		assertEquals("https://example.org/a guide", target.uriText());
 		assertTrue(target.uri().isEmpty());
 		assertTrue(target.scheme().isEmpty());
 	}
@@ -44,7 +44,7 @@ class UriTargetTest {
 	void targetKeepsWhatFollowsTheAddress() {
 		UriTarget target = UriTarget.of("https://example.org/guide?page=2#section", 1, 0, 40);
 
-		assertEquals("https://example.org/guide?page=2#section", target.text());
+		assertEquals("https://example.org/guide?page=2#section", target.uriText());
 		assertEquals("section", target.uri().orElseThrow().getFragment());
 		assertEquals("page=2", target.uri().orElseThrow().getQuery());
 	}

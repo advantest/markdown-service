@@ -56,7 +56,7 @@ class UnknownSchemeReportingTest {
 
 					@Override
 					public boolean isResponsibleFor(UriTarget target) {
-						return target.text().startsWith("jira:");
+						return target.uriText().startsWith("jira:");
 					}
 
 					@Override

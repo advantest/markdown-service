@@ -133,7 +133,7 @@ class WebAddressValidationTest {
 
 					@Override
 					public boolean isResponsibleFor(UriTarget target) {
-						return target.text().startsWith("https://example.org/");
+						return target.uriText().startsWith("https://example.org/");
 					}
 
 					@Override

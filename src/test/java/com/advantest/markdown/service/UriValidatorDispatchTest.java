@@ -66,7 +66,7 @@ class UriValidatorDispatchTest {
 
 		assertEquals(1, webAddresses.claimedTargets.size());
 		UriTarget target = webAddresses.claimedTargets.get(0);
-		assertEquals("https://example.org/guide", target.text());
+		assertEquals("https://example.org/guide", target.uriText());
 		assertEquals(1, target.lineNumber());
 		assertEquals(8, target.startOffset());
 		assertEquals(33, target.endOffset());
@@ -81,7 +81,7 @@ class UriValidatorDispatchTest {
 		serviceWith(webAddresses).validateMarkdown("![label](https://example.org/picture.png)");
 
 		assertEquals(1, webAddresses.claimedTargets.size());
-		assertEquals("https://example.org/picture.png", webAddresses.claimedTargets.get(0).text());
+		assertEquals("https://example.org/picture.png", webAddresses.claimedTargets.get(0).uriText());
 	}
 
 	@Test
@@ -91,7 +91,7 @@ class UriValidatorDispatchTest {
 		serviceWith(webAddresses).validateMarkdown("[key]: https://example.org/guide\n\nSee [key].");
 
 		assertEquals(1, webAddresses.claimedTargets.size());
-		assertEquals("https://example.org/guide", webAddresses.claimedTargets.get(0).text());
+		assertEquals("https://example.org/guide", webAddresses.claimedTargets.get(0).uriText());
 	}
 
 	@Test
