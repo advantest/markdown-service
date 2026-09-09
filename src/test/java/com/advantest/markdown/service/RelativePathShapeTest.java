@@ -157,7 +157,8 @@ public class RelativePathShapeTest {
 			"mailto:someone@example.com",
 			"#a-section-of-this-document" })
 	public void saysNothingAboutATargetItDoesNotResolve(String linkTarget) {
-		String markdown = "See the [something](" + linkTarget + ") for details.\n";
+		String markdown = "# A section of this document {#a-section-of-this-document}\n\n"
+				+ "See the [something](" + linkTarget + ") for details.\n";
 
 		assertTrue(this.service.validateMarkdown(markdown, documentResource()).isEmpty(),
 				"Whoever owns the scheme of that target decides what its shape means: " + linkTarget);

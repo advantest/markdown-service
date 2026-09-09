@@ -196,7 +196,7 @@ public class RelativePathExistenceTest {
 
 	@Test
 	public void acceptsATargetOfNothingButAFragment() {
-		String markdown = "See the [section](#a-section) for details.\n";
+		String markdown = "# A section {#a-section}\n\nSee the [section](#a-section) for details.\n";
 
 		assertTrue(this.service.validateMarkdown(markdown, documentResource()).isEmpty(),
 				"A target pointing into the current document names no file to look for.");

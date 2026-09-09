@@ -155,7 +155,8 @@ public class MarkdownLinkValidatorTest {
 			"#a-section-of-this-document",
 			"#doSomething(int,boolean)" })
 	public void acceptsATargetNoRuleHasAnythingToSayAbout(String linkTarget) {
-		String markdown = "See the [something](" + linkTarget + ") for details.\n";
+		String markdown = "# A section of this document {#a-section-of-this-document}\n\n"
+				+ "See the [something](" + linkTarget + ") for details.\n";
 
 		assertTrue(this.service.validateMarkdown(markdown).isEmpty(),
 				"Nothing is wrong with this target: " + linkTarget);
