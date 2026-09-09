@@ -108,7 +108,7 @@ public class MarkdownService {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.parserAndRenderer = parserAndRenderer;
-		this.validation = new MarkdownValidation(resourceResolvers, withShippedValidators(
+		this.validation = new MarkdownValidation(parserAndRenderer, resourceResolvers, withShippedValidators(
 				uriValidators, uriReachabilityChecker));
 		this.uriReachabilityChecker = uriReachabilityChecker;
 	}

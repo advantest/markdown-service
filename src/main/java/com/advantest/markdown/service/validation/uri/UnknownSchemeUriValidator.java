@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
 
 import com.advantest.markdown.service.validation.IssueSeverity;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
+import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 
 /**
@@ -90,7 +91,7 @@ public class UnknownSchemeUriValidator implements UriValidator {
 	}
 
 	@Override
-	public List<ValidationIssue> validate(UriTarget target) {
+	public List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context) {
 		if (target == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}

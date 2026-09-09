@@ -15,6 +15,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.advantest.markdown.service.validation.IssueSeverity;
+import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.markdown.service.validation.uri.UriTarget;
 import com.advantest.markdown.service.validation.uri.UriValidator;
@@ -50,7 +51,7 @@ class UriValidatorDispatchTest {
 		}
 
 		@Override
-		public List<ValidationIssue> validate(UriTarget target) {
+		public List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context) {
 			this.claimedTargets.add(target);
 			return List.of(new ValidationIssue(ISSUE_TYPE, IssueSeverity.WARNING, this.name,
 					target.lineNumber(), target.startOffset(), target.endOffset()));

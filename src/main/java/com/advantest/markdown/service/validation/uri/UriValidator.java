@@ -8,6 +8,7 @@ package com.advantest.markdown.service.validation.uri;
 
 import java.util.List;
 
+import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 
 /**
@@ -44,9 +45,10 @@ public interface UriValidator {
 	 * Checks the given target and says what is wrong with it.
 	 * 
 	 * @param target the target as it was found in the document, must not be <code>null</code>
+	 * @param context what this run knows besides the document, must not be <code>null</code>
 	 * @return the problems found, never <code>null</code>, empty if there are none
-	 * @throws IllegalArgumentException if the given target is <code>null</code>
+	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 */
-	List<ValidationIssue> validate(UriTarget target);
+	List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context);
 
 }

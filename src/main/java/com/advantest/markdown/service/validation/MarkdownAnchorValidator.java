@@ -44,7 +44,7 @@ class MarkdownAnchorValidator implements MarkdownValidator {
 	}
 
 	@Override
-	public List<ValidationIssue> validate(Node node) {
+	public List<ValidationIssue> validate(Node node, MarkdownValidationContext context) {
 		Document document = node.getDocument();
 		List<ValidationIssue> issues = new ArrayList<>();
 

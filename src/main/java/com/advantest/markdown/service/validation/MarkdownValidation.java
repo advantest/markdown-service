@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.validation.uri.UriValidator;
 import com.vladsch.flexmark.util.ast.Document;
@@ -30,6 +31,8 @@ import com.vladsch.flexmark.util.ast.Node;
  */
 public class MarkdownValidation {
 
+	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
+
 	private final List<MarkdownValidator> validators;
 
 	private final List<NodeFilter> distinctFilters;
@@ -40,11 +43,14 @@ public class MarkdownValidation {
 	 * Creates a validation applying the built-in validators, resolving everything a document
 	 * refers to with the given resolvers.
 	 * 
+	 * @param parserAndRenderer the parser reading a document a link points into, must not be
+	 *                          <code>null</code>
 	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
 	 *                          <code>null</code>
 	 */
-	public MarkdownValidation(ResourceResolverRegistry resourceResolvers) {
-		this(resourceResolvers, List.of());
+	public MarkdownValidation(MarkdownParserAndHtmlRenderer parserAndRenderer,
+			ResourceResolverRegistry resourceResolvers) {
+		this(parserAndRenderer, resourceResolvers, List.of());
 	}
 
 	/**
@@ -52,26 +58,34 @@ public class MarkdownValidation {
 	 * refers to with the given resolvers and handing a target naming a scheme to the given
 	 * validators.
 	 * 
+	 * @param parserAndRenderer the parser reading a document a link points into, must not be
+	 *                          <code>null</code>
 	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
 	 *                          <code>null</code>
 	 * @param uriValidators the validators of a target naming a scheme, the first one saying it is
 	 *                      responsible answers for a target, must not be <code>null</code>
 	 */
-	public MarkdownValidation(ResourceResolverRegistry resourceResolvers,
+	public MarkdownValidation(MarkdownParserAndHtmlRenderer parserAndRenderer,
+			ResourceResolverRegistry resourceResolvers,
 			List<UriValidator> uriValidators) {
-		this(List.of(new MarkdownLinkValidator(resourceResolvers, uriValidators),
+		this(parserAndRenderer, List.of(new MarkdownLinkValidator(resourceResolvers, uriValidators),
 				new MarkdownAnchorValidator()));
 	}
 
 	/**
 	 * Creates a validation applying the given validators.
 	 * 
+	 * @param parserAndRenderer the parser reading a document a link points into, must not be
+	 *                          <code>null</code>
 	 * @param validators the validators to be applied, must not be <code>null</code>
 	 */
-	MarkdownValidation(List<MarkdownValidator> validators) {
-		if (validators == null) {
-			throw new IllegalArgumentException("Argument must not be null.");
+	MarkdownValidation(MarkdownParserAndHtmlRenderer parserAndRenderer,
+			List<MarkdownValidator> validators) {
+		if (parserAndRenderer == null || validators == null) {
+			throw new IllegalArgumentException("Arguments must not be null.");
 		}
+
+		this.parserAndRenderer = parserAndRenderer;
 
 		this.validators = List.copyOf(validators);
 
@@ -101,14 +115,16 @@ public class MarkdownValidation {
 		}
 
 		List<ValidationIssue> issues = new ArrayList<>();
+		MarkdownValidationContext context = MarkdownValidationContext.parsingWith(this.parserAndRenderer);
 
-		visit(document, Collections.newSetFromMap(new IdentityHashMap<>()), issues);
+		visit(document, Collections.newSetFromMap(new IdentityHashMap<>()), context, issues);
 
 		issues.sort(Comparator.comparingInt(ValidationIssue::startOffset));
 		return List.copyOf(issues);
 	}
 
-	private void visit(Node node, Set<NodeFilter> ignoringFilters, List<ValidationIssue> issues) {
+	private void visit(Node node, Set<NodeFilter> ignoringFilters, MarkdownValidationContext context,
+			List<ValidationIssue> issues) {
 		List<NodeFilter> filtersStartingToIgnoreHere = null;
 		for (NodeFilter filter : this.distinctFilters) {
 			if (!ignoringFilters.contains(filter) && filter.isIgnored(node)) {
@@ -122,12 +138,12 @@ public class MarkdownValidation {
 
 		for (MarkdownValidator validator : validatorsFor(node.getClass())) {
 			if (!ignoringFilters.contains(validator.getIgnoredNodes()) && validator.isValidatorFor(node)) {
-				issues.addAll(validator.validate(node));
+				issues.addAll(validator.validate(node, context));
 			}
 		}
 
 		for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
-			visit(child, ignoringFilters, issues);
+			visit(child, ignoringFilters, context, issues);
 		}
 
 		if (filtersStartingToIgnoreHere != null) {

@@ -15,6 +15,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.MarkdownService;
 import com.vladsch.flexmark.ast.Code;
 import com.vladsch.flexmark.ast.FencedCodeBlock;
@@ -59,7 +60,7 @@ public class MarkdownValidationTraversalTest {
 		}
 
 		@Override
-		public List<ValidationIssue> validate(Node node) {
+		public List<ValidationIssue> validate(Node node, MarkdownValidationContext context) {
 			this.visitedNodes.add(node);
 			return List.of();
 		}
@@ -75,7 +76,7 @@ public class MarkdownValidationTraversalTest {
 
 	private List<ValidationIssue> validate(String markdown, MarkdownValidator... validators) {
 		Document document = this.service.parseMarkdown(markdown);
-		return new MarkdownValidation(List.of(validators)).validate(document);
+		return new MarkdownValidation(new MarkdownParserAndHtmlRenderer(), List.of(validators)).validate(document);
 	}
 
 	@Test
@@ -204,7 +205,7 @@ public class MarkdownValidationTraversalTest {
 			}
 
 			@Override
-			public List<ValidationIssue> validate(Node node) {
+			public List<ValidationIssue> validate(Node node, MarkdownValidationContext context) {
 				return List.of(issueAt(20), issueAt(5));
 			}
 		};

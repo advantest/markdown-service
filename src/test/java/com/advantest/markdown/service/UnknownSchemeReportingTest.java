@@ -14,6 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
+import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.markdown.service.validation.uri.UriTarget;
 import com.advantest.markdown.service.validation.uri.UriValidator;
@@ -60,7 +61,7 @@ class UnknownSchemeReportingTest {
 					}
 
 					@Override
-					public List<ValidationIssue> validate(UriTarget target) {
+					public List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context) {
 						return List.of();
 					}
 				})

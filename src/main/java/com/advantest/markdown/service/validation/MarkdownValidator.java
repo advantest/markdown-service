@@ -25,9 +25,8 @@ import com.vladsch.flexmark.util.ast.Node;
  * {@link com.vladsch.flexmark.ast.Paragraph} and searches the text it is given.</p>
  * 
  * <p>Implementations are stateless and are used for more than one document. Something worth
- * remembering for the duration of one validation run belongs to the document, which is a
- * {@link com.vladsch.flexmark.util.data.MutableDataHolder} and takes it under a
- * {@link com.vladsch.flexmark.util.data.DataKey}.</p>
+ * remembering for the duration of one validation run belongs to the {@link MarkdownValidationContext}
+ * every check is handed, which is created for one run and dropped when it ends.</p>
  */
 public interface MarkdownValidator {
 
@@ -47,7 +46,8 @@ public interface MarkdownValidator {
 	 * heading that carries an anchor identifier. The default accepts all of them.</p>
 	 * 
 	 * @param node the node to be decided about, never <code>null</code>
-	 * @return <code>true</code> if {@link #validate(Node)} is to be called for that node
+	 * @return <code>true</code> if {@link #validate(Node, MarkdownValidationContext)} is to be called for
+	 *         that node
 	 */
 	default boolean isValidatorFor(Node node) {
 		return true;
@@ -69,8 +69,9 @@ public interface MarkdownValidator {
 	 * Checks the given node.
 	 * 
 	 * @param node the node to be checked, never <code>null</code>
+	 * @param context what this run knows besides the document, never <code>null</code>
 	 * @return the problems found, {@link List#of() empty} if there are none, never <code>null</code>
 	 */
-	List<ValidationIssue> validate(Node node);
+	List<ValidationIssue> validate(Node node, MarkdownValidationContext context);
 
 }

@@ -18,14 +18,20 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.validation.IssueSeverity;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
+import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 
 /**
  * Tests which scheme is left alone and which one is reported as one nothing here knows.
  */
 class UnknownSchemeUriValidatorTest {
+
+	/** No validator of this test looks into another document, so what the context parses is never asked. */
+	private static final MarkdownValidationContext CONTEXT =
+			MarkdownValidationContext.parsingWith(new MarkdownParserAndHtmlRenderer());
 
 	private final UnknownSchemeUriValidator validator = new UnknownSchemeUriValidator();
 
@@ -87,14 +93,14 @@ class UnknownSchemeUriValidatorTest {
 	@Test
 	void validatorRejectsATargetItIsNotGiven() {
 		assertThrows(IllegalArgumentException.class, () -> this.validator.isResponsibleFor(null));
-		assertThrows(IllegalArgumentException.class, () -> this.validator.validate(null));
+		assertThrows(IllegalArgumentException.class, () -> this.validator.validate(null, CONTEXT));
 	}
 
 	@Test
 	void targetNamingASchemeNothingKnowsIsReportedWhereItStands() {
 		UriTarget target = UriTarget.of("htp://example.org/guide", 4, 40, 63);
 
-		List<ValidationIssue> issues = this.validator.validate(target);
+		List<ValidationIssue> issues = this.validator.validate(target, CONTEXT);
 
 		assertEquals(1, issues.size());
 		ValidationIssue issue = issues.get(0);

@@ -13,6 +13,7 @@ import java.util.Locale;
 
 import com.advantest.markdown.service.validation.IssueSeverity;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
+import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 
 /**
@@ -62,7 +63,7 @@ public class DefaultHttpUriValidator implements UriValidator {
 	}
 
 	@Override
-	public List<ValidationIssue> validate(UriTarget target) {
+	public List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context) {
 		if (target == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
@@ -127,7 +128,7 @@ public class DefaultHttpUriValidator implements UriValidator {
 	/**
 	 * Tells whether the text begins with {@code http://} or {@code https://}, the scheme and its separator.
 	 * <p>
-	 * This is the question {@link #validate(UriTarget)} asks first, and it separates the two reports it can
+	 * This is the question {@link #validate(UriTarget, MarkdownValidationContext)} asks first, and it separates the two reports it can
 	 * write: a text missing the separator is not a web address at all and is reported as one that has to be
 	 * written with {@code https://}, while a text carrying it is a web address whose remainder is then read
 	 * and asked about.
