@@ -55,13 +55,14 @@ import com.advantest.resources.Resource;
  * in {@link ExpectedDeviations}, taken out of the comparison and counted in the report, so that the
  * comparison keeps failing on every difference nobody decided.</p>
  * 
- * <p>The corpus and the recording are not part of this repository and are not published, so their
- * locations have no default and have to be given as system properties. The build therefore leaves
- * this test out — the surefire plugin excludes the package — and running it means asking for it:</p>
+ * <p>The corpus and the recording are not part of this repository and are not published. They
+ * default to where they lie on the machine this comparison is developed on, and a machine holding
+ * them elsewhere names them as system properties. The build leaves this test out either way &mdash;
+ * the surefire plugin excludes the package &mdash; so running it means asking for it:</p>
  * 
  * <pre>
  * mvn test -Dtest=MarkdownValidationDifferentialTest -DfailIfNoSpecifiedTests=false \
- *          -Dmarkdown.corpus.root=&lt;corpus&gt; -Dmarkdown.recording.dir=&lt;recording&gt;
+ *          [-Dmarkdown.corpus.root=&lt;corpus&gt; -Dmarkdown.recording.dir=&lt;recording&gt;]
  * </pre>
  * 
  * <p>In the IDE the two belong into the VM arguments of the launch configuration, not into the
@@ -80,7 +81,7 @@ import com.advantest.resources.Resource;
  * 
  * <pre>
  * mvn test -Dtest=MarkdownValidationDifferentialTest -DfailIfNoSpecifiedTests=false \
- *          -Dmarkdown.corpus.root=&lt;corpus&gt; -Dmarkdown.recording.dir=&lt;recording&gt; \
+ *          [-Dmarkdown.corpus.root=&lt;corpus&gt; -Dmarkdown.recording.dir=&lt;recording&gt;] \
  *          -Dmarkdown.corpus.checkWebAddresses=true
  * </pre>
  * 
@@ -97,6 +98,21 @@ public class MarkdownValidationDifferentialTest {
 	private static final String INCLUDE_PROPERTY = "markdown.corpus.include";
 	private static final String EXCLUDE_PROPERTY = "markdown.corpus.exclude";
 	private static final String WEB_ADDRESSES_PROPERTY = "markdown.corpus.checkWebAddresses";
+
+	/**
+	 * Where the corpus and the recording lie on the machine this comparison is developed on, so
+	 * that running the test means naming the test and nothing else.
+	 * 
+	 * <p>Both are checkouts of repositories of the FluentMark Eclipse plug-ins, and this package is
+	 * the one place allowed to know that. A machine holding them elsewhere overrides the default
+	 * with the system property, and the recording taken outside the company network lies next to
+	 * the one taken inside it.</p>
+	 */
+	private static final String DEFAULT_CORPUS_ROOT = "C:\\work\\git-repos\\fluentmark-extensions\\tests";
+
+	private static final String DEFAULT_RECORDING_DIRECTORY = "C:\\work\\git-repos\\fluentmark-extensions"
+			+ "\\com.advantest.fluentmark.extensions.validations.tests\\validation-results-recording"
+			+ "\\inside-intranet";
 
 	private static final boolean WEB_ADDRESSES_ARE_CHECKED = Boolean.getBoolean(WEB_ADDRESSES_PROPERTY);
 
@@ -155,8 +171,9 @@ public class MarkdownValidationDifferentialTest {
 
 	@TestFactory
 	public Stream<DynamicTest> reportsWhatTheRecordedRunReported() {
-		Path corpusRoot = directoryFromProperty(CORPUS_ROOT_PROPERTY);
-		Path recordingDirectory = directoryFromProperty(RECORDING_DIRECTORY_PROPERTY);
+		Path corpusRoot = directoryFromProperty(CORPUS_ROOT_PROPERTY, DEFAULT_CORPUS_ROOT);
+		Path recordingDirectory =
+				directoryFromProperty(RECORDING_DIRECTORY_PROPERTY, DEFAULT_RECORDING_DIRECTORY);
 
 		ValidationRecording recording = ValidationRecording.readFrom(recordingDirectory);
 		Predicate<String> inScope = scopeFromProperties();
@@ -187,7 +204,9 @@ public class MarkdownValidationDifferentialTest {
 		List<ComparableFinding> expectedFindings =
 				withoutExpectedDeviations(toComparableFindings(recordedFindings), markdownSourceCode);
 		List<ComparableFinding> actualFindings =
-				withoutDifferentlyWordedFindings(producedFindings(markdownSourceCode, markdownFile),
+				withoutExpectedSurpluses(
+						withoutDifferentlyWordedFindings(producedFindings(markdownSourceCode, markdownFile),
+								markdownSourceCode),
 						markdownSourceCode);
 
 		SUMMARY.count(recordedFindings, expectedFindings, actualFindings);
@@ -241,6 +260,30 @@ public class MarkdownValidationDifferentialTest {
 				.toList();
 	}
 
+	/**
+	 * Drops the findings this service produces although the recorded run has none of them, where
+	 * that was decided. Each of them is counted, so that the report keeps stating how many findings
+	 * were let go and why.
+	 */
+	private static List<ComparableFinding> withoutExpectedSurpluses(List<ComparableFinding> findings,
+			String markdownSourceCode) {
+
+		List<ComparableFinding> compared = new ArrayList<>(findings.size());
+
+		for (ComparableFinding finding : findings) {
+			Optional<Deviation> deviation =
+					ExpectedDeviations.explainingSurplusOf(contextOf(finding, markdownSourceCode));
+
+			if (deviation.isPresent()) {
+				SUMMARY.countDeviation(deviation.get());
+			} else {
+				compared.add(finding);
+			}
+		}
+
+		return compared;
+	}
+
 	private static ExpectedDeviations.RecordedFindingInContext contextOf(ComparableFinding finding,
 			String markdownSourceCode) {
 
@@ -288,8 +331,8 @@ public class MarkdownValidationDifferentialTest {
 	 * skipped comparison looks exactly like one that found no difference. The default build does not
 	 * run this test at all, see the class comment, so failing here costs nobody anything.</p>
 	 */
-	private static Path directoryFromProperty(String propertyName) {
-		String value = System.getProperty(propertyName);
+	private static Path directoryFromProperty(String propertyName, String defaultLocation) {
+		String value = System.getProperty(propertyName, defaultLocation);
 
 		assertNotNull(value, () -> missingConfiguration(propertyName, "is not set"));
 		assertFalse(value.isBlank(), () -> missingConfiguration(propertyName, "is empty"));
@@ -306,7 +349,8 @@ public class MarkdownValidationDifferentialTest {
 				+ " compared with a recorded validation run of the FluentMark Eclipse plug-ins."
 				+ " Pass -D" + CORPUS_ROOT_PROPERTY + "=<corpus> and -D" + RECORDING_DIRECTORY_PROPERTY
 				+ "=<recording> as VM arguments, not as program arguments. Neither location belongs"
-				+ " into this repository, so neither has a default.";
+				+ " into this repository, so both default to where they lie on the machine this"
+				+ " comparison is developed on.";
 	}
 
 	private static Predicate<String> scopeFromProperties() {
@@ -441,9 +485,9 @@ public class MarkdownValidationDifferentialTest {
 		}
 
 		/**
-		 * Lists the recorded findings that this service is meant not to produce. They are left out
-		 * of the comparison, so without this the report would claim a parity that was in part
-		 * decided rather than reached.
+		 * Lists the findings that the two runs differ about on purpose, whichever side has them.
+		 * They are left out of the comparison, so without this the report would claim a parity that
+		 * was in part decided rather than reached.
 		 */
 		private void appendDeviations(StringBuilder report) {
 			if (this.deviations.isEmpty()) {
@@ -451,7 +495,7 @@ public class MarkdownValidationDifferentialTest {
 			}
 
 			int total = this.deviations.values().stream().mapToInt(Integer::intValue).sum();
-			report.append(String.format("%n  recorded findings not produced on purpose: %d%n", total));
+			report.append(String.format("%n  findings the two runs differ about on purpose: %d%n", total));
 
 			this.deviations.entrySet().stream()
 					.sorted(Map.Entry.comparingByKey(Comparator.comparing(Deviation::id)))

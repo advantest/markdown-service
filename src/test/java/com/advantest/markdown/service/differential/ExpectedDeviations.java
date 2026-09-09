@@ -151,6 +151,29 @@ final class ExpectedDeviations {
 				.findFirst();
 	}
 
+	private static final List<DeclaredDeviation> SURPLUSES = List.of(
+			new DeclaredDeviation(
+					new Deviation("V-15", "an anchor in a target that is no Markdown file is reported"
+							+ " as unchecked, because this library answers for Markdown only"),
+					finding -> finding.issueTypeId()
+							.equals(MarkdownIssueTypes.ANCHOR_NO_VALIDATOR_FOR_TARGET)));
+
+	/**
+	 * Tells whether a finding of this service is one the recorded run is not expected to have, and
+	 * which decision says so. Such a finding is taken out of the comparison, so that it is not
+	 * counted as surplus.
+	 * 
+	 * @param finding the finding together with the document it belongs to
+	 * @return the deviation explaining the finding, or empty if the recorded run is expected to
+	 *         have it as well
+	 */
+	static Optional<Deviation> explainingSurplusOf(RecordedFindingInContext finding) {
+		return SURPLUSES.stream()
+				.filter(declared -> declared.recognises().test(finding))
+				.map(DeclaredDeviation::deviation)
+				.findFirst();
+	}
+
 	private ExpectedDeviations() {
 		// utility class, not meant to be instantiated
 	}
