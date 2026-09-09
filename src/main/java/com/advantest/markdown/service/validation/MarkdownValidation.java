@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.markdown.service.validation.anchor.AnchorValidator;
 import com.advantest.markdown.service.validation.uri.UriValidator;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
@@ -50,13 +51,13 @@ public class MarkdownValidation {
 	 */
 	public MarkdownValidation(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers) {
-		this(parserAndRenderer, resourceResolvers, List.of());
+		this(parserAndRenderer, resourceResolvers, List.of(), List.of());
 	}
 
 	/**
 	 * Creates a validation applying the built-in validators, resolving everything a document
-	 * refers to with the given resolvers and handing a target naming a scheme to the given
-	 * validators.
+	 * refers to with the given resolvers, handing a target naming a scheme to the given URI
+	 * validators and a fragment of a target to the given anchor validators.
 	 * 
 	 * @param parserAndRenderer the parser reading a document a link points into, must not be
 	 *                          <code>null</code>
@@ -64,12 +65,17 @@ public class MarkdownValidation {
 	 *                          <code>null</code>
 	 * @param uriValidators the validators of a target naming a scheme, the first one saying it is
 	 *                      responsible answers for a target, must not be <code>null</code>
+	 * @param anchorValidators the validators of what a link names inside its target, the first one
+	 *                         saying it is responsible answers for a target, must not be
+	 *                         <code>null</code>
 	 */
 	public MarkdownValidation(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers,
-			List<UriValidator> uriValidators) {
-		this(parserAndRenderer, List.of(new MarkdownLinkValidator(resourceResolvers, uriValidators),
-				new MarkdownAnchorValidator()));
+			List<UriValidator> uriValidators,
+			List<AnchorValidator> anchorValidators) {
+		this(parserAndRenderer,
+				List.of(new MarkdownLinkValidator(resourceResolvers, uriValidators, anchorValidators),
+						new MarkdownAnchorValidator()));
 	}
 
 	/**

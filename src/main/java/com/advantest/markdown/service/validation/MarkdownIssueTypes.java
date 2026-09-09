@@ -100,6 +100,24 @@ public final class MarkdownIssueTypes {
 	/** Several section anchors in the same document use the same identifier. */
 	public static final String ANCHOR_DUPLICATE_IDENTIFIER = PREFIX + "anchor.duplicateIdentifier";
 
+	/**
+	 * A link or image points to a target that is there but could not be read, so what it contains
+	 * could not be looked at.
+	 */
+	public static final String LINK_TARGET_CANNOT_BE_READ = PREFIX + "link.targetCannotBeRead";
+
+	/**
+	 * A link or image points to a place inside a target, e.g. <code>guide.md#section</code>, that
+	 * the target does not declare.
+	 */
+	public static final String ANCHOR_NOT_FOUND = PREFIX + "anchor.notFound";
+
+	/**
+	 * A link or image points to a place inside a target no validator answers for, so what the
+	 * fragment names could not be looked for.
+	 */
+	public static final String ANCHOR_NO_VALIDATOR_FOR_TARGET = PREFIX + "anchor.noValidatorForTarget";
+
 	private MarkdownIssueTypes() {
 		// utility class, not meant to be instantiated
 	}

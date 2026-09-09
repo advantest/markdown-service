@@ -11,6 +11,7 @@ import com.advantest.markdown.service.validation.MarkdownIssueTypes;
 import com.advantest.markdown.service.validation.ValidationIssue;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.parsing.LinkTarget;
@@ -53,21 +54,25 @@ public class RelativePathValidator {
 	 * 
 	 * <p>The fragment of a target names a place inside the target, e.g. a section of a document. It
 	 * can only be looked for once the target itself is found, which is why only the resource is
-	 * checked here.</p>
+	 * checked here and the resource is handed back to whoever wants to look inside it.</p>
 	 * 
 	 * @param targetMatch the target as it stands in the document, written as a path and not as a
 	 *                    URI, must not be <code>null</code>
 	 * @param document the document the target is written in, must not be <code>null</code>
 	 * @param issues the problems found so far, to which this validator adds its own, must not be
 	 *               <code>null</code>
+	 * @return the resource the target points to, or {@link Optional#empty()} where the target names
+	 *         no resource or does not lead to one, never <code>null</code>
 	 */
-	public void checkTargetResource(RegexMatch targetMatch, Document document, List<ValidationIssue> issues) {
+	public Optional<Resource> checkTargetResource(RegexMatch targetMatch, Document document,
+			List<ValidationIssue> issues) {
+
 		String targetReference = targetMatch.matchedText;
 
 		LinkTarget target = LinkTarget.of(targetReference);
 		if (target.path() == null || target.path().isBlank()) {
 			// the reference names a place inside the document it is written in, not a resource
-			return;
+			return Optional.empty();
 		}
 
 		int startOffset = targetMatch.startIndex;
@@ -85,7 +90,7 @@ public class RelativePathValidator {
 					lineNumber,
 					startOffset,
 					endOffset));
-			return;
+			return Optional.empty();
 		}
 
 		Resource targetResource = this.resourceResolver.resolve(targetReference, documentResource);
@@ -97,11 +102,13 @@ public class RelativePathValidator {
 					lineNumber,
 					startOffset,
 					endOffset));
-			return;
+			return Optional.empty();
 		}
 
 		checkTargetPathTellsWhatItPointsTo(target, targetResource, lineNumber, startOffset, endOffset,
 				issues);
+
+		return Optional.of(targetResource);
 	}
 
 	/**

@@ -7,16 +7,15 @@
 package com.advantest.markdown.service.validation;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
+import com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchors;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.utils.TextUtils;
-import com.vladsch.flexmark.ast.Heading;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 
@@ -48,8 +47,7 @@ class MarkdownAnchorValidator implements MarkdownValidator {
 		Document document = node.getDocument();
 		List<ValidationIssue> issues = new ArrayList<>();
 
-		Map<String, List<RegexMatch>> anchorDeclarations = new LinkedHashMap<>();
-		collectAnchorDeclarations(node, anchorDeclarations);
+		Map<String, List<RegexMatch>> anchorDeclarations = MarkdownSectionAnchors.declarationsIn(document);
 
 		anchorDeclarations.values().stream()
 				.flatMap(List::stream)
@@ -62,22 +60,6 @@ class MarkdownAnchorValidator implements MarkdownValidator {
 						document, issues));
 
 		return issues;
-	}
-
-	private static void collectAnchorDeclarations(Node node,
-			Map<String, List<RegexMatch>> anchorDeclarations) {
-
-		for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
-			if (child instanceof Heading) {
-				MarkdownParsingTools
-						.findHeadingAnchorIds(node.getDocument().getChars(), child.getStartOffset(), child.getEndOffset())
-						.forEach(match -> anchorDeclarations
-								.computeIfAbsent(match.matchedText, anchorId -> new ArrayList<>(2))
-								.add(match));
-			} else {
-				collectAnchorDeclarations(child, anchorDeclarations);
-			}
-		}
 	}
 
 	private ValidationIssue invalidAnchorIdentifierIssue(RegexMatch anchorIdMatch, Document document) {

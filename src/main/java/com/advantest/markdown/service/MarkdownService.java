@@ -19,6 +19,9 @@ import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UnknownSchemeUriValidator;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriTarget;
+import com.advantest.markdown.service.validation.anchor.AnchorTarget;
+import com.advantest.markdown.service.validation.anchor.AnchorValidator;
+import com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchorValidator;
 import com.advantest.markdown.service.validation.uri.UriValidator;
 import com.advantest.resources.FileSchemeUriResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
@@ -84,13 +87,14 @@ public class MarkdownService {
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers) {
-		this(parserAndRenderer, resourceResolvers, null, List.of());
+		this(parserAndRenderer, resourceResolvers, null, List.of(), List.of());
 	}
 
 	/**
 	 * Creates a service delegating to the given Markdown parser and HTML renderer, resolving
-	 * references with the given resolvers, asking the given check whether an address is there and
-	 * handing a target naming a scheme to the given validators.
+	 * references with the given resolvers, asking the given check whether an address is there,
+	 * handing a target naming a scheme to the given URI validators and a fragment of a target to
+	 * the given anchor validators.
 	 * 
 	 * @param parserAndRenderer the parser and renderer to delegate to, must not be <code>null</code>
 	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
@@ -99,17 +103,23 @@ public class MarkdownService {
 	 *                               <code>null</code>, in which case no address is asked about
 	 * @param uriValidators the validators of a target naming a scheme, the first one saying it is
 	 *                      responsible answers for a target, must not be <code>null</code>
+	 * @param anchorValidators the validators of what a link names inside its target, the first one
+	 *                         saying it is responsible answers for a target, must not be
+	 *                         <code>null</code>
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers,
 			UriReachabilityChecker uriReachabilityChecker,
-			List<UriValidator> uriValidators) {
-		if (parserAndRenderer == null || resourceResolvers == null || uriValidators == null) {
+			List<UriValidator> uriValidators,
+			List<AnchorValidator> anchorValidators) {
+		if (parserAndRenderer == null || resourceResolvers == null || uriValidators == null
+				|| anchorValidators == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.parserAndRenderer = parserAndRenderer;
-		this.validation = new MarkdownValidation(parserAndRenderer, resourceResolvers, withShippedValidators(
-				uriValidators, uriReachabilityChecker));
+		this.validation = new MarkdownValidation(parserAndRenderer, resourceResolvers,
+				withShippedValidators(uriValidators, uriReachabilityChecker),
+				withShippedAnchorValidators(anchorValidators, parserAndRenderer));
 		this.uriReachabilityChecker = uriReachabilityChecker;
 	}
 
@@ -127,6 +137,21 @@ public class MarkdownService {
 			validatorsAskedInOrder.add(new DefaultHttpUriValidator(uriReachabilityChecker));
 		}
 		validatorsAskedInOrder.add(new UnknownSchemeUriValidator());
+
+		return List.copyOf(validatorsAskedInOrder);
+	}
+
+	/**
+	 * Puts the anchor validator this library ships behind the ones a caller registered, so that a
+	 * caller knowing a target better answers for it first. The shipped one looks into a Markdown
+	 * file and asks the parser of this service which file that is.
+	 */
+	private static List<AnchorValidator> withShippedAnchorValidators(
+			List<AnchorValidator> registeredValidators, MarkdownParserAndHtmlRenderer parserAndRenderer) {
+
+		List<AnchorValidator> validatorsAskedInOrder = new ArrayList<>(registeredValidators);
+		validatorsAskedInOrder.add(
+				new MarkdownSectionAnchorValidator(parserAndRenderer.getMarkdownFileExtensions()));
 
 		return List.copyOf(validatorsAskedInOrder);
 	}
@@ -294,6 +319,8 @@ public class MarkdownService {
 
 		private final List<UriValidator> uriValidators = new ArrayList<>();
 
+		private final List<AnchorValidator> anchorValidators = new ArrayList<>();
+
 		private Builder() {
 		}
 
@@ -422,6 +449,29 @@ public class MarkdownService {
 		}
 
 		/**
+		 * Adds a validator for what a link names inside its target, e.g. one finding a method in a
+		 * source file.
+		 * 
+		 * <p>Several validators may answer for the same kind of target and tell each other apart by
+		 * the path, so the one added last that says it is
+		 * {@link AnchorValidator#isResponsibleFor(AnchorTarget) responsible} answers for a target,
+		 * and it answers alone. Looking into a Markdown file is what this library ships, so a
+		 * validator added here is asked before that one. A target no validator claims is reported,
+		 * because nothing would ever look at what the link names.</p>
+		 * 
+		 * @param validator the validator to be added, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the given validator is <code>null</code>
+		 */
+		public Builder withAnchorValidator(AnchorValidator validator) {
+			if (validator == null) {
+				throw new IllegalArgumentException("Argument must not be null.");
+			}
+			this.anchorValidators.add(validator);
+			return this;
+		}
+
+		/**
 		 * Adds the given flexmark extension to the extensions already configured,
 		 * i.e. it does not replace or remove any of the default extensions.
 		 * 
@@ -498,8 +548,11 @@ public class MarkdownService {
 			List<UriValidator> validatorsAskedInOrder = new ArrayList<>(this.uriValidators);
 			Collections.reverse(validatorsAskedInOrder);
 
+			List<AnchorValidator> anchorValidatorsAskedInOrder = new ArrayList<>(this.anchorValidators);
+			Collections.reverse(anchorValidatorsAskedInOrder);
+
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers,
-					this.uriReachabilityChecker, validatorsAskedInOrder);
+					this.uriReachabilityChecker, validatorsAskedInOrder, anchorValidatorsAskedInOrder);
 		}
 
 	}

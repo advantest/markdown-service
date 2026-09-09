@@ -43,6 +43,22 @@ public interface MarkdownValidationContext {
 	}
 
 	/**
+	 * Reads what the given resource contains, or answers with what was read for it earlier in this
+	 * run.
+	 * 
+	 * <p>A resource of any kind is read here, not only a Markdown one, so that whoever wants to
+	 * know whether a target can be read at all asks in one place. Reading twice is what is avoided,
+	 * not reading at all: a resource read here and parsed later is read once.</p>
+	 * 
+	 * @param resource the resource to be read, must not be <code>null</code>
+	 * @return what the resource contains, never <code>null</code>, possibly empty
+	 * @throws IOException if the resource cannot be read, raised again for every further caller
+	 *                     asking for the same resource in this run
+	 * @throws IllegalArgumentException if the given resource is <code>null</code>
+	 */
+	String getContents(Resource resource) throws IOException;
+
+	/**
 	 * Reads and parses the given Markdown resource, or answers with what was read for it earlier in
 	 * this run.
 	 * 

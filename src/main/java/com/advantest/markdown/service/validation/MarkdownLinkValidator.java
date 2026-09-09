@@ -6,6 +6,7 @@
  */
 package com.advantest.markdown.service.validation;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,14 +16,19 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.advantest.markdown.service.parsing.LinkTarget;
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.markdown.service.validation.anchor.AnchorTarget;
+import com.advantest.markdown.service.validation.anchor.AnchorValidator;
+import com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchors;
 import com.advantest.markdown.service.validation.resource.AbsolutePathValidator;
 import com.advantest.markdown.service.validation.resource.RelativePathValidator;
 import com.advantest.markdown.service.validation.uri.UriTarget;
 import com.advantest.markdown.service.validation.uri.UriValidator;
 import com.advantest.markdown.service.utils.TextUtils;
+import com.advantest.resources.Resource;
 import com.vladsch.flexmark.ast.Image;
 import com.vladsch.flexmark.ast.ImageRef;
 import com.vladsch.flexmark.ast.Link;
@@ -64,6 +70,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 	private final List<UriValidator> uriValidators;
 
+	private final List<AnchorValidator> anchorValidators;
+
 	/**
 	 * Creates the validator, resolving everything a link points to with the given resolvers and
 	 * checking no target naming a scheme.
@@ -72,24 +80,31 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 *                          <code>null</code>
 	 */
 	MarkdownLinkValidator(ResourceResolverRegistry resourceResolvers) {
-		this(resourceResolvers, List.of());
+		this(resourceResolvers, List.of(), List.of());
 	}
 
 	/**
-	 * Creates the validator, resolving everything a link points to with the given resolvers and
-	 * handing a target naming a scheme to the given validators.
+	 * Creates the validator, resolving everything a link points to with the given resolvers,
+	 * handing a target naming a scheme to the given URI validators and a fragment of a target to
+	 * the given anchor validators.
 	 * 
 	 * @param resourceResolvers the resolvers of the surrounding environment, must not be
 	 *                          <code>null</code>
 	 * @param uriValidators the validators of a target naming a scheme, the first one saying it is
 	 *                      responsible answers for a target, must not be <code>null</code>
+	 * @param anchorValidators the validators of what a link names inside its target, the first one
+	 *                         saying it is responsible answers for a target, must not be
+	 *                         <code>null</code>
 	 */
-	MarkdownLinkValidator(ResourceResolverRegistry resourceResolvers, List<UriValidator> uriValidators) {
-		if (resourceResolvers == null || uriValidators == null) {
+	MarkdownLinkValidator(ResourceResolverRegistry resourceResolvers, List<UriValidator> uriValidators,
+			List<AnchorValidator> anchorValidators) {
+
+		if (resourceResolvers == null || uriValidators == null || anchorValidators == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.relativePathValidator = new RelativePathValidator(resourceResolvers.relativePathResolver());
 		this.uriValidators = List.copyOf(uriValidators);
+		this.anchorValidators = List.copyOf(anchorValidators);
 	}
 
 	@Override
@@ -350,12 +365,124 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		String targetReference = targetMatch.matchedText;
 
 		if (ResourceResolverRegistry.isRelativePath(targetReference)) {
-			this.relativePathValidator.checkTargetResource(targetMatch, document, issues);
+			Optional<Resource> targetResource =
+					this.relativePathValidator.checkTargetResource(targetMatch, document, issues);
+			checkTargetAnchor(targetMatch, document, targetResource, context, issues);
 		} else if (ResourceResolverRegistry.isAbsolutePathWithoutScheme(targetReference)) {
 			this.absolutePathValidator.checkTargetPath(targetMatch, document, issues);
 		} else {
 			checkTargetUri(targetMatch, document, context, issues);
 		}
+	}
+
+	/**
+	 * Checks the place inside the target a link names, e.g. the <code>section</code> of
+	 * <code>guide.md#section</code>.
+	 * 
+	 * <p>A fragment without a path names a place inside the document carrying the link, which is
+	 * parsed already and is therefore looked at directly &ndash; reading it again would answer about
+	 * what is stored rather than about what is being checked. A fragment with a path is only looked
+	 * for where the target itself was found, and it is looked for by the validator answering for
+	 * that kind of target.</p>
+	 */
+	private void checkTargetAnchor(RegexMatch targetMatch, Document document,
+			Optional<Resource> targetResource, MarkdownValidationContext context,
+			List<ValidationIssue> issues) {
+
+		LinkTarget target = LinkTarget.of(targetMatch.matchedText);
+		if (target.fragment() == null || target.fragment().isBlank()) {
+			return;
+		}
+
+		int startOffset = targetMatch.startIndex + targetMatch.matchedText.indexOf('#');
+		int endOffset = startOffset + 1 + target.fragment().length();
+		int lineNumber = TextUtils.getLineNumberForOffset(document, startOffset);
+
+		if (target.path() == null || target.path().isBlank()) {
+			checkAnchorOfTheDocumentItself(target.fragment(), document, lineNumber, startOffset, endOffset,
+					issues);
+			return;
+		}
+
+		if (targetResource.isEmpty()) {
+			// the target itself is not there, which was said already; where the target is, the
+			// fragment cannot be looked for
+			return;
+		}
+
+		AnchorTarget anchorTarget = new AnchorTarget(target.path(), target.fragment(), targetResource.get(),
+				lineNumber, startOffset, endOffset);
+
+		this.anchorValidators.stream()
+				.filter(validator -> validator.isResponsibleFor(anchorTarget))
+				.findFirst()
+				.ifPresentOrElse(
+						validator -> checkAnchorWith(validator, anchorTarget, targetMatch, document, context,
+								issues),
+						() -> issues.add(noAnchorValidatorIssue(anchorTarget)));
+	}
+
+	/**
+	 * Reads the target before the validator answering for it is asked, so that a target which
+	 * cannot be read is one finding in one place, whatever kind of target it is. What cannot be read
+	 * is the file, so the path is marked and not the fragment.
+	 */
+	private void checkAnchorWith(AnchorValidator validator, AnchorTarget target, RegexMatch targetMatch,
+			Document document, MarkdownValidationContext context, List<ValidationIssue> issues) {
+
+		try {
+			context.getContents(target.targetResource());
+		} catch (IOException failure) {
+			issues.add(targetCannotBeReadIssue(target, targetMatch, document));
+			return;
+		}
+
+		issues.addAll(validator.validate(target, context));
+	}
+
+	private static void checkAnchorOfTheDocumentItself(String anchor, Document document, int lineNumber,
+			int startOffset, int endOffset, List<ValidationIssue> issues) {
+
+		if (MarkdownSectionAnchors.validAnchorsIn(document).contains(anchor)) {
+			return;
+		}
+
+		issues.add(new ValidationIssue(
+				MarkdownIssueTypes.ANCHOR_NOT_FOUND,
+				IssueSeverity.ERROR,
+				String.format("There is no section with the anchor '%s' in this document,"
+						+ " or the anchor is invalid.", anchor),
+				lineNumber,
+				startOffset,
+				endOffset));
+	}
+
+	private static ValidationIssue noAnchorValidatorIssue(AnchorTarget target) {
+		return new ValidationIssue(
+				MarkdownIssueTypes.ANCHOR_NO_VALIDATOR_FOR_TARGET,
+				IssueSeverity.WARNING,
+				String.format("The anchor '%s' cannot be checked, because nothing answers for a target"
+						+ " like '%s'.", target.anchor(), target.targetPath()),
+				target.lineNumber(),
+				target.startOffset(),
+				target.endOffset());
+	}
+
+	private static ValidationIssue targetCannotBeReadIssue(AnchorTarget target, RegexMatch targetMatch,
+			Document document) {
+
+		int startOffset = targetMatch.startIndex;
+		int endOffset = targetMatch.startIndex + targetMatch.matchedText.indexOf('#');
+
+		return new ValidationIssue(
+				MarkdownIssueTypes.LINK_TARGET_CANNOT_BE_READ,
+				IssueSeverity.ERROR,
+				String.format("The referenced file '%s' cannot be read, so the anchor '%s' cannot be"
+						+ " looked for. Resolved target path: %s",
+						target.targetPath(), target.anchor(), target.targetResource().getResolvedPath()),
+				TextUtils.getLineNumberForOffset(document, startOffset),
+				startOffset,
+				endOffset);
 	}
 
 	/**
