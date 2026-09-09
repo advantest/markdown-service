@@ -16,6 +16,10 @@ this repository, in addition to what a task asks for.
   renamed at once, each rename gets its own commit, or at least a commit that holds nothing but
   renames — a reviewer can then read one name change at a time instead of a change set nobody
   reads to the end.
+- **Say "rename" in the message of a rename commit**, and name the old and the new name. A reader
+  looking for the commit that turned one name into another searches for that word; a message
+  describing only what the new name expresses hides the rename from everybody who does not already
+  know it happened.
 - **Split first, run the tests afterwards.** Where a change falls into several commits — rename this,
   extract that, then add the feature — the split is worth more than every single commit compiling.
   Cut the change into its commits and let the test suite run over the result; a commit in the middle
