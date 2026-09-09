@@ -78,7 +78,7 @@ class HttpUriReachabilityCheckerTest {
 
 		UriReachability reachability = checkerUsing(httpClient).check(SOME_ADDRESS);
 
-		assertEquals(new UriReachability.NotReached("IOException"), reachability);
+		assertEquals(new UriReachability.NotReached("java.io.IOException"), reachability);
 	}
 
 	@Test

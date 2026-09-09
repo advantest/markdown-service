@@ -21,7 +21,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * Asks an address over HTTP whether it is there, and remembers what it answered.
  * 
  * <p>Only the head of a document is asked for, because whether an address leads somewhere is
- * answered by the status code alone and nothing here reads a page.</p>
+ * answered by the status code alone and nothing here reads a page. An address answering with a
+ * redirect is followed, so that what is reported is what a reader would finally arrive at.</p>
+ * 
+ * <p>Where the asking fails, the reason is what the failure says about itself, and the name of its
+ * class where it says nothing.</p>
  * 
  * <p>Every answer is remembered, the one that came and the one that did not, for as long as this
  * checker lives. An address that costs a timeout costs it once and not once per document naming
@@ -45,6 +49,8 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 	// else, so this checker names itself after a tool such a server is used to.
 	private static final String USER_AGENT = "curl/8.11.0";
 
+	private static final String ACCEPTED_CONTENT = "*/*";
+
 	private final HttpClient httpClient;
 
 	private final Duration requestTimeout;
@@ -56,7 +62,10 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 	 * connection and about five seconds to answer.
 	 */
 	public HttpUriReachabilityChecker() {
-		this(HttpClient.newBuilder().connectTimeout(DEFAULT_CONNECT_TIMEOUT).build(),
+		this(HttpClient.newBuilder()
+				.connectTimeout(DEFAULT_CONNECT_TIMEOUT)
+				.followRedirects(HttpClient.Redirect.NORMAL)
+				.build(),
 				DEFAULT_REQUEST_TIMEOUT);
 	}
 
@@ -99,6 +108,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 					.method("HEAD", BodyPublishers.noBody())
 					.timeout(this.requestTimeout)
 					.header("User-Agent", USER_AGENT)
+					.header("Accept", ACCEPTED_CONTENT)
 					.build();
 		} catch (IllegalArgumentException exception) {
 			// an address HTTP cannot ask about, e.g. one naming another scheme
@@ -116,7 +126,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 				: throwable;
 
 		String message = cause.getMessage();
-		return message == null || message.isBlank() ? cause.getClass().getSimpleName() : message;
+		return message == null || message.isBlank() ? cause.getClass().getName() : message;
 	}
 
 }
