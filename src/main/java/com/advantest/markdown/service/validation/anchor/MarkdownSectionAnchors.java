@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -19,6 +20,7 @@ import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
 import com.vladsch.flexmark.ast.Heading;
 import com.vladsch.flexmark.ext.attributes.AttributeNode;
+import com.vladsch.flexmark.ext.attributes.AttributesNode;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 
@@ -37,6 +39,13 @@ import com.vladsch.flexmark.util.ast.Node;
  * the parser, which is what the renderer will act on; {@link #declarationsIn(Document)} tells what
  * an author wrote as a declaration, which has to be read from the text, because a declaration the
  * parser rejected is exactly the one a rule about declarations has to point at.</p>
+ * 
+ * <p>Writing an anchor as <code>{#identifier}</code> is an attribute, and attributes are no part of
+ * the CommonMark specification but one of the language extensions this dialect of Markdown is made
+ * of. What an attribute means, and which of several of them reaches the rendered document, is
+ * therefore laid down by the extension reading it and described in
+ * <a href="https://github.com/vsch/flexmark-java/wiki/Attributes-Extension">its documentation</a>.
+ * </p>
  */
 public final class MarkdownSectionAnchors {
 
@@ -83,6 +92,11 @@ public final class MarkdownSectionAnchors {
 	 * either, and saying that the anchor is not there is the truth a reader of the link needs. That
 	 * the declaration itself is wrong is said where the declaration stands.</p>
 	 * 
+	 * <p>Several identifiers written into one pair of braces do not give several anchors: an
+	 * identifier written there overrides the one written before it, and only the last of them
+	 * reaches the rendered document. Written in a pair of braces of its own, each of them reaches
+	 * it, the earlier ones on a span wrapping the text before them.</p>
+	 * 
 	 * @param document the parsed document to be read, must not be <code>null</code>
 	 * @return the valid anchor identifiers of the document, never <code>null</code>
 	 * @throws IllegalArgumentException if the given document is <code>null</code>
@@ -94,14 +108,24 @@ public final class MarkdownSectionAnchors {
 
 		Set<String> anchors = new LinkedHashSet<>();
 		forEachHeading(document, heading -> heading.getDescendants().forEach(node -> {
-			if (node instanceof AttributeNode attribute && attribute.isId()) {
-				anchors.add(attribute.getValue().toString());
+			if (node instanceof AttributesNode attributes) {
+				lastIdentifierIn(attributes).ifPresent(anchors::add);
 			}
 		}));
 
 		return anchors.stream()
 				.filter(MarkdownParsingTools::isValidAnchorIdentifier)
-				.collect(Collectors.toSet());
+				.collect(Collectors.toCollection(LinkedHashSet::new));
+	}
+
+	private static Optional<String> lastIdentifierIn(AttributesNode attributes) {
+		String identifier = null;
+		for (Node child = attributes.getFirstChild(); child != null; child = child.getNext()) {
+			if (child instanceof AttributeNode attribute && attribute.isId()) {
+				identifier = attribute.getValue().toString();
+			}
+		}
+		return Optional.ofNullable(identifier);
 	}
 
 	private static void forEachHeading(Node node, Consumer<Node> headingReader) {

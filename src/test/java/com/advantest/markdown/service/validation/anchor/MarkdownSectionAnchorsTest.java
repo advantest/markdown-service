@@ -84,7 +84,16 @@ class MarkdownSectionAnchorsTest {
 		Document document = parse("# Overview {#first} {#second}\n");
 
 		assertEquals(Set.of("first", "second"), MarkdownSectionAnchors.validAnchorsIn(document),
-				"What the parser read as an identifier is an anchor a link leads to.");
+				"Each pair of braces puts its identifier into the document, so both lead somewhere.");
+	}
+
+	@Test
+	void ofSeveralIdentifiersInOnePairOfBracesOnlyTheLastOneIsAnAnchor() {
+		Document document = parse("# Overview {#first #second}\n");
+
+		assertEquals(Set.of("second"), MarkdownSectionAnchors.validAnchorsIn(document),
+				"An identifier overrides the one written before it in the same pair of braces, "
+						+ "so a link to the earlier one would lead nowhere.");
 	}
 
 	@Test
