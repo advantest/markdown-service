@@ -404,7 +404,8 @@ public class MarkdownValidationDifferentialTest {
 			this.comparedFiles++;
 
 			recorded.stream()
-					.filter(finding -> PORTED_RULES.issueTypeIdOf(finding.message()).isEmpty())
+					.filter(finding -> PORTED_RULES
+							.issueTypeIdOf(RewordedMessages.asThisServiceWordsIt(finding.message())).isEmpty())
 					.forEach(this::countNotCovered);
 
 			List<ComparableFinding> missing = new ArrayList<>(expected);
@@ -428,6 +429,11 @@ public class MarkdownValidationDifferentialTest {
 		 * Counts a recorded finding that no ported rule accounts for, under the shape of its
 		 * message. The rule behind it has no name here yet, and the message is all the recording
 		 * says about it, so the shapes are the list of what is still to be ported.
+		 * 
+		 * <p>Whether a rule accounts for a finding is asked of the message as this service words
+		 * it, the same way the comparison asks it. Asking it of the recorded wording would count a
+		 * finding of a rule that is ported but worded differently as an open one, and the list
+		 * would then name work that is done.</p>
 		 */
 		private void countNotCovered(RecordedFinding finding) {
 			this.notCoveredFindings++;
