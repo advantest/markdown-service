@@ -29,6 +29,7 @@ import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.resources.Resource;
 import com.advantest.resources.ResourceKind;
+import com.vladsch.flexmark.util.ast.Document;
 
 /**
  * Checks the validator looking for a section anchor in the Markdown document a link points into.
@@ -147,8 +148,53 @@ class MarkdownSectionAnchorValidatorTest {
 		Resource vanishedTarget = new FailingResource("/docs/guide.md");
 
 		assertTrue(this.validator
-				.validate(new AnchorTarget("guide.md", "section", vanishedTarget, 3, 20, 28), this.context)
+				.validate(new AnchorTarget("guide.md", "section", vanishedTarget, parse("# Doc\n"), 3, 20, 28),
+						this.context)
 				.isEmpty(), "What is wrong with the file is said where the file is read.");
+	}
+
+	@Test
+	void answersForAnAnchorNamingThePlaceInTheDocumentItself() {
+		AnchorTarget target = AnchorTarget.inTheDocumentItself("section", parse("# Doc\n"), 3, 20, 28);
+
+		assertTrue(this.validator.isResponsibleFor(target),
+				"A document being checked as Markdown is a Markdown document.");
+	}
+
+	@Test
+	void acceptsAnAnchorTheDocumentItselfDeclares() {
+		Document document = parse("# Doc {#doc}\n\n[here](#doc)\n");
+		AnchorTarget target = AnchorTarget.inTheDocumentItself("doc", document, 3, 20, 24);
+
+		assertTrue(this.validator.validate(target, this.context).isEmpty(),
+				"The document declares that anchor, so there is nothing to report.");
+	}
+
+	@Test
+	void reportsAnAnchorTheDocumentItselfDoesNotDeclare() {
+		Document document = parse("# Doc\n\n[here](#doc)\n");
+		AnchorTarget target = AnchorTarget.inTheDocumentItself("doc", document, 3, 14, 18);
+
+		assertEquals(
+				List.of(new ValidationIssue(MarkdownIssueTypes.ANCHOR_NOT_FOUND, IssueSeverity.ERROR,
+						"There is no section with the anchor 'doc' in this document,"
+								+ " or the anchor is invalid.",
+						3, 14, 18)),
+				this.validator.validate(target, this.context),
+				"A finding about the document itself names no path, because there is none.");
+	}
+
+	@Test
+	void readsTheDocumentItselfAsItWasHandedOver() {
+		Resource storedDocument = new TextResource("/docs/guide.md", "# Doc\n");
+		Document documentBeingEdited = parse("# Doc {#doc}\n\n[here](#doc)\n");
+
+		assertTrue(this.validator
+				.validate(AnchorTarget.inTheDocumentItself("doc", documentBeingEdited, 3, 20, 24),
+						this.context)
+				.isEmpty(),
+				"What is checked is the text a reader is looking at, not what is stored: "
+						+ storedDocument.getResolvedPath() + " is never read for it.");
 	}
 
 	@Test
@@ -169,7 +215,12 @@ class MarkdownSectionAnchorValidatorTest {
 		Resource target = new TextResource("/docs/" + targetPath, targetContents);
 		int startOffset = 20;
 
-		return new AnchorTarget(targetPath, anchor, target, 3, startOffset, startOffset + 1 + anchor.length());
+		return new AnchorTarget(targetPath, anchor, target, parse("# Doc\n"), 3, startOffset,
+				startOffset + 1 + anchor.length());
+	}
+
+	private static Document parse(String markdown) {
+		return new MarkdownParserAndHtmlRenderer().parseMarkdown(markdown);
 	}
 
 }

@@ -379,11 +379,11 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * Checks the place inside the target a link names, e.g. the <code>section</code> of
 	 * <code>guide.md#section</code>.
 	 * 
-	 * <p>A fragment without a path names a place inside the document carrying the link, which is
-	 * parsed already and is therefore looked at directly &ndash; reading it again would answer about
-	 * what is stored rather than about what is being checked. A fragment with a path is only looked
-	 * for where the target itself was found, and it is looked for by the validator answering for
-	 * that kind of target.</p>
+	 * <p>What the fragment names is looked for by the validator answering for the kind of target it
+	 * stands in, this one only says where the fragment is written. A fragment with a path is looked
+	 * for only where the target itself was found; a fragment without a path names a place in the
+	 * document carrying the link, which is parsed already and is therefore handed over as it
+	 * is.</p>
 	 */
 	private void checkTargetAnchor(RegexMatch targetMatch, Document document,
 			Optional<Resource> targetResource, MarkdownValidationContext context,
@@ -398,20 +398,18 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		int endOffset = startOffset + 1 + target.fragment().length();
 		int lineNumber = TextUtils.getLineNumberForOffset(document, startOffset);
 
+		AnchorTarget anchorTarget;
 		if (target.path() == null || target.path().isBlank()) {
-			checkAnchorOfTheDocumentItself(target.fragment(), document, lineNumber, startOffset, endOffset,
-					issues);
-			return;
-		}
-
-		if (targetResource.isEmpty()) {
+			anchorTarget = AnchorTarget.inTheDocumentItself(target.fragment(), document, lineNumber,
+					startOffset, endOffset);
+		} else if (targetResource.isEmpty()) {
 			// the target itself is not there, which was said already; where the target is, the
 			// fragment cannot be looked for
 			return;
+		} else {
+			anchorTarget = new AnchorTarget(target.path(), target.fragment(), targetResource.get(), document,
+					lineNumber, startOffset, endOffset);
 		}
-
-		AnchorTarget anchorTarget = new AnchorTarget(target.path(), target.fragment(), targetResource.get(),
-				lineNumber, startOffset, endOffset);
 
 		this.anchorValidators.stream()
 				.filter(validator -> validator.isResponsibleFor(anchorTarget))
@@ -425,47 +423,41 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	/**
 	 * Reads the target before the validator answering for it is asked, so that a target which
 	 * cannot be read is one finding in one place, whatever kind of target it is. What cannot be read
-	 * is the file, so the path is marked and not the fragment.
+	 * is the file, so the path is marked and not the fragment. A fragment naming a place in the
+	 * document carrying it reads nothing.
 	 */
 	private void checkAnchorWith(AnchorValidator validator, AnchorTarget target, RegexMatch targetMatch,
 			Document document, MarkdownValidationContext context, List<ValidationIssue> issues) {
 
-		try {
-			context.getContents(target.targetResource());
-		} catch (IOException failure) {
-			issues.add(targetCannotBeReadIssue(target, targetMatch, document));
-			return;
+		if (!target.namesTheDocumentItself()) {
+			try {
+				context.getContents(target.targetResource());
+			} catch (IOException failure) {
+				issues.add(targetCannotBeReadIssue(target, targetMatch, document));
+				return;
+			}
 		}
 
 		issues.addAll(validator.validate(target, context));
-	}
-
-	private static void checkAnchorOfTheDocumentItself(String anchor, Document document, int lineNumber,
-			int startOffset, int endOffset, List<ValidationIssue> issues) {
-
-		if (MarkdownSectionAnchors.validAnchorsIn(document).contains(anchor)) {
-			return;
-		}
-
-		issues.add(new ValidationIssue(
-				MarkdownIssueTypes.ANCHOR_NOT_FOUND,
-				IssueSeverity.ERROR,
-				String.format("There is no section with the anchor '%s' in this document,"
-						+ " or the anchor is invalid.", anchor),
-				lineNumber,
-				startOffset,
-				endOffset));
 	}
 
 	private static ValidationIssue noAnchorValidatorIssue(AnchorTarget target) {
 		return new ValidationIssue(
 				MarkdownIssueTypes.ANCHOR_NO_VALIDATOR_FOR_TARGET,
 				IssueSeverity.WARNING,
-				String.format("The anchor '%s' cannot be checked, because nothing answers for a target"
-						+ " like '%s'.", target.anchor(), target.targetPath()),
+				noAnchorValidatorMessage(target),
 				target.lineNumber(),
 				target.startOffset(),
 				target.endOffset());
+	}
+
+	private static String noAnchorValidatorMessage(AnchorTarget target) {
+		if (target.namesTheDocumentItself()) {
+			return String.format("The anchor '%s' cannot be checked, because nothing answers for a"
+					+ " Markdown document.", target.anchor());
+		}
+		return String.format("The anchor '%s' cannot be checked, because nothing answers for a target"
+				+ " like '%s'.", target.anchor(), target.targetPath());
 	}
 
 	private static ValidationIssue targetCannotBeReadIssue(AnchorTarget target, RegexMatch targetMatch,

@@ -18,14 +18,18 @@ import com.advantest.markdown.service.validation.ValidationIssue;
 import com.vladsch.flexmark.util.ast.Document;
 
 /**
- * Checks that a link into another Markdown document points to a section that document declares.
+ * Checks that a link into a Markdown document points to a section that document declares.
  * 
  * <p>Which target this validator answers for is decided by the extension of the path as it is
  * written in the link, and what counts as Markdown is what the parser of the service accepts, so
- * that this question is answered in one place for the whole library.</p>
+ * that this question is answered in one place for the whole library. A link naming nothing but a
+ * fragment points into the document it stands in, which is a Markdown document by the very fact
+ * that it is being checked, so this validator answers for it as well.</p>
  * 
- * <p>The target is asked of the validation run rather than read here, so a document fifty links
- * point into is read and parsed once.</p>
+ * <p>Another document is asked of the validation run rather than read here, so a document fifty
+ * links point into is read and parsed once. The document a link stands in is taken as it was handed
+ * over, so that what is checked is the text a reader is looking at and not the text that was stored
+ * last.</p>
  */
 public class MarkdownSectionAnchorValidator implements AnchorValidator {
 
@@ -50,7 +54,8 @@ public class MarkdownSectionAnchorValidator implements AnchorValidator {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 
-		return this.markdownFileExtensions.isMarkdownFile(target.targetPath());
+		return target.namesTheDocumentItself()
+				|| this.markdownFileExtensions.isMarkdownFile(target.targetPath());
 	}
 
 	@Override
@@ -60,13 +65,17 @@ public class MarkdownSectionAnchorValidator implements AnchorValidator {
 		}
 
 		Document targetDocument;
-		try {
-			targetDocument = context.getParsedMarkdownDocument(target.targetResource());
-		} catch (IOException failure) {
-			// whoever asks has read the target before asking, so the target can only have vanished
-			// between the two reads; that it cannot be read is said where it is read, and repeating
-			// it here would blame the fragment for what is wrong with the file
-			return List.of();
+		if (target.namesTheDocumentItself()) {
+			targetDocument = target.documentContainingTheLink();
+		} else {
+			try {
+				targetDocument = context.getParsedMarkdownDocument(target.targetResource());
+			} catch (IOException failure) {
+				// whoever asks has read the target before asking, so the target can only have
+				// vanished between the two reads; that it cannot be read is said where it is read,
+				// and repeating it here would blame the fragment for what is wrong with the file
+				return List.of();
+			}
 		}
 
 		Set<String> declaredAnchors = MarkdownSectionAnchors.validAnchorsIn(targetDocument);
@@ -84,6 +93,10 @@ public class MarkdownSectionAnchorValidator implements AnchorValidator {
 	}
 
 	private static String anchorNotFoundMessage(AnchorTarget target) {
+		if (target.namesTheDocumentItself()) {
+			return String.format("There is no section with the anchor '%s' in this document,"
+					+ " or the anchor is invalid.", target.anchor());
+		}
 		return String.format("There is no section with the anchor '%s' in the Markdown document '%s',"
 				+ " or the anchor is invalid.",
 				target.anchor(), target.targetResource().getResolvedPath());
