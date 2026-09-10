@@ -20,20 +20,66 @@ package com.advantest.markdown.service.differential;
  */
 final class RewordedMessages {
 
+	private static final String ANCHOR_MISSING_PREFIX = "There is no section with the given anchor '";
+	private static final String IN_THE_DOCUMENT = "' in the Markdown document '";
+	private static final String ANCHOR_MISSING_SUFFIX = "' or the anchor is invalid.";
+
 	private RewordedMessages() {
 		// utility class, not meant to be instantiated
 	}
 
 	/**
-	 * Applies every decided rewording to the given recorded message.
+	 * Applies every decided rewording to the message of the given recorded finding.
 	 * 
-	 * @param recordedMessage the message of a recorded finding, must not be <code>null</code>
-	 * @return the message as this service words it, never <code>null</code>
+	 * @param recordedFinding the finding as it was recorded, must not be <code>null</code>
+	 * @return its message as this service words it, never <code>null</code>
 	 */
-	static String asThisServiceWordsIt(String recordedMessage) {
+	static String asThisServiceWordsIt(RecordedFinding recordedFinding) {
 		// "Target path" leaves open which path is meant, the one written in the document or the one
 		// it was resolved to; the message names the latter and now says so
-		return recordedMessage.replace("does not exist. Target path:", "does not exist. Resolved target path:");
+		String message = recordedFinding.message()
+				.replace("does not exist. Target path:", "does not exist. Resolved target path:");
+
+		return anchorMessage(message, recordedFinding.file());
+	}
+
+	/**
+	 * Rewords the message about an anchor no section carries.
+	 * 
+	 * <p>Two things are said differently. The word <em>given</em> says nothing a reader does not
+	 * see anyway, and a document naming its own anchor is said to be "this document" rather than
+	 * named by its path &mdash; a reader of the message is in that document already, and a path
+	 * leading back to it tells him less than the two words do.</p>
+	 * 
+	 * @param message the recorded message with every other rewording applied
+	 * @param recordedFile the validated file, relative to the corpus root, using forward slashes
+	 * @return the message as this service words it
+	 */
+	private static String anchorMessage(String message, String recordedFile) {
+		if (!message.startsWith(ANCHOR_MISSING_PREFIX) || !message.endsWith(ANCHOR_MISSING_SUFFIX)) {
+			return message;
+		}
+
+		int documentStart = message.indexOf(IN_THE_DOCUMENT);
+		if (documentStart < 0) {
+			return message;
+		}
+
+		String anchor = message.substring(ANCHOR_MISSING_PREFIX.length(), documentStart);
+		String document = message.substring(documentStart + IN_THE_DOCUMENT.length(),
+				message.length() - ANCHOR_MISSING_SUFFIX.length());
+
+		if (namesTheValidatedFile(document, recordedFile)) {
+			return "There is no section with the anchor '" + anchor + "' in this document,"
+					+ " or the anchor is invalid.";
+		}
+
+		return "There is no section with the anchor '" + anchor + "' in the Markdown document '"
+				+ document + "', or the anchor is invalid.";
+	}
+
+	private static boolean namesTheValidatedFile(String document, String recordedFile) {
+		return document.replace('\\', '/').endsWith("/" + recordedFile);
 	}
 
 }

@@ -294,7 +294,7 @@ public class MarkdownValidationDifferentialTest {
 	private static List<ComparableFinding> toComparableFindings(List<RecordedFinding> recordedFindings) {
 		return recordedFindings.stream()
 				.flatMap(finding -> {
-					String message = RewordedMessages.asThisServiceWordsIt(finding.message());
+					String message = RewordedMessages.asThisServiceWordsIt(finding);
 
 					return PORTED_RULES.issueTypeIdOf(message).stream()
 							.map(issueTypeId -> new ComparableFinding(finding.lineNumber(), finding.startOffset(),
@@ -405,7 +405,7 @@ public class MarkdownValidationDifferentialTest {
 
 			recorded.stream()
 					.filter(finding -> PORTED_RULES
-							.issueTypeIdOf(RewordedMessages.asThisServiceWordsIt(finding.message())).isEmpty())
+							.issueTypeIdOf(RewordedMessages.asThisServiceWordsIt(finding)).isEmpty())
 					.forEach(this::countNotCovered);
 
 			List<ComparableFinding> missing = new ArrayList<>(expected);

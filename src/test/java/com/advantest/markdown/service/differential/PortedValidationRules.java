@@ -63,7 +63,10 @@ final class PortedValidationRules {
 			new Rule(MarkdownIssueTypes.ANCHOR_INVALID_IDENTIFIER,
 					message -> message.startsWith("The anchor identifier") && message.contains("is invalid.")),
 			new Rule(MarkdownIssueTypes.ANCHOR_DUPLICATE_IDENTIFIER,
-					message -> message.startsWith("The anchor identifier") && message.contains("is not unique.")));
+					message -> message.startsWith("The anchor identifier") && message.contains("is not unique.")),
+			new Rule(MarkdownIssueTypes.ANCHOR_NOT_FOUND,
+					message -> message.startsWith("There is no section with the anchor")
+							&& message.contains("or the anchor is invalid.")));
 
 	/**
 	 * The rules asking the network, which are only ported into a comparison that asks it as well.
