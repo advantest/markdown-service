@@ -80,6 +80,24 @@ class MarkdownSectionAnchorsTest {
 	}
 
 	@Test
+	void aLinkMayPointToEveryAnchorOfAHeadingDeclaringSeveral() {
+		Document document = parse("# Overview {#first} {#second}\n");
+
+		assertEquals(Set.of("first", "second"), MarkdownSectionAnchors.validAnchorsIn(document),
+				"What the parser read as an identifier is an anchor a link leads to.");
+	}
+
+	@Test
+	void whatTheParserDoesNotReadAsAnIdentifierIsStillReadAsADeclaration() {
+		Document document = parse("# Overview {#two words}\n");
+
+		assertTrue(MarkdownSectionAnchors.validAnchorsIn(document).contains("two"),
+				"The parser reads the first word as the identifier, and so a link leads there.");
+		assertEquals(Set.of("two words"), MarkdownSectionAnchors.declarationsIn(document).keySet(),
+				"What the author wrote is kept, so that a rule can tell them that it is no identifier.");
+	}
+
+	@Test
 	void nothingIsAnsweredAboutNoDocument() {
 		assertThrows(IllegalArgumentException.class, () -> MarkdownSectionAnchors.declarationsIn(null));
 		assertThrows(IllegalArgumentException.class, () -> MarkdownSectionAnchors.validAnchorsIn(null));
