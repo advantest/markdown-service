@@ -459,7 +459,7 @@ public class MarkdownLinkValidatorTest {
 	private static String ambiguousReferenceMessage(String linkLabel) {
 		return "There is either no link reference definition for the reference link label \"" + linkLabel
 				+ "\" (assuming this is a collapsed reference link like \"[ReferenceLinkLabel][]\")"
-				+ " or the reference link label is empty  (assuming this is a full reference link"
+				+ " or the reference link label is empty (assuming this is a full reference link"
 				+ " like \"[Some text][ReferenceLinkLabel]\")."
 				+ " Expected a link reference definition like \"[" + linkLabel + "]: https://plantuml.com\""
 				+ " or a reference link \"[" + linkLabel + "][ReferenceLinkLabel]\""
@@ -468,8 +468,7 @@ public class MarkdownLinkValidatorTest {
 
 	private static String invalidLinkReferenceDefinitionIdentifierMessage(String identifier) {
 		return "The link reference definition identifier \"" + identifier + "\" is invalid."
-				// the double space is deliberate, it is part of the message this rule reports
-				+ " It has to contain at least one non-space character "
+				+ " It has to contain at least one non-space character"
 				+ " and is allowed to contain any number of the following characters:"
 				+ " letters ([A-Za-z]), digits ([0-9]), hyphens (\"-\"), underscores (\"_\"),"
 				+ " colons (\":\"), periods (\".\"), slashes (\"/\"), spaces (\" \").";

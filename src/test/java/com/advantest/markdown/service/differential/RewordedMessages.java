@@ -38,7 +38,11 @@ final class RewordedMessages {
 		// "Target path" leaves open which path is meant, the one written in the document or the one
 		// it was resolved to; the message names the latter and now says so
 		String message = recordedFinding.message()
-				.replace("does not exist. Target path:", "does not exist. Resolved target path:");
+				.replace("does not exist. Target path:", "does not exist. Resolved target path:")
+				// two messages of the recorded run carry a double space where a sentence is put
+				// together from two pieces; this service writes one, see I-01
+				.replace("at least one non-space character  and", "at least one non-space character and")
+				.replace("label is empty  (assuming", "label is empty (assuming");
 
 		return anchorMessage(message, recordedFinding.file());
 	}
