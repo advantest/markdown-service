@@ -7,8 +7,8 @@
 package com.advantest.markdown.service.validation;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.resources.Resource;
@@ -27,16 +27,18 @@ import com.vladsch.flexmark.util.ast.Document;
  * A parsed document is remembered next to the text it was parsed from, so a resource read first and
  * parsed later is read once.</p>
  * 
- * <p>One instance belongs to one run and is used by the one thread walking the document, so
- * nothing here is synchronized.</p>
+ * <p>One instance belongs to one run, and a run is not one thread: a check that cannot answer at
+ * once is waited for after the document has been walked, and what it does in between reads
+ * resources through this context. Both maps therefore bear being read and written at the same
+ * time, and a resource two threads ask for at once is read once.</p>
  */
 final class CachingMarkdownValidationContext implements MarkdownValidationContext {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
-	private final Map<String, Object> contentsByResolvedPath = new HashMap<>();
+	private final Map<String, Object> contentsByResolvedPath = new ConcurrentHashMap<>();
 
-	private final Map<String, Document> documentsByResolvedPath = new HashMap<>();
+	private final Map<String, Document> documentsByResolvedPath = new ConcurrentHashMap<>();
 
 	CachingMarkdownValidationContext(MarkdownParserAndHtmlRenderer parserAndRenderer) {
 		if (parserAndRenderer == null) {
@@ -57,15 +59,13 @@ final class CachingMarkdownValidationContext implements MarkdownValidationContex
 			return resource.readAllContents();
 		}
 
-		Object remembered = this.contentsByResolvedPath.get(resolvedPath);
-		if (remembered == null) {
+		Object remembered = this.contentsByResolvedPath.computeIfAbsent(resolvedPath, path -> {
 			try {
-				remembered = resource.readAllContents();
+				return resource.readAllContents();
 			} catch (IOException failure) {
-				remembered = failure;
+				return failure;
 			}
-			this.contentsByResolvedPath.put(resolvedPath, remembered);
-		}
+		});
 
 		if (remembered instanceof IOException failure) {
 			throw failure;
@@ -86,11 +86,16 @@ final class CachingMarkdownValidationContext implements MarkdownValidationContex
 		}
 
 		Document parsedDocument = this.documentsByResolvedPath.get(resolvedPath);
-		if (parsedDocument == null) {
-			parsedDocument = this.parserAndRenderer.parseMarkdown(getContents(markdownResource), markdownResource);
-			this.documentsByResolvedPath.put(resolvedPath, parsedDocument);
+		if (parsedDocument != null) {
+			return parsedDocument;
 		}
-		return parsedDocument;
+
+		// read before the document is remembered: reading says what went wrong with a checked
+		// exception, which the mapping function of a concurrent map cannot pass on
+		String contents = getContents(markdownResource);
+
+		return this.documentsByResolvedPath.computeIfAbsent(resolvedPath,
+				path -> this.parserAndRenderer.parseMarkdown(contents, markdownResource));
 	}
 
 }
