@@ -32,6 +32,12 @@ this repository, in addition to what a task asks for.
 - Limit a line to 120 characters. A table is exempt where the syntax would otherwise break.
 - Align the columns of a table with spaces so that it is readable in the source as well.
 
+## Pushing
+
+Pushing a commit is the repository owner's business alone. Commit what the task asks for and leave
+the branch where it is: do not push it, do not open a pull request and do not ask to be allowed to.
+Whoever owns the repository decides when work leaves this machine and under which name it arrives.
+
 ## This repository knows nothing about where its code came from
 
 Code is ported into this repository from other projects. What it says about itself must not depend
