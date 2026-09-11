@@ -91,11 +91,12 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * 
 	 * @param resourceResolvers the resolvers of the surrounding environment, must not be
 	 *                          <code>null</code>
-	 * @param uriValidators the validators of a target naming a scheme, the first one saying it is
-	 *                      responsible answers for a target, must not be <code>null</code>
-	 * @param anchorValidators the validators of what a link names inside its target, the first one
-	 *                         saying it is responsible answers for a target, must not be
-	 *                         <code>null</code>
+	 * @param uriValidators the validators of a target naming a scheme, asked in the given order, so
+	 *                      that the first one saying it is responsible answers for a target, must
+	 *                      not be <code>null</code>
+	 * @param anchorValidators the validators of what a link names inside its target, asked in the
+	 *                         given order, so that the first one saying it is responsible answers
+	 *                         for a target, must not be <code>null</code>
 	 */
 	MarkdownLinkValidator(ResourceResolverRegistry resourceResolvers, List<UriValidator> uriValidators,
 			List<AnchorValidator> anchorValidators) {
