@@ -76,7 +76,7 @@ public class RelativePathShapeTest {
 		int expectedStart = markdown.indexOf("overview.md/");
 
 		assertEquals(
-				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_FILE_PATH_WITH_TRAILING_SLASH,
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_FILES_FILE_PATH_WITH_TRAILING_SLASH,
 						IssueSeverity.ERROR,
 						"The file path 'overview.md/' ends with a '/' which usually indicates a directory,"
 								+ " not a file. Please remove the trailing '/' if you mean a file.",
@@ -93,7 +93,7 @@ public class RelativePathShapeTest {
 		int expectedStart = markdown.indexOf("documents)") ;
 
 		assertEquals(
-				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_FILES_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
 						IssueSeverity.WARNING,
 						"The given path 'documents' is a directory, not a file."
 								+ " Please add a trailing '/' if you really mean a directory.",
@@ -123,7 +123,7 @@ public class RelativePathShapeTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResource());
 
 		assertEquals(1, issues.size(), "An image points to a resource like a link does.");
-		assertEquals(MarkdownIssueTypes.LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
+		assertEquals(MarkdownIssueTypes.LINK_FILES_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
 				issues.get(0).issueTypeId());
 	}
 
@@ -136,7 +136,7 @@ public class RelativePathShapeTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResource());
 
 		assertEquals(1, issues.size(), "A link reference definition names a target like a link does.");
-		assertEquals(MarkdownIssueTypes.LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
+		assertEquals(MarkdownIssueTypes.LINK_FILES_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
 				issues.get(0).issueTypeId());
 	}
 
@@ -147,7 +147,7 @@ public class RelativePathShapeTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResource());
 
 		assertEquals(1, issues.size(), "A target that is nowhere is reported once, by the existence rule.");
-		assertEquals(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_TARGET_DOES_NOT_EXIST, issues.get(0).issueTypeId());
 	}
 
 	@ParameterizedTest
@@ -174,7 +174,7 @@ public class RelativePathShapeTest {
 
 		assertEquals(1, issues.size(), "Without a document location nothing is resolved, so nothing is known"
 				+ " about the shape of the target.");
-		assertEquals(MarkdownIssueTypes.LINK_UNKNOWN_DOCUMENT_LOCATION, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_UNKNOWN_DOCUMENT_LOCATION, issues.get(0).issueTypeId());
 	}
 
 	private Resource documentResource() {

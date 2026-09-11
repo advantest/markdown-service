@@ -51,13 +51,13 @@ final class PortedValidationRules {
 			new Rule(MarkdownIssueTypes.LINK_REFERENCE_DEFINITION_DUPLICATE_IDENTIFIER,
 					message -> message.startsWith("The link reference definition identifier")
 							&& message.contains("is not unique.")),
-			new Rule(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
+			new Rule(MarkdownIssueTypes.LINK_FILES_TARGET_DOES_NOT_EXIST,
 					message -> message.startsWith("The referenced file or directory")
 							&& message.contains("does not exist. Resolved target path:")),
-			new Rule(MarkdownIssueTypes.LINK_FILE_PATH_WITH_TRAILING_SLASH,
+			new Rule(MarkdownIssueTypes.LINK_FILES_FILE_PATH_WITH_TRAILING_SLASH,
 					message -> message.startsWith("The file path")
 							&& message.contains("ends with a '/'")),
-			new Rule(MarkdownIssueTypes.LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
+			new Rule(MarkdownIssueTypes.LINK_FILES_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
 					message -> message.startsWith("The given path")
 							&& message.contains("is a directory, not a file.")),
 			new Rule(MarkdownIssueTypes.ANCHOR_INVALID_IDENTIFIER,
@@ -72,13 +72,13 @@ final class PortedValidationRules {
 	 * The rules asking the network, which are only ported into a comparison that asks it as well.
 	 */
 	private static final List<Rule> RULES_ASKING_THE_NETWORK = List.of(
-			new Rule(MarkdownIssueTypes.LINK_INVALID_WEB_ADDRESS,
+			new Rule(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS,
 					message -> message.startsWith("The referenced web address")
 							&& message.contains("seems not to be a valid HTTP web address.")),
-			new Rule(MarkdownIssueTypes.LINK_WEB_ADDRESS_DOES_NOT_ANSWER,
+			new Rule(MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_DOES_NOT_ANSWER,
 					message -> message.startsWith("The referenced web address")
 							&& message.contains("seems not to exist. (Error message:")),
-			new Rule(MarkdownIssueTypes.LINK_WEB_ADDRESS_NOT_REACHABLE,
+			new Rule(MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_NOT_REACHABLE,
 					message -> message.startsWith("The referenced web address")
 							&& message.contains("is not reachable (HTTP status code")));
 

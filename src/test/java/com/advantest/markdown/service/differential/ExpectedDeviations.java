@@ -132,7 +132,7 @@ final class ExpectedDeviations {
 			new DeclaredDeviation(
 					new Deviation("V-07", "a target carrying a link title cannot be resolved at all,"
 							+ " so the message names the target and not a location"),
-					finding -> finding.issueTypeId().equals(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST)
+					finding -> finding.issueTypeId().equals(MarkdownIssueTypes.LINK_FILES_TARGET_DOES_NOT_EXIST)
 							&& finding.markedText().contains("\"")));
 
 	/**

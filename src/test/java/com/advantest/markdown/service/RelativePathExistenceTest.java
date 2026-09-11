@@ -99,7 +99,7 @@ public class RelativePathExistenceTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResourceIn(deepDirectory));
 
 		assertEquals(1, issues.size(), "The file is nowhere, however far the path climbs: " + linkTarget);
-		assertEquals(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_TARGET_DOES_NOT_EXIST, issues.get(0).issueTypeId());
 		assertEquals(markdown.indexOf(linkTarget), issues.get(0).startOffset(),
 				"The marked range covers the target as it is written.");
 		assertEquals(markdown.indexOf(linkTarget) + linkTarget.length(), issues.get(0).endOffset());
@@ -127,7 +127,7 @@ public class RelativePathExistenceTest {
 		String expectedTargetPath = this.documentDirectory.resolve("documents").resolve("overview.md").toString();
 
 		assertEquals(
-				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST, IssueSeverity.ERROR,
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_FILES_TARGET_DOES_NOT_EXIST, IssueSeverity.ERROR,
 						"The referenced file or directory 'documents/overview.md' does not exist."
 								+ " Resolved target path: " + expectedTargetPath,
 						1, expectedStart, expectedStart + "documents/overview.md".length())),
@@ -177,7 +177,7 @@ public class RelativePathExistenceTest {
 		int expectedStart = markdown.indexOf("overview.md");
 
 		assertEquals(
-				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_UNKNOWN_DOCUMENT_LOCATION, IssueSeverity.ERROR,
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_FILES_UNKNOWN_DOCUMENT_LOCATION, IssueSeverity.ERROR,
 						"The referenced file or directory 'overview.md' cannot be resolved,"
 								+ " because the location of the document containing this link is unknown.",
 						1, expectedStart, expectedStart + "overview.md".length())),
@@ -209,7 +209,7 @@ public class RelativePathExistenceTest {
 		int expectedStart = markdown.indexOf("overview.md");
 
 		assertEquals(
-				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST, IssueSeverity.ERROR,
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_FILES_TARGET_DOES_NOT_EXIST, IssueSeverity.ERROR,
 						"The referenced file or directory 'overview.md' does not exist. Resolved target path: "
 								+ this.documentDirectory.resolve("overview.md").toString(),
 						1, expectedStart, expectedStart + "overview.md".length())),

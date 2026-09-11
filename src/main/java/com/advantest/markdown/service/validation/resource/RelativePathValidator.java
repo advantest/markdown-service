@@ -84,7 +84,7 @@ public class RelativePathValidator {
 			// a target is resolved relative to the document, so without knowing where the document
 			// is there is nothing to look for
 			issues.add(new ValidationIssue(
-					MarkdownIssueTypes.LINK_UNKNOWN_DOCUMENT_LOCATION,
+					MarkdownIssueTypes.LINK_FILES_UNKNOWN_DOCUMENT_LOCATION,
 					IssueSeverity.ERROR,
 					unknownDocumentLocationMessage(target.path()),
 					lineNumber,
@@ -96,7 +96,7 @@ public class RelativePathValidator {
 		Resource targetResource = this.resourceResolver.resolve(targetReference, documentResource);
 		if (!targetResource.exists()) {
 			issues.add(new ValidationIssue(
-					MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST,
+					MarkdownIssueTypes.LINK_FILES_TARGET_DOES_NOT_EXIST,
 					IssueSeverity.ERROR,
 					missingTargetResourceMessage(target.path(), targetResource),
 					lineNumber,
@@ -127,7 +127,7 @@ public class RelativePathValidator {
 
 		if (targetResource.isFile() && pathAnnouncesADirectory) {
 			issues.add(new ValidationIssue(
-					MarkdownIssueTypes.LINK_FILE_PATH_WITH_TRAILING_SLASH,
+					MarkdownIssueTypes.LINK_FILES_FILE_PATH_WITH_TRAILING_SLASH,
 					IssueSeverity.ERROR,
 					filePathWithTrailingSlashMessage(target.path()),
 					lineNumber,
@@ -135,7 +135,7 @@ public class RelativePathValidator {
 					endOffset));
 		} else if (targetResource.isDirectory() && !pathAnnouncesADirectory) {
 			issues.add(new ValidationIssue(
-					MarkdownIssueTypes.LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
+					MarkdownIssueTypes.LINK_FILES_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH,
 					IssueSeverity.WARNING,
 					directoryPathWithoutTrailingSlashMessage(target.path()),
 					lineNumber,

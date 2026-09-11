@@ -136,7 +136,7 @@ public class AnchorValidationTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResource());
 
 		assertEquals(1, issues.size(), "Where the file is missing, the anchor is not looked for.");
-		assertEquals(MarkdownIssueTypes.LINK_TARGET_DOES_NOT_EXIST, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_TARGET_DOES_NOT_EXIST, issues.get(0).issueTypeId());
 	}
 
 	@Test

@@ -206,7 +206,7 @@ class MarkdownServiceBuilderTest {
 		List<ValidationIssue> issues = service.validateMarkdown("[label](/absolute/path/guide.md)");
 
 		assertEquals(1, issues.size());
-		assertEquals(MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
 	}
 
 	@Test

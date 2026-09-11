@@ -76,7 +76,7 @@ class WebAddressValidationTest {
 		List<ValidationIssue> issues = service.validateMarkdown("[label](https://example.org/gone)");
 
 		assertEquals(1, issues.size());
-		assertEquals(MarkdownIssueTypes.LINK_WEB_ADDRESS_NOT_REACHABLE, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_NOT_REACHABLE, issues.get(0).issueTypeId());
 		assertEquals(8, issues.get(0).startOffset());
 		assertEquals(32, issues.get(0).endOffset());
 	}
@@ -89,7 +89,7 @@ class WebAddressValidationTest {
 		List<ValidationIssue> issues = service.validateMarkdown("[label](https://example.org/silent)");
 
 		assertEquals(1, issues.size());
-		assertEquals(MarkdownIssueTypes.LINK_WEB_ADDRESS_DOES_NOT_ANSWER, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_DOES_NOT_ANSWER, issues.get(0).issueTypeId());
 	}
 
 	@Test
@@ -108,7 +108,7 @@ class WebAddressValidationTest {
 				service.validateMarkdown("[key]: https://example.org/gone\n\nSee [key].");
 
 		assertEquals(1, issues.size());
-		assertEquals(MarkdownIssueTypes.LINK_WEB_ADDRESS_NOT_REACHABLE, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_NOT_REACHABLE, issues.get(0).issueTypeId());
 	}
 
 	@Test

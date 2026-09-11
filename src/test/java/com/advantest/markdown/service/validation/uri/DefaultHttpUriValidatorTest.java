@@ -107,7 +107,7 @@ class DefaultHttpUriValidatorTest {
 
 		assertEquals(1, issues.size());
 		ValidationIssue issue = issues.get(0);
-		assertEquals(MarkdownIssueTypes.LINK_INVALID_WEB_ADDRESS, issue.issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, issue.issueTypeId());
 		assertEquals(IssueSeverity.ERROR, issue.severity());
 		assertEquals("The referenced web address 'https:/example.org/guide' seems not to be a valid"
 				+ " HTTP web address. It has to start with https:// or http://", issue.message());
@@ -130,7 +130,7 @@ class DefaultHttpUriValidatorTest {
 
 		assertEquals(1, issues.size());
 		ValidationIssue issue = issues.get(0);
-		assertEquals(MarkdownIssueTypes.LINK_INVALID_WEB_ADDRESS, issue.issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, issue.issueTypeId());
 		assertEquals(IssueSeverity.ERROR, issue.severity());
 		assertTrue(issue.message().startsWith("The referenced web address 'https://example.org/a guide'"
 				+ " seems not to be a valid HTTP web address. "), issue.message());
@@ -155,7 +155,7 @@ class DefaultHttpUriValidatorTest {
 
 		assertEquals(1, issues.size());
 		ValidationIssue issue = issues.get(0);
-		assertEquals(MarkdownIssueTypes.LINK_WEB_ADDRESS_DOES_NOT_ANSWER, issue.issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_DOES_NOT_ANSWER, issue.issueTypeId());
 		assertEquals(IssueSeverity.WARNING, issue.severity());
 		assertEquals("The referenced web address 'https://plantxyzuml.com' seems not to exist."
 				+ " (Error message: HTTP connect timed out)", issue.message());
@@ -169,7 +169,7 @@ class DefaultHttpUriValidatorTest {
 
 		assertEquals(1, issues.size());
 		ValidationIssue issue = issues.get(0);
-		assertEquals(MarkdownIssueTypes.LINK_WEB_ADDRESS_NOT_REACHABLE, issue.issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_NOT_REACHABLE, issue.issueTypeId());
 		assertEquals(IssueSeverity.ERROR, issue.severity());
 		assertEquals("The referenced web address 'https://example.org/gone' is not reachable"
 				+ " (HTTP status code 404).", issue.message());
@@ -238,7 +238,7 @@ class DefaultHttpUriValidatorTest {
 		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
 
 		assertTrue(validator.isResponsibleFor(targetOf("http://example.org/a guide")));
-		assertEquals(MarkdownIssueTypes.LINK_INVALID_WEB_ADDRESS,
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS,
 				validator.validate(targetOf("http://example.org/a guide"), CONTEXT).get(0).issueTypeId());
 	}
 

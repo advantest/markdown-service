@@ -51,7 +51,7 @@ public class AbsoluteTargetPathTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResource());
 
 		assertEquals(1, issues.size(), "Such a path is a mistake wherever it points: " + linkTarget);
-		assertEquals(MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
 	}
 
 	@Test
@@ -60,7 +60,7 @@ public class AbsoluteTargetPathTest {
 		int expectedStart = markdown.indexOf("/usr");
 
 		assertEquals(
-				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH,
+				List.of(new ValidationIssue(MarkdownIssueTypes.LINK_FILES_ABSOLUTE_TARGET_PATH,
 						IssueSeverity.ERROR,
 						"The path '/usr/share/doc/guide.md' names a file or directory of one machine,"
 								+ " so it leads nowhere for anybody else reading this document."
@@ -80,7 +80,7 @@ public class AbsoluteTargetPathTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResource());
 
 		assertEquals(1, issues.size(), "A target that works by coincidence is still the wrong target.");
-		assertEquals(MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
 	}
 
 	@Test
@@ -90,7 +90,7 @@ public class AbsoluteTargetPathTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResource());
 
 		assertEquals(1, issues.size(), "An image points to a resource like a link does.");
-		assertEquals(MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
 	}
 
 	@Test
@@ -100,7 +100,7 @@ public class AbsoluteTargetPathTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown, documentResource());
 
 		assertEquals(1, issues.size(), "A link reference definition names a target like a link does.");
-		assertEquals(MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
 	}
 
 	@Test
@@ -110,7 +110,7 @@ public class AbsoluteTargetPathTest {
 		List<ValidationIssue> issues = this.service.validateMarkdown(markdown);
 
 		assertEquals(1, issues.size(), "Nothing has to be resolved to see that the path names one machine.");
-		assertEquals(MarkdownIssueTypes.LINK_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
+		assertEquals(MarkdownIssueTypes.LINK_FILES_ABSOLUTE_TARGET_PATH, issues.get(0).issueTypeId());
 	}
 
 	@ParameterizedTest
