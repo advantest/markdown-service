@@ -300,6 +300,64 @@ public class MarkdownService {
 	}
 
 	/**
+	 * Checks the given parsed Markdown document without waiting for the answers of the checks that
+	 * have to ask something slow, e.g. a web address.
+	 * 
+	 * <p>The document is walked before this method returns, so it must not be changed until the
+	 * promised findings have arrived. Everything that is asked over the network is asked while the
+	 * walk goes on, and the promise is kept once the last answer is there.</p>
+	 * 
+	 * <p>The promised findings are ordered by their start offset, just like those of
+	 * {@link #validateMarkdown(Document)}, so that two runs over equal source code promise equal
+	 * lists.</p>
+	 * 
+	 * @param markdownDocument the parsed Markdown document to be checked, must not be <code>null</code>
+	 * @return the promise of the problems found, ordered by start offset, empty if there are none,
+	 *         never <code>null</code> and not modifiable
+	 * @throws IllegalArgumentException if the given document is <code>null</code>
+	 */
+	public CompletableFuture<List<ValidationIssue>> validateMarkdownAsync(Document markdownDocument) {
+		return this.validation.validate(markdownDocument);
+	}
+
+	/**
+	 * Convenience method parsing the given Markdown source code of unknown origin and checking it
+	 * without waiting for the slow checks.
+	 * 
+	 * @param markdownSourceCode the Markdown source code to be checked, must not be <code>null</code>
+	 * @return the promise of the problems found, ordered by start offset, empty if there are none,
+	 *         never <code>null</code> and not modifiable
+	 * @throws IllegalArgumentException if the given source code is <code>null</code>
+	 * @see #validateMarkdownAsync(Document)
+	 */
+	public CompletableFuture<List<ValidationIssue>> validateMarkdownAsync(String markdownSourceCode) {
+		if (markdownSourceCode == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
+		return this.validation.validate(parseMarkdown(markdownSourceCode));
+	}
+
+	/**
+	 * Convenience method parsing the given Markdown source code that came from the given resource
+	 * and checking it without waiting for the slow checks.
+	 * 
+	 * @param markdownSourceCode the Markdown source code to be checked, must not be <code>null</code>
+	 * @param documentResource the resource the source code came from, must not be <code>null</code>,
+	 *                         pass {@link UnresolvedResource#UNKNOWN_DOCUMENT} if it is unknown
+	 * @return the promise of the problems found, ordered by start offset, empty if there are none,
+	 *         never <code>null</code> and not modifiable
+	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
+	 * @see #validateMarkdownAsync(Document)
+	 */
+	public CompletableFuture<List<ValidationIssue>> validateMarkdownAsync(String markdownSourceCode,
+			Resource documentResource) {
+		if (markdownSourceCode == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
+		return this.validation.validate(parseMarkdown(markdownSourceCode, documentResource));
+	}
+
+	/**
 	 * Waits for the promised findings and hands them over.
 	 * 
 	 * <p>What a check failed with is handed on as it was thrown, rather than wrapped in what
