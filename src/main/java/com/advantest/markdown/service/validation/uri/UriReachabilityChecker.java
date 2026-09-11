@@ -7,6 +7,7 @@
 package com.advantest.markdown.service.validation.uri;
 
 import java.net.URI;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Asks whether an address can be reached.
@@ -26,16 +27,22 @@ import java.net.URI;
 public interface UriReachabilityChecker {
 
 	/**
-	 * Tells whether the given address can be reached.
+	 * Asks whether the given address can be reached and hands back the promise of the answer.
 	 * 
-	 * <p>This method answers rather than fails: an address that cannot be reached, for whatever
-	 * reason, is a {@link UriReachability.NotReached} answer carrying that reason, not an
-	 * exception.</p>
+	 * <p>The address is asked while the document it was found in is walked on, and the promise is
+	 * waited for once the walk is over, so this method returns without waiting for anything. An
+	 * implementation that knows its answer without asking anybody hands back a
+	 * {@link java.util.concurrent.CompletableFuture#completedFuture(Object) promise that is kept
+	 * already}.</p>
+	 * 
+	 * <p>The promise answers rather than fails: an address that cannot be reached, for whatever
+	 * reason, is a {@link UriReachability.NotReached} answer carrying that reason, not a promise
+	 * broken with an exception.</p>
 	 * 
 	 * @param targetUri the address to be asked about, must not be <code>null</code>
-	 * @return what the address answered, never <code>null</code>
+	 * @return the promise of what the address answered, never <code>null</code>
 	 * @throws IllegalArgumentException if the given address is <code>null</code>
 	 */
-	UriReachability check(URI targetUri);
+	CompletableFuture<UriReachability> check(URI targetUri);
 
 }

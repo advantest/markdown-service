@@ -18,7 +18,11 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Asks an address over HTTP whether it is there, and remembers what it answered.
+ * Asks an address over HTTP whether it is there, hands back the promise of what it answers, and
+ * remembers that answer.
+ * 
+ * <p>Asking returns at once, so the document naming the address is walked on while the far side
+ * takes its time, and whoever wants the answer waits for the promise.</p>
  * 
  * <p>Only the head of a document is asked for, because whether an address leads somewhere is
  * answered by the status code alone and nothing here reads a page. An address answering with a
@@ -86,12 +90,14 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 	}
 
 	@Override
-	public UriReachability check(URI targetUri) {
+	public CompletableFuture<UriReachability> check(URI targetUri) {
 		if (targetUri == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 
-		return this.answersByUri.computeIfAbsent(targetUri, this::ask).join();
+		// a copy, so that a caller giving up on an answer gives up on its own promise and not on
+		// the one every other document naming that address waits for
+		return this.answersByUri.computeIfAbsent(targetUri, this::ask).copy();
 	}
 
 	/**

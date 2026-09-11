@@ -7,6 +7,7 @@
 package com.advantest.markdown.service.validation.uri;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,7 +50,7 @@ class HttpUriReachabilityCheckerTest {
 	void answeringAddressYieldsItsStatusCode() {
 		HttpClient httpClient = clientAnswering(200);
 
-		UriReachability reachability = checkerUsing(httpClient).check(SOME_ADDRESS);
+		UriReachability reachability = checkerUsing(httpClient).check(SOME_ADDRESS).join();
 
 		assertEquals(new UriReachability.Answered(200), reachability);
 	}
@@ -58,7 +59,7 @@ class HttpUriReachabilityCheckerTest {
 	void addressAnsweringWithAnErrorStatusCodeIsStillAnAnswer() {
 		HttpClient httpClient = clientAnswering(404);
 
-		UriReachability reachability = checkerUsing(httpClient).check(SOME_ADDRESS);
+		UriReachability reachability = checkerUsing(httpClient).check(SOME_ADDRESS).join();
 
 		assertEquals(new UriReachability.Answered(404), reachability);
 	}
@@ -67,7 +68,7 @@ class HttpUriReachabilityCheckerTest {
 	void addressThatDoesNotAnswerYieldsTheReasonItGave() {
 		HttpClient httpClient = clientFailingWith(new HttpConnectTimeoutException("HTTP connect timed out"));
 
-		UriReachability reachability = checkerUsing(httpClient).check(SOME_ADDRESS);
+		UriReachability reachability = checkerUsing(httpClient).check(SOME_ADDRESS).join();
 
 		assertEquals(new UriReachability.NotReached("HTTP connect timed out"), reachability);
 	}
@@ -76,7 +77,7 @@ class HttpUriReachabilityCheckerTest {
 	void failureWithoutAReasonIsNamedAfterWhatWentWrong() {
 		HttpClient httpClient = clientFailingWith(new IOException());
 
-		UriReachability reachability = checkerUsing(httpClient).check(SOME_ADDRESS);
+		UriReachability reachability = checkerUsing(httpClient).check(SOME_ADDRESS).join();
 
 		assertEquals(new UriReachability.NotReached("java.io.IOException"), reachability);
 	}
@@ -85,7 +86,8 @@ class HttpUriReachabilityCheckerTest {
 	void addressHttpCannotAskAboutIsNotReached() {
 		HttpClient httpClient = clientAnswering(200);
 
-		UriReachability reachability = checkerUsing(httpClient).check(URI.create("mailto:someone@example.org"));
+		UriReachability reachability = checkerUsing(httpClient)
+				.check(URI.create("mailto:someone@example.org")).join();
 
 		assertInstanceOf(UriReachability.NotReached.class, reachability);
 	}
@@ -108,7 +110,7 @@ class HttpUriReachabilityCheckerTest {
 		HttpClient httpClient = clientAnswering(200);
 		HttpUriReachabilityChecker checker = checkerUsing(httpClient);
 
-		assertEquals(checker.check(SOME_ADDRESS), checker.check(SOME_ADDRESS));
+		assertEquals(checker.check(SOME_ADDRESS).join(), checker.check(SOME_ADDRESS).join());
 
 		verify(httpClient, times(1)).sendAsync(any(), any());
 	}
@@ -166,7 +168,7 @@ class HttpUriReachabilityCheckerTest {
 			for (int asker = 0; asker < askers; asker++) {
 				answers.add(threads.submit(() -> {
 					allAsking.countDown();
-					return checker.check(SOME_ADDRESS);
+					return checker.check(SOME_ADDRESS).join();
 				}));
 			}
 			assertTrue(allAsking.await(5, TimeUnit.SECONDS));
@@ -180,6 +182,31 @@ class HttpUriReachabilityCheckerTest {
 		}
 
 		assertEquals(1, requests.get());
+	}
+
+	@Test
+	void addressIsAskedWithoutWaitingForWhatItAnswers() {
+		CompletableFuture<HttpResponse<Void>> answer = new CompletableFuture<>();
+		HttpClient httpClient = clientAnsweringWith(answer);
+
+		CompletableFuture<UriReachability> reachability = checkerUsing(httpClient).check(SOME_ADDRESS);
+
+		assertFalse(reachability.isDone());
+		answer.complete(responseWith(200));
+		assertEquals(new UriReachability.Answered(200), reachability.join());
+	}
+
+	@Test
+	void askerGivingUpOnAnAnswerLeavesItForEverybodyElse() {
+		CompletableFuture<HttpResponse<Void>> answer = new CompletableFuture<>();
+		HttpClient httpClient = clientAnsweringWith(answer);
+		HttpUriReachabilityChecker checker = checkerUsing(httpClient);
+
+		checker.check(SOME_ADDRESS).cancel(true);
+		answer.complete(responseWith(200));
+
+		assertEquals(new UriReachability.Answered(200), checker.check(SOME_ADDRESS).join());
+		verify(httpClient, times(1)).sendAsync(any(), any());
 	}
 
 	@Test
@@ -204,6 +231,13 @@ class HttpUriReachabilityCheckerTest {
 		HttpClient httpClient = mock(HttpClient.class);
 		when(httpClient.sendAsync(any(), any(BodyHandler.class)))
 				.thenAnswer(invocation -> CompletableFuture.completedFuture(responseWith(statusCode)));
+		return httpClient;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static HttpClient clientAnsweringWith(CompletableFuture<HttpResponse<Void>> answer) {
+		HttpClient httpClient = mock(HttpClient.class);
+		when(httpClient.sendAsync(any(), any(BodyHandler.class))).thenAnswer(invocation -> answer);
 		return httpClient;
 	}
 
