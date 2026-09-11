@@ -12,10 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -24,12 +22,9 @@ import org.junit.jupiter.api.Timeout;
 
 import com.vladsch.flexmark.util.ast.Document;
 
-import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.markdown.service.validation.uri.UriReachability;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
-import com.advantest.markdown.service.validation.uri.UriTarget;
-import com.advantest.markdown.service.validation.uri.UriValidator;
 import com.advantest.resources.UnresolvedResource;
 
 /**
@@ -101,31 +96,6 @@ class AsynchronousValidationTest {
 						+ " because that is where the address stands.");
 	}
 
-	@Test
-	@Timeout(value = 10, unit = TimeUnit.SECONDS)
-	void whatACheckFailedWithIsWhatACallerSees() {
-		IllegalStateException failure = new IllegalStateException("This check gave up.");
-		MarkdownService service = MarkdownService.builder()
-				.withUriValidator(new UriValidator() {
-
-					@Override
-					public boolean isResponsibleFor(UriTarget target) {
-						return true;
-					}
-
-					@Override
-					public CompletableFuture<List<ValidationIssue>> validate(UriTarget target,
-							MarkdownValidationContext context) {
-						throw failure;
-					}
-				})
-				.build();
-
-		IllegalStateException thrown = assertThrows(IllegalStateException.class,
-				() -> service.validateMarkdown("[label](https://example.org/one)"));
-
-		assertSame(failure, thrown, "A caller sees what the check threw, not what the waiting wrapped it in.");
-	}
 
 	@Test
 	@Timeout(value = 10, unit = TimeUnit.SECONDS)
@@ -149,20 +119,6 @@ class AsynchronousValidationTest {
 				() -> service.validateMarkdownAsync(null, UnresolvedResource.UNKNOWN_DOCUMENT));
 	}
 
-	@Test
-	@Timeout(value = 10, unit = TimeUnit.SECONDS)
-	void failureThatIsNoRuntimeFailureIsHandedOnAsTheWaitingWrappedIt() {
-		IOException failure = new IOException("The address could not be asked about.");
-		MarkdownService service = MarkdownService.builder()
-				.withUriReachabilityCheck(uri -> CompletableFuture.failedFuture(failure))
-				.build();
-
-		CompletionException thrown = assertThrows(CompletionException.class,
-				() -> service.validateMarkdown("[label](https://example.org/one)"));
-
-		assertSame(failure, thrown.getCause(),
-				"What cannot be thrown as it was keeps the wrapper, and names its reason.");
-	}
 	@Test
 	@Timeout(value = 10, unit = TimeUnit.SECONDS)
 	void documentThatIsAlreadyParsedIsCheckedWaitingAndPromising() {

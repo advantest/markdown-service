@@ -36,7 +36,12 @@ import com.vladsch.flexmark.util.ast.Node;
  * from the document alone hands back a
  * {@link java.util.concurrent.CompletableFuture#completedFuture(Object) promise that is kept
  * already}.</p>
- */
+ * <p>A validator that cannot do its work says so by throwing an unchecked exception, or by breaking
+ * the promise it gave. It then loses what it would have found about that node, and nothing else:
+ * every other validator is still asked about the node, and the walk goes on over the rest of the
+ * document. Nothing declared here throws a checked exception, so a validator reading something turns
+ * what it cannot read into a finding of its own or into an unchecked exception.</p>
+ *  */
 public interface MarkdownValidator {
 
 	/**

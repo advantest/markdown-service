@@ -118,6 +118,10 @@ public class MarkdownValidation {
 	 * them at once. What comes back is ordered by where it was found, so that the order does not
 	 * depend on who answered first.</p>
 	 * 
+	 * <p>A validator that fails loses its own findings for the node it was asked about, and the run
+	 * goes on: the other validators are asked, the walk reaches the end of the document, and what
+	 * the other rules found is reported. A failure is not said out loud anywhere yet.</p>
+	 * 
 	 * @param document the parsed Markdown document to be checked, must not be <code>null</code>
 	 * @return the promise of the problems found, ordered by start offset, never <code>null</code>
 	 *         and kept with a list that is not modifiable
@@ -159,8 +163,9 @@ public class MarkdownValidation {
 		}
 
 		for (MarkdownValidator validator : validatorsFor(node.getClass())) {
-			if (!ignoringFilters.contains(validator.getIgnoredNodes()) && validator.isValidatorFor(node)) {
-				issues.addPromised(validator.validate(node, context));
+			if (!ignoringFilters.contains(validator.getIgnoredNodes())
+					&& ValidatorGuard.saysItIsResponsible(() -> validator.isValidatorFor(node))) {
+				issues.addPromised(ValidatorGuard.findingsOf(() -> validator.validate(node, context)));
 			}
 		}
 

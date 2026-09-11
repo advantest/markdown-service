@@ -416,7 +416,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 		}
 
 		this.anchorValidators.stream()
-				.filter(validator -> validator.isResponsibleFor(anchorTarget))
+				.filter(validator -> ValidatorGuard
+						.saysItIsResponsible(() -> validator.isResponsibleFor(anchorTarget)))
 				.findFirst()
 				.ifPresentOrElse(
 						validator -> checkAnchorWith(validator, anchorTarget, targetMatch, document, context,
@@ -442,7 +443,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			}
 		}
 
-		issues.addPromised(validator.validate(target, context));
+		issues.addPromised(ValidatorGuard.findingsOf(() -> validator.validate(target, context)));
 	}
 
 	private static ValidationIssue noAnchorValidatorIssue(AnchorTarget target) {
@@ -499,8 +500,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 				TextUtils.getLineNumberForOffset(document, startOffset), startOffset, endOffset);
 
 		for (UriValidator validator : this.uriValidators) {
-			if (validator.isResponsibleFor(target)) {
-				issues.addPromised(validator.validate(target, context));
+			if (ValidatorGuard.saysItIsResponsible(() -> validator.isResponsibleFor(target))) {
+				issues.addPromised(ValidatorGuard.findingsOf(() -> validator.validate(target, context)));
 				return;
 			}
 		}

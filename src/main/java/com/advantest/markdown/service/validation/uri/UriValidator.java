@@ -26,7 +26,12 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * {@link #isResponsibleFor(UriTarget) responsible} answers for a target, and it answers alone. A
  * target no validator claims is left alone rather than reported.</p>
  * 
- * @see com.advantest.markdown.service.MarkdownService.Builder#withUriValidator(UriValidator)
+ * <p>A validator that cannot do its work says so by throwing an unchecked exception, or by breaking
+ * the promise it gave. It then loses what it would have found about that target, and nothing else:
+ * every other target of the document is still checked, and the run reports what the other rules
+ * found. A validator failing where it is asked whether it is responsible is read as not being
+ * responsible for that target.</p>
+ *  * @see com.advantest.markdown.service.MarkdownService.Builder#withUriValidator(UriValidator)
  */
 public interface UriValidator {
 
