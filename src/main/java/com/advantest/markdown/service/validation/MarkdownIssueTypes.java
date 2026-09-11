@@ -26,51 +26,51 @@ public final class MarkdownIssueTypes {
 	public static final String LINK_EMPTY_TARGET = PREFIX + "link.emptyTarget";
 
 	/** A link or image points to a file or directory that does not exist. */
-	public static final String LINK_TARGET_DOES_NOT_EXIST = PREFIX + "link.targetDoesNotExist";
+	public static final String LINK_TARGET_DOES_NOT_EXIST = PREFIX + "link.files.targetDoesNotExist";
 
 	/**
 	 * A link or image points to a file, but its target path ends with a slash, which announces a
 	 * directory.
 	 */
 	public static final String LINK_FILE_PATH_WITH_TRAILING_SLASH =
-			PREFIX + "link.filePathWithTrailingSlash";
+			PREFIX + "link.files.filePathWithTrailingSlash";
 
 	/**
 	 * A link or image points to a directory, but its target path does not end with a slash, so it
 	 * reads like the path of a file.
 	 */
 	public static final String LINK_DIRECTORY_PATH_WITHOUT_TRAILING_SLASH =
-			PREFIX + "link.directoryPathWithoutTrailingSlash";
+			PREFIX + "link.files.directoryPathWithoutTrailingSlash";
 
 	/**
 	 * A link or image points to a file or directory by a path that names it on its own, e.g.
 	 * <code>/usr/share/doc/guide.md</code>, which leads nowhere on another machine.
 	 */
-	public static final String LINK_ABSOLUTE_TARGET_PATH = PREFIX + "link.absoluteTargetPath";
+	public static final String LINK_ABSOLUTE_TARGET_PATH = PREFIX + "link.files.absoluteTargetPath";
 
 	/**
 	 * A link or image points to a file relative to the document containing it, but the location of
 	 * that document is unknown, so there is nothing the target could be resolved against.
 	 */
-	public static final String LINK_UNKNOWN_DOCUMENT_LOCATION = PREFIX + "link.unknownDocumentLocation";
+	public static final String LINK_UNKNOWN_DOCUMENT_LOCATION = PREFIX + "link.files.unknownDocumentLocation";
 
 	/**
 	 * A link or image points to a web address that is none, e.g. because it names another scheme
 	 * than <code>http</code> or <code>https</code> or because the address cannot be read at all.
 	 */
-	public static final String LINK_INVALID_WEB_ADDRESS = PREFIX + "link.invalidWebAddress";
+	public static final String LINK_INVALID_WEB_ADDRESS = PREFIX + "link.http.invalidWebAddress";
 
 	/**
 	 * A link or image points to a web address that did not answer, e.g. because no host of that
 	 * name exists or because nothing answered in time.
 	 */
-	public static final String LINK_WEB_ADDRESS_DOES_NOT_ANSWER = PREFIX + "link.webAddressDoesNotAnswer";
+	public static final String LINK_WEB_ADDRESS_DOES_NOT_ANSWER = PREFIX + "link.http.webAddressDoesNotAnswer";
 
 	/**
 	 * A link or image points to a web address that answered, but with a status code saying that
 	 * it leads nowhere, e.g. <code>404</code>.
 	 */
-	public static final String LINK_WEB_ADDRESS_NOT_REACHABLE = PREFIX + "link.webAddressNotReachable";
+	public static final String LINK_WEB_ADDRESS_NOT_REACHABLE = PREFIX + "link.http.webAddressNotReachable";
 
 	/**
 	 * A link or image points to a target naming a scheme nothing knows, e.g.
