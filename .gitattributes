@@ -1,5 +1,4 @@
 # Line endings are normalised to LF in the repository and on checkout, on every platform.
-# See markdown-lsp-harness/docs/decisions/LDR-0001-line-endings-new-repos.md
 #
 # This overrides each developer's core.autocrlf setting, which is the point: the rule belongs to
 # the repository, not to the machine.
