@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
 
@@ -60,9 +61,9 @@ public class MarkdownValidationTraversalTest {
 		}
 
 		@Override
-		public List<ValidationIssue> validate(Node node, MarkdownValidationContext context) {
+		public CompletableFuture<List<ValidationIssue>> validate(Node node, MarkdownValidationContext context) {
 			this.visitedNodes.add(node);
-			return List.of();
+			return CompletableFuture.completedFuture(List.of());
 		}
 
 		List<String> visitedText() {
@@ -76,7 +77,8 @@ public class MarkdownValidationTraversalTest {
 
 	private List<ValidationIssue> validate(String markdown, MarkdownValidator... validators) {
 		Document document = this.service.parseMarkdown(markdown);
-		return new MarkdownValidation(new MarkdownParserAndHtmlRenderer(), List.of(validators)).validate(document);
+		return new MarkdownValidation(new MarkdownParserAndHtmlRenderer(), List.of(validators))
+				.validate(document).join();
 	}
 
 	@Test
@@ -205,8 +207,9 @@ public class MarkdownValidationTraversalTest {
 			}
 
 			@Override
-			public List<ValidationIssue> validate(Node node, MarkdownValidationContext context) {
-				return List.of(issueAt(20), issueAt(5));
+			public CompletableFuture<List<ValidationIssue>> validate(Node node,
+					MarkdownValidationContext context) {
+				return CompletableFuture.completedFuture(List.of(issueAt(20), issueAt(5)));
 			}
 		};
 

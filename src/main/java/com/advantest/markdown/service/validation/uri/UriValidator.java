@@ -7,6 +7,7 @@
 package com.advantest.markdown.service.validation.uri;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
@@ -44,11 +45,16 @@ public interface UriValidator {
 	/**
 	 * Checks the given target and says what is wrong with it.
 	 * 
+	 * <p>A validator asking a server about the target hands back the promise of its findings and
+	 * returns; the promise is waited for once the document has been walked, so several addresses of
+	 * one document are asked about at the same time.</p>
+	 * 
 	 * @param target the target as it was found in the document, must not be <code>null</code>
 	 * @param context what this run knows besides the document, must not be <code>null</code>
-	 * @return the problems found, never <code>null</code>, empty if there are none
+	 * @return the promise of the problems found, never <code>null</code>, kept with an empty list
+	 *         where there are none
 	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 */
-	List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context);
+	CompletableFuture<List<ValidationIssue>> validate(UriTarget target, MarkdownValidationContext context);
 
 }

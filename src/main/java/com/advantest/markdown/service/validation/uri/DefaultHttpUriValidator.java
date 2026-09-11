@@ -10,6 +10,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 import com.advantest.markdown.service.validation.IssueSeverity;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
@@ -63,23 +64,30 @@ public class DefaultHttpUriValidator implements UriValidator {
 	}
 
 	@Override
-	public List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context) {
+	public CompletableFuture<List<ValidationIssue>> validate(UriTarget target,
+			MarkdownValidationContext context) {
+
 		if (target == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 
 		if (!startsWithHttpSchemeAndSeparator(target.uriText())) {
-			return List.of(issue(target, MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, IssueSeverity.ERROR,
-					noHttpAddressMessage(target.uriText())));
+			return CompletableFuture.completedFuture(List.of(
+					issue(target, MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, IssueSeverity.ERROR,
+							noHttpAddressMessage(target.uriText()))));
 		}
 
 		if (target.uri().isEmpty()) {
-			return List.of(issue(target, MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, IssueSeverity.ERROR,
-					unreadableAddressMessage(target.uriText())));
+			return CompletableFuture.completedFuture(List.of(
+					issue(target, MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, IssueSeverity.ERROR,
+							unreadableAddressMessage(target.uriText()))));
 		}
 
-		UriReachability reachability = this.reachabilityChecker.check(target.uri().orElseThrow());
+		return this.reachabilityChecker.check(target.uri().orElseThrow())
+				.thenApply(reachability -> whatIsWrongWith(target, reachability));
+	}
 
+	private static List<ValidationIssue> whatIsWrongWith(UriTarget target, UriReachability reachability) {
 		return switch (reachability) {
 			case UriReachability.NotReached notReached -> List.of(
 					issue(target, MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_DOES_NOT_ANSWER, IssueSeverity.WARNING,

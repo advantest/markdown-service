@@ -100,7 +100,7 @@ class UnknownSchemeUriValidatorTest {
 	void targetNamingASchemeNothingKnowsIsReportedWhereItStands() {
 		UriTarget target = UriTarget.of("htp://example.org/guide", 4, 40, 63);
 
-		List<ValidationIssue> issues = this.validator.validate(target, CONTEXT);
+		List<ValidationIssue> issues = this.validator.validate(target, CONTEXT).join();
 
 		assertEquals(1, issues.size());
 		ValidationIssue issue = issues.get(0);

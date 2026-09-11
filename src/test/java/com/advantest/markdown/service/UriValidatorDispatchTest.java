@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
 
@@ -51,10 +52,12 @@ class UriValidatorDispatchTest {
 		}
 
 		@Override
-		public List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context) {
+		public CompletableFuture<List<ValidationIssue>> validate(UriTarget target,
+				MarkdownValidationContext context) {
 			this.claimedTargets.add(target);
-			return List.of(new ValidationIssue(ISSUE_TYPE, IssueSeverity.WARNING, this.name,
-					target.lineNumber(), target.startOffset(), target.endOffset()));
+			return CompletableFuture.completedFuture(List.of(
+					new ValidationIssue(ISSUE_TYPE, IssueSeverity.WARNING, this.name,
+							target.lineNumber(), target.startOffset(), target.endOffset())));
 		}
 	}
 

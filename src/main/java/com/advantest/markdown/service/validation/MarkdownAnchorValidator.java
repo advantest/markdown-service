@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
@@ -50,7 +51,7 @@ class MarkdownAnchorValidator implements MarkdownValidator {
 	}
 
 	@Override
-	public List<ValidationIssue> validate(Node node, MarkdownValidationContext context) {
+	public CompletableFuture<List<ValidationIssue>> validate(Node node, MarkdownValidationContext context) {
 		Document document = node.getDocument();
 		List<ValidationIssue> issues = new ArrayList<>();
 
@@ -66,7 +67,7 @@ class MarkdownAnchorValidator implements MarkdownValidator {
 				.forEach(anchor -> reportDuplicateAnchorIdentifier(anchor.getKey(), anchor.getValue(),
 						document, issues));
 
-		return issues;
+		return CompletableFuture.completedFuture(List.copyOf(issues));
 	}
 
 	private ValidationIssue invalidAnchorIdentifierIssue(RegexMatch anchorIdMatch, Document document) {

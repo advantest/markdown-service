@@ -116,7 +116,7 @@ class MarkdownSectionAnchorValidatorTest {
 		AnchorTarget target = anchorTarget("guide.md", "installation",
 				"# Guide {#guide}\n\n## Installation {#installation}\n");
 
-		assertTrue(this.validator.validate(target, this.context).isEmpty(),
+		assertTrue(this.validator.validate(target, this.context).join().isEmpty(),
 				"The target declares that anchor, so there is nothing to report.");
 	}
 
@@ -129,7 +129,7 @@ class MarkdownSectionAnchorValidatorTest {
 						"There is no section with the anchor 'installation' in the Markdown document"
 								+ " '/docs/guide.md', or the anchor is invalid.",
 						3, 20, 33)),
-				this.validator.validate(target, this.context),
+				this.validator.validate(target, this.context).join(),
 				"A finding names the anchor that was looked for and where it was looked for it.");
 	}
 
@@ -137,7 +137,7 @@ class MarkdownSectionAnchorValidatorTest {
 	void reportsAnAnchorTheTargetDeclaresInvalidly() {
 		AnchorTarget target = anchorTarget("guide.md", "1-guide", "# Guide {#1-guide}\n");
 
-		List<ValidationIssue> issues = this.validator.validate(target, this.context);
+		List<ValidationIssue> issues = this.validator.validate(target, this.context).join();
 
 		assertEquals(1, issues.size(), "A link to an invalid identifier does not lead anywhere.");
 		assertEquals(MarkdownIssueTypes.ANCHOR_NOT_FOUND, issues.get(0).issueTypeId());
@@ -150,7 +150,7 @@ class MarkdownSectionAnchorValidatorTest {
 		assertTrue(this.validator
 				.validate(new AnchorTarget("guide.md", "section", vanishedTarget, parse("# Doc\n"), 3, 20, 28),
 						this.context)
-				.isEmpty(), "What is wrong with the file is said where the file is read.");
+				.join().isEmpty(), "What is wrong with the file is said where the file is read.");
 	}
 
 	@Test
@@ -166,7 +166,7 @@ class MarkdownSectionAnchorValidatorTest {
 		Document document = parse("# Doc {#doc}\n\n[here](#doc)\n");
 		AnchorTarget target = AnchorTarget.inTheDocumentItself("doc", document, 3, 20, 24);
 
-		assertTrue(this.validator.validate(target, this.context).isEmpty(),
+		assertTrue(this.validator.validate(target, this.context).join().isEmpty(),
 				"The document declares that anchor, so there is nothing to report.");
 	}
 
@@ -180,7 +180,7 @@ class MarkdownSectionAnchorValidatorTest {
 						"There is no section with the anchor 'doc' in this document,"
 								+ " or the anchor is invalid.",
 						3, 14, 18)),
-				this.validator.validate(target, this.context),
+				this.validator.validate(target, this.context).join(),
 				"A finding about the document itself names no path, because there is none.");
 	}
 
@@ -192,7 +192,7 @@ class MarkdownSectionAnchorValidatorTest {
 		assertTrue(this.validator
 				.validate(AnchorTarget.inTheDocumentItself("doc", documentBeingEdited, 3, 20, 24),
 						this.context)
-				.isEmpty(),
+				.join().isEmpty(),
 				"What is checked is the text a reader is looking at, not what is stored: "
 						+ storedDocument.getResolvedPath() + " is never read for it.");
 	}

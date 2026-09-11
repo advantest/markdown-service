@@ -13,6 +13,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
 
@@ -42,9 +43,10 @@ class WebAddressValidationTest {
 		}
 
 		@Override
-		public UriReachability check(URI uri) {
+		public CompletableFuture<UriReachability> check(URI uri) {
 			this.askedAddresses.add(uri);
-			return this.answers.getOrDefault(uri.toString(), new UriReachability.Answered(200));
+			return CompletableFuture.completedFuture(
+					this.answers.getOrDefault(uri.toString(), new UriReachability.Answered(200)));
 		}
 	}
 
@@ -138,8 +140,9 @@ class WebAddressValidationTest {
 					}
 
 					@Override
-					public List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context) {
-						return List.of();
+					public CompletableFuture<List<ValidationIssue>> validate(UriTarget target,
+							MarkdownValidationContext context) {
+						return CompletableFuture.completedFuture(List.of());
 					}
 				})
 				.build();

@@ -9,6 +9,7 @@ package com.advantest.markdown.service.validation.anchor;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import com.advantest.markdown.MarkdownFileExtensions;
 import com.advantest.markdown.service.validation.IssueSeverity;
@@ -59,7 +60,9 @@ public class MarkdownSectionAnchorValidator implements AnchorValidator {
 	}
 
 	@Override
-	public List<ValidationIssue> validate(AnchorTarget target, MarkdownValidationContext context) {
+	public CompletableFuture<List<ValidationIssue>> validate(AnchorTarget target,
+			MarkdownValidationContext context) {
+
 		if (target == null || context == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
@@ -74,22 +77,22 @@ public class MarkdownSectionAnchorValidator implements AnchorValidator {
 				// whoever asks has read the target before asking, so the target can only have
 				// vanished between the two reads; that it cannot be read is said where it is read,
 				// and repeating it here would blame the fragment for what is wrong with the file
-				return List.of();
+				return CompletableFuture.completedFuture(List.of());
 			}
 		}
 
 		Set<String> declaredAnchors = MarkdownSectionAnchors.validAnchorsIn(targetDocument);
 		if (declaredAnchors.contains(target.anchor())) {
-			return List.of();
+			return CompletableFuture.completedFuture(List.of());
 		}
 
-		return List.of(new ValidationIssue(
+		return CompletableFuture.completedFuture(List.of(new ValidationIssue(
 				MarkdownIssueTypes.ANCHOR_NOT_FOUND,
 				IssueSeverity.ERROR,
 				anchorNotFoundMessage(target),
 				target.lineNumber(),
 				target.startOffset(),
-				target.endOffset()));
+				target.endOffset())));
 	}
 
 	private static String anchorNotFoundMessage(AnchorTarget target) {

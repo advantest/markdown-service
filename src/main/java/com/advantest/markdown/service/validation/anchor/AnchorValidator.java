@@ -7,6 +7,7 @@
 package com.advantest.markdown.service.validation.anchor;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
@@ -45,12 +46,16 @@ public interface AnchorValidator {
 	 * Checks the given target, which this validator said it is
 	 * {@link #isResponsibleFor(AnchorTarget) responsible} for.
 	 * 
+	 * <p>A validator that cannot answer at once hands back the promise of its findings and returns;
+	 * the promise is waited for once the document has been walked.</p>
+	 * 
 	 * @param target the target of a link, must not be <code>null</code>
 	 * @param context what the current validation run knows, among it what another document
 	 *                contains, must not be <code>null</code>
-	 * @return the problems found, never <code>null</code>, empty where there are none
+	 * @return the promise of the problems found, never <code>null</code>, kept with an empty list
+	 *         where there are none
 	 * @throws IllegalArgumentException if an argument is <code>null</code>
 	 */
-	List<ValidationIssue> validate(AnchorTarget target, MarkdownValidationContext context);
+	CompletableFuture<List<ValidationIssue>> validate(AnchorTarget target, MarkdownValidationContext context);
 
 }

@@ -8,6 +8,7 @@ package com.advantest.markdown.service.validation;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import com.vladsch.flexmark.util.ast.Node;
 
@@ -27,6 +28,14 @@ import com.vladsch.flexmark.util.ast.Node;
  * <p>Implementations are stateless and are used for more than one document. Something worth
  * remembering for the duration of one validation run belongs to the {@link MarkdownValidationContext}
  * every check is handed, which is created for one run and dropped when it ends.</p>
+ * 
+ * <p>A validator that cannot answer at once &ndash; because it asks a server, reads something slow
+ * or waits for anything else &ndash; hands back the promise of its findings and returns. The walk
+ * over the document goes on, and the promise is waited for once the walk is over, so a validator
+ * that waits for its answer itself makes the whole document wait with it. A validator answering
+ * from the document alone hands back a
+ * {@link java.util.concurrent.CompletableFuture#completedFuture(Object) promise that is kept
+ * already}.</p>
  */
 public interface MarkdownValidator {
 
@@ -70,8 +79,9 @@ public interface MarkdownValidator {
 	 * 
 	 * @param node the node to be checked, never <code>null</code>
 	 * @param context what this run knows besides the document, never <code>null</code>
-	 * @return the problems found, {@link List#of() empty} if there are none, never <code>null</code>
+	 * @return the promise of the problems found, kept with an {@link List#of() empty list} where
+	 *         there are none, never <code>null</code>
 	 */
-	List<ValidationIssue> validate(Node node, MarkdownValidationContext context);
+	CompletableFuture<List<ValidationIssue>> validate(Node node, MarkdownValidationContext context);
 
 }

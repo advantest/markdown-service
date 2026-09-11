@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
@@ -238,7 +239,8 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void builderTakesACheckOfItsOwn() {
-		UriReachabilityChecker ownChecker = targetUri -> new UriReachability.Answered(200);
+		UriReachabilityChecker ownChecker =
+				targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
 
 		MarkdownService service = MarkdownService.builder()
 				.withUriReachabilityCheck(ownChecker)
@@ -249,7 +251,8 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void laterCheckReplacesTheEarlierOne() {
-		UriReachabilityChecker ownChecker = targetUri -> new UriReachability.Answered(200);
+		UriReachabilityChecker ownChecker =
+				targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
 
 		MarkdownService service = MarkdownService.builder()
 				.withUriReachabilityCheck()

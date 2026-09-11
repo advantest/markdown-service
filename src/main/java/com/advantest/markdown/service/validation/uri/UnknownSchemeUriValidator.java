@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -91,14 +92,16 @@ public class UnknownSchemeUriValidator implements UriValidator {
 	}
 
 	@Override
-	public List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context) {
+	public CompletableFuture<List<ValidationIssue>> validate(UriTarget target,
+			MarkdownValidationContext context) {
+
 		if (target == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 
 		String scheme = schemeOf(target).orElse("");
 
-		return List.of(new ValidationIssue(
+		return CompletableFuture.completedFuture(List.of(new ValidationIssue(
 				MarkdownIssueTypes.LINK_UNKNOWN_TARGET_SCHEME,
 				IssueSeverity.WARNING,
 				String.format("The referenced target '%s' names the scheme '%s', which nothing knows here,"
@@ -106,7 +109,7 @@ public class UnknownSchemeUriValidator implements UriValidator {
 						+ " typing mistake.", target.uriText(), scheme),
 				target.lineNumber(),
 				target.startOffset(),
-				target.endOffset()));
+				target.endOffset())));
 	}
 
 	/**

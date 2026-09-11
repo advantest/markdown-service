@@ -13,6 +13,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
@@ -112,25 +113,40 @@ public class MarkdownValidation {
 	/**
 	 * Checks the given Markdown document.
 	 * 
+	 * <p>A validator that cannot answer at once is not waited for where it is asked: the document
+	 * is walked to its end, and the promises collected on the way are waited for afterwards, all of
+	 * them at once. What comes back is ordered by where it was found, so that the order does not
+	 * depend on who answered first.</p>
+	 * 
 	 * @param document the parsed Markdown document to be checked, must not be <code>null</code>
-	 * @return the problems found, ordered by start offset, never <code>null</code> and not modifiable
+	 * @return the promise of the problems found, ordered by start offset, never <code>null</code>
+	 *         and kept with a list that is not modifiable
 	 */
-	public List<ValidationIssue> validate(Document document) {
+	public CompletableFuture<List<ValidationIssue>> validate(Document document) {
 		if (document == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
 
-		List<ValidationIssue> issues = new ArrayList<>();
+		ValidationIssueCollector issues = new ValidationIssueCollector();
 		MarkdownValidationContext context = MarkdownValidationContext.parsingWith(this.parserAndRenderer);
 
 		visit(document, Collections.newSetFromMap(new IdentityHashMap<>()), context, issues);
 
-		issues.sort(Comparator.comparingInt(ValidationIssue::startOffset));
-		return List.copyOf(issues);
+		return issues.promised().thenApply(MarkdownValidation::orderedByPosition);
+	}
+
+	/**
+	 * Puts what was found into the order of the document. The findings are collected in the order
+	 * the walk met them, which sorting keeps where two of them share a start offset.
+	 */
+	private static List<ValidationIssue> orderedByPosition(List<ValidationIssue> issues) {
+		List<ValidationIssue> orderedIssues = new ArrayList<>(issues);
+		orderedIssues.sort(Comparator.comparingInt(ValidationIssue::startOffset));
+		return List.copyOf(orderedIssues);
 	}
 
 	private void visit(Node node, Set<NodeFilter> ignoringFilters, MarkdownValidationContext context,
-			List<ValidationIssue> issues) {
+			ValidationIssueCollector issues) {
 		List<NodeFilter> filtersStartingToIgnoreHere = null;
 		for (NodeFilter filter : this.distinctFilters) {
 			if (!ignoringFilters.contains(filter) && filter.isIgnored(node)) {
@@ -144,7 +160,7 @@ public class MarkdownValidation {
 
 		for (MarkdownValidator validator : validatorsFor(node.getClass())) {
 			if (!ignoringFilters.contains(validator.getIgnoredNodes()) && validator.isValidatorFor(node)) {
-				issues.addAll(validator.validate(node, context));
+				issues.addPromised(validator.validate(node, context));
 			}
 		}
 

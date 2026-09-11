@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -53,9 +54,10 @@ public class AnchorValidationTest {
 		}
 
 		@Override
-		public List<ValidationIssue> validate(AnchorTarget target, MarkdownValidationContext context) {
+		public CompletableFuture<List<ValidationIssue>> validate(AnchorTarget target,
+				MarkdownValidationContext context) {
 			this.targetsAskedAbout.add(target);
-			return List.of();
+			return CompletableFuture.completedFuture(List.of());
 		}
 	}
 

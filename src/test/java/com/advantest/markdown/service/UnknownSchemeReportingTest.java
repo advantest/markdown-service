@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
 
@@ -61,8 +62,9 @@ class UnknownSchemeReportingTest {
 					}
 
 					@Override
-					public List<ValidationIssue> validate(UriTarget target, MarkdownValidationContext context) {
-						return List.of();
+					public CompletableFuture<List<ValidationIssue>> validate(UriTarget target,
+							MarkdownValidationContext context) {
+						return CompletableFuture.completedFuture(List.of());
 					}
 				})
 				.build();

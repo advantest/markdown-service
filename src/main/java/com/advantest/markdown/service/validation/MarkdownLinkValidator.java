@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -113,9 +114,9 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	@Override
-	public List<ValidationIssue> validate(Node node, MarkdownValidationContext context) {
+	public CompletableFuture<List<ValidationIssue>> validate(Node node, MarkdownValidationContext context) {
 		Document document = node.getDocument();
-		List<ValidationIssue> issues = new ArrayList<>();
+		ValidationIssueCollector issues = new ValidationIssueCollector();
 
 		if (node instanceof Document) {
 			checkLinkReferenceDefinitionIdentifiersAreUnique(document, issues);
@@ -134,7 +135,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 					.ifPresent(referenceLink -> checkReferenceLinkLabel(referenceLink, document, issues));
 		}
 
-		return issues;
+		return issues.promised();
 	}
 
 	/**
@@ -143,7 +144,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * link found here is not reported by one of the other checks a second time.
 	 */
 	private void checkLinksTheParserLeftAsText(Node node, Document document, MarkdownValidationContext context,
-			List<ValidationIssue> issues) {
+			ValidationIssueCollector issues) {
 		BasedSequence sourceCode = document.getChars();
 		int startOffset = node.getStartOffset();
 		int endOffset = node.getEndOffset();
@@ -209,7 +210,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	private void checkLinkReferenceDefinitionIdentifier(RegexMatch linkReferenceDefinition,
-			Document document, List<ValidationIssue> issues) {
+			Document document, ValidationIssueCollector issues) {
 
 		RegexMatch labelMatch = linkReferenceDefinition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_LABEL);
 		if (labelMatch == null
@@ -224,7 +225,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	private void checkLinkReferenceDefinitionIdentifiersAreUnique(Document document,
-			List<ValidationIssue> issues) {
+			ValidationIssueCollector issues) {
 
 		Map<String, List<RegexMatch>> identifiers = new LinkedHashMap<>();
 		collectLinkReferenceDefinitionIdentifiers(document, identifiers);
@@ -287,7 +288,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * leaves nothing to mark, so the brackets around it are marked instead.
 	 */
 	private void checkLinkOrImageTarget(RegexMatch linkOrImage, Document document,
-			MarkdownValidationContext context, List<ValidationIssue> issues) {
+			MarkdownValidationContext context, ValidationIssueCollector issues) {
 
 		RegexMatch targetMatch = linkOrImage.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
 		if (targetMatch == null) {
@@ -318,7 +319,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * statement is marked instead of the brackets a link would have around its target.
 	 */
 	private void checkLinkReferenceDefinitionTarget(RegexMatch linkReferenceDefinition, Document document,
-			MarkdownValidationContext context, List<ValidationIssue> issues) {
+			MarkdownValidationContext context, ValidationIssueCollector issues) {
 
 		RegexMatch targetMatch =
 				linkReferenceDefinition.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
@@ -340,7 +341,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	}
 
 	private static void reportEmptyTarget(Document document, int startOffset, int endOffset,
-			List<ValidationIssue> issues) {
+			ValidationIssueCollector issues) {
 
 		issues.add(new ValidationIssue(
 				MarkdownIssueTypes.LINK_EMPTY_TARGET,
@@ -359,16 +360,20 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * answering for that scheme, e.g. a web address by one asking whether the address is there.
 	 */
 	private void checkTargetResource(RegexMatch targetMatch, Document document,
-			MarkdownValidationContext context, List<ValidationIssue> issues) {
+			MarkdownValidationContext context, ValidationIssueCollector issues) {
 
 		String targetReference = targetMatch.matchedText;
 
 		if (ResourceResolverRegistry.isRelativePath(targetReference)) {
+			List<ValidationIssue> pathIssues = new ArrayList<>();
 			Optional<Resource> targetResource =
-					this.relativePathValidator.checkTargetResource(targetMatch, document, issues);
+					this.relativePathValidator.checkTargetResource(targetMatch, document, pathIssues);
+			issues.addAll(pathIssues);
 			checkTargetAnchor(targetMatch, document, targetResource, context, issues);
 		} else if (ResourceResolverRegistry.isAbsolutePathWithoutScheme(targetReference)) {
-			this.absolutePathValidator.checkTargetPath(targetMatch, document, issues);
+			List<ValidationIssue> pathIssues = new ArrayList<>();
+			this.absolutePathValidator.checkTargetPath(targetMatch, document, pathIssues);
+			issues.addAll(pathIssues);
 		} else {
 			checkTargetUri(targetMatch, document, context, issues);
 		}
@@ -386,7 +391,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 */
 	private void checkTargetAnchor(RegexMatch targetMatch, Document document,
 			Optional<Resource> targetResource, MarkdownValidationContext context,
-			List<ValidationIssue> issues) {
+			ValidationIssueCollector issues) {
 
 		LinkTarget target = LinkTarget.of(targetMatch.matchedText);
 		if (target.fragment() == null || target.fragment().isBlank()) {
@@ -426,7 +431,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * document carrying it reads nothing.
 	 */
 	private void checkAnchorWith(AnchorValidator validator, AnchorTarget target, RegexMatch targetMatch,
-			Document document, MarkdownValidationContext context, List<ValidationIssue> issues) {
+			Document document, MarkdownValidationContext context, ValidationIssueCollector issues) {
 
 		if (!target.namesTheDocumentItself()) {
 			try {
@@ -437,7 +442,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			}
 		}
 
-		issues.addAll(validator.validate(target, context));
+		issues.addPromised(validator.validate(target, context));
 	}
 
 	private static ValidationIssue noAnchorValidatorIssue(AnchorTarget target) {
@@ -482,7 +487,7 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * and a target nobody understands is not a target that is wrong.
 	 */
 	private void checkTargetUri(RegexMatch targetMatch, Document document,
-			MarkdownValidationContext context, List<ValidationIssue> issues) {
+			MarkdownValidationContext context, ValidationIssueCollector issues) {
 
 		if (this.uriValidators.isEmpty()) {
 			return;
@@ -495,14 +500,14 @@ class MarkdownLinkValidator implements MarkdownValidator {
 
 		for (UriValidator validator : this.uriValidators) {
 			if (validator.isResponsibleFor(target)) {
-				issues.addAll(validator.validate(target, context));
+				issues.addPromised(validator.validate(target, context));
 				return;
 			}
 		}
 	}
 
 	private void checkReferenceLinkLabel(RegexMatch referenceLink, Document document,
-			List<ValidationIssue> issues) {
+			ValidationIssueCollector issues) {
 
 		RegexMatch targetMatch = referenceLink.subMatches.get(MarkdownParsingTools.CAPTURING_GROUP_TARGET);
 		if (targetMatch == null) {

@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
@@ -259,7 +261,7 @@ public class MarkdownService {
 	 * @throws IllegalArgumentException if the given document is <code>null</code>
 	 */
 	public List<ValidationIssue> validateMarkdown(Document markdownDocument) {
-		return this.validation.validate(markdownDocument);
+		return waitFor(this.validation.validate(markdownDocument));
 	}
 
 	/**
@@ -275,7 +277,7 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return this.validation.validate(parseMarkdown(markdownSourceCode));
+		return waitFor(this.validation.validate(parseMarkdown(markdownSourceCode)));
 	}
 
 	/**
@@ -294,7 +296,26 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return this.validation.validate(parseMarkdown(markdownSourceCode, documentResource));
+		return waitFor(this.validation.validate(parseMarkdown(markdownSourceCode, documentResource)));
+	}
+
+	/**
+	 * Waits for the promised findings and hands them over.
+	 * 
+	 * <p>What a check failed with is handed on as it was thrown, rather than wrapped in what
+	 * waiting for a promise says about a broken one, so that a caller sees the failure of the check
+	 * and not the failure of the waiting.</p>
+	 */
+	private static List<ValidationIssue> waitFor(CompletableFuture<List<ValidationIssue>> promisedIssues) {
+		try {
+			return promisedIssues.join();
+		} catch (CompletionException waitingFailed) {
+			switch (waitingFailed.getCause()) {
+				case RuntimeException failure -> throw failure;
+				case Error failure -> throw failure;
+				case null, default -> throw waitingFailed;
+			}
+		}
 	}
 
 	/**
