@@ -133,16 +133,6 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.1.2</version>
-				<configuration>
-					<!-- The differential comparison needs a corpus and a recording that are not part
-					     of this repository, so it fails without them and is not part of the build.
-					     Run it explicitly:
-					     mvn test -Dtest=MarkdownValidationDifferentialTest -DfailIfNoSpecifiedTests=false
-					              -Dmarkdown.corpus.root=<corpus> -Dmarkdown.recording.dir=<recording> -->
-					<excludes>
-						<exclude>**/differential/*Test.java</exclude>
-					</excludes>
-				</configuration>
 				<dependencies>
 					<dependency>
 						<groupId>org.junit.jupiter</groupId>
@@ -158,9 +148,8 @@
 			     target/site/jacoco/index.html, and the CI workflow keeps it as an artefact.
 
 			     The agent is passed to the tests through the argLine property, which surefire picks
-			     up on its own. A build that sets that property itself, as the differential
-			     comparison does, therefore runs without the agent and measures nothing, which is
-			     what it is meant to do: that comparison is not part of the measured suite. -->
+			     up on its own. A build that sets that property itself therefore runs without the
+			     agent and measures nothing. -->
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
