@@ -55,8 +55,5 @@ A relation between this library and another project is documented in the reposit
 relation, not here. Where a behaviour looks arbitrary without its history, the comment states the
 rule that is implemented, e.g. that a message keeps a double space, not who once produced it.
 
-The differential test package `com.advantest.markdown.service.differential` is the one exception.
-Its whole purpose is to compare this service with a recorded run of the implementation it was
-extracted from, so it has to name that implementation and may point to the decisions and issues
-recorded elsewhere — without them the code cannot be understood. The package is temporary and goes
-away once the extraction is finished. Nothing outside it may rely on that exception.
+There is no exception to this. Every file of this repository, test code included, is written for a
+reader who knows nothing but this repository.
