@@ -26,12 +26,19 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * {@link #isResponsibleFor(UriTarget) responsible} answers for a target, and it answers alone. A
  * target no validator claims is left alone rather than reported.</p>
  * 
+ * <p>Claiming a target does two things. The validator answers for it, alone, and the target is
+ * taken away from the check asking an address whether it is there: that check is asked last and
+ * only about a target no validator claimed. A validator may therefore claim a target it has
+ * nothing to say about and report nothing, which is how an address that must not be fetched, e.g.
+ * one inside a network the check cannot reach, is kept away from it.</p>
+ * 
  * <p>A validator that cannot do its work says so by throwing an unchecked exception, or by breaking
  * the promise it gave. It then loses what it would have found about that target, and nothing else:
  * every other target of the document is still checked, and the run reports what the other rules
  * found. A validator failing where it is asked whether it is responsible is read as not being
  * responsible for that target.</p>
- *  * @see com.advantest.markdown.service.MarkdownService.Builder#withUriValidator(UriValidator)
+ * 
+ * @see com.advantest.markdown.service.MarkdownService.Builder#withUriValidator(UriValidator)
  */
 public interface UriValidator {
 
@@ -40,6 +47,10 @@ public interface UriValidator {
 	 * 
 	 * <p>The target is passed as it is written in the document, so a validator sees a text that is
 	 * no address at all as well, and can claim it where it recognizes what the author meant.</p>
+	 * 
+	 * <p>Claiming a target also keeps it from being asked whether it is there, so saying yes and
+	 * then reporting nothing is a way of shielding an address rather than a way of wasting a
+	 * call.</p>
 	 * 
 	 * @param target the target as it was found in the document, must not be <code>null</code>
 	 * @return <code>true</code> if and only if this validator checks the given target

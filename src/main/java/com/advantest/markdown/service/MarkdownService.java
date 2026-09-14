@@ -477,6 +477,10 @@ public class MarkdownService {
 		 * be read as an address, when it does not answer, or when it answers that there is nothing
 		 * there.</p>
 		 * 
+		 * <p>That validator is asked last and only about a target no
+		 * {@link #withUriValidator(UriValidator) registered validator} claimed, so a validator
+		 * claiming an address keeps it from being asked about at all.</p>
+		 * 
 		 * @return this builder for method chaining, never <code>null</code>
 		 */
 		public Builder withUriReachabilityCheck() {
@@ -493,7 +497,8 @@ public class MarkdownService {
 		 * former and is expected to remember an answer rather than to ask again.</p>
 		 * 
 		 * <p>Saying this also puts the shipped validator of web addresses to work, the same way
-		 * {@link #withUriReachabilityCheck()} does.</p>
+		 * {@link #withUriReachabilityCheck()} does, and that validator is asked only about a target
+		 * no {@link #withUriValidator(UriValidator) registered validator} claimed.</p>
 		 * 
 		 * @param checker the check to be used, must not be <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
@@ -517,6 +522,11 @@ public class MarkdownService {
 		 * answers alone. A target naming a scheme this library knows and no validator claims is left
 		 * alone; a target naming a scheme nobody knows is reported, because nothing would ever look
 		 * at it.</p>
+		 * 
+		 * <p>A validator added here is asked before the shipped validator of web addresses, so
+		 * claiming an address keeps it from being asked whether it is there
+		 * ({@link #withUriReachabilityCheck()}), whether the validator reports anything about it or
+		 * not.</p>
 		 * 
 		 * @param validator the validator to be added, must not be <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
