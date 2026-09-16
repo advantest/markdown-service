@@ -51,8 +51,15 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 	/** How long it may take until the far side accepts the connection, where nobody says otherwise. */
 	public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(2);
 
-	/** How long it may take until the far side has answered, where nobody says otherwise. */
-	public static final Duration DEFAULT_ANSWER_TIMEOUT = Duration.ofSeconds(5);
+	/**
+	 * How long it may take until the far side has answered, where nobody says otherwise.
+	 * 
+	 * <p>Fifteen seconds is three times the slowest answer measured, which came from an address
+	 * running a search before it answers. A shorter limit turns a slow address into one this check
+	 * claims not to exist, and the cost of a longer one is bounded rather than multiplied, because
+	 * addresses are asked at the same time and each one only once.</p>
+	 */
+	public static final Duration DEFAULT_ANSWER_TIMEOUT = Duration.ofSeconds(15);
 
 	// Some servers answer a request only if they recognize who is asking, and refuse everything
 	// else, so this checker names itself after a tool such a server is used to.
