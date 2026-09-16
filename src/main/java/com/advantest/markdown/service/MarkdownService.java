@@ -6,6 +6,7 @@
  */
 package com.advantest.markdown.service;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -465,12 +466,13 @@ public class MarkdownService {
 		/**
 		 * Asks the addresses a document names whether they are there, with the shipped check.
 		 * 
-		 * <p>No address is asked about unless this method or
+		 * <p>No address is asked about unless this method,
+		 * {@link #withUriReachabilityCheck(Duration, Duration)} or
 		 * {@link #withUriReachabilityCheck(UriReachabilityChecker)} is called: asking costs time
 		 * and needs a network, which is nothing a caller should pay without saying so. The shipped
-		 * check gives an address about two seconds to accept the connection and about five to
-		 * answer, and it remembers every answer, so an address named by many documents is asked
-		 * about once.</p>
+		 * check gives an address the times it defaults to, and it remembers every answer, so an
+		 * address named by many documents is asked about once. Whoever needs other times says them
+		 * with {@link #withUriReachabilityCheck(Duration, Duration)}.</p>
 		 * 
 		 * <p>Saying this also puts the shipped validator of web addresses to work: from now on a
 		 * target beginning with <code>http</code> or <code>https</code> is reported when it cannot
@@ -485,6 +487,33 @@ public class MarkdownService {
 		 */
 		public Builder withUriReachabilityCheck() {
 			return withUriReachabilityCheck(new HttpUriReachabilityChecker());
+		}
+
+		/**
+		 * Asks the addresses a document names whether they are there, with the shipped check, and
+		 * gives an address the times said here rather than the ones that check defaults to.
+		 * 
+		 * <p>Everything {@link #withUriReachabilityCheck()} says holds, only the two times differ.
+		 * What is long enough depends on the network the caller sits in and on what its addresses
+		 * lead to, so a caller whose addresses are slower, or who wants a dead one given up on
+		 * sooner, says so here instead of writing a check of its own.
+		 * {@link HttpUriReachabilityChecker#DEFAULT_CONNECT_TIMEOUT} and
+		 * {@link HttpUriReachabilityChecker#DEFAULT_ANSWER_TIMEOUT} are there so that changing one
+		 * of the two does not mean restating the other.</p>
+		 * 
+		 * @param untilConnected how long the far side has to accept the connection, must not be
+		 *        <code>null</code> and must be longer than nothing
+		 * @param untilAnswered how long the far side has to answer, must not be <code>null</code>,
+		 *        must be longer than nothing and must not be shorter than
+		 *        <code>untilConnected</code>, because connecting is part of answering
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if one of the arguments is <code>null</code>, if one of
+		 *         them is zero or negative, or if the time to answer is shorter than the time to
+		 *         connect
+		 */
+		public Builder withUriReachabilityCheck(Duration untilConnected, Duration untilAnswered) {
+			return withUriReachabilityCheck(
+					new HttpUriReachabilityChecker(untilConnected, untilAnswered));
 		}
 
 		/**

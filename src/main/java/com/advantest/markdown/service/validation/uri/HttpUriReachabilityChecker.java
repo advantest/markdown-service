@@ -39,15 +39,20 @@ import java.util.concurrent.ConcurrentHashMap;
  * so a checker living in a long running program is told to {@link #clearCache() forget} what it
  * knows when its answers may have gone stale.</p>
  * 
+ * <p>Two times bound the asking: how long the far side has to accept the connection, and how long
+ * it has to answer. Both have a default, so a caller needing neither says nothing, and both can be
+ * given instead, because what is long enough depends on a network this library knows nothing
+ * about.</p>
+ * 
  * <p>Instances of this class can be used from several threads at once.</p>
  */
 public final class HttpUriReachabilityChecker implements UriReachabilityChecker {
 
-	/** How long it may take until the far side accepts the connection. */
-	static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(2);
+	/** How long it may take until the far side accepts the connection, where nobody says otherwise. */
+	public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(2);
 
-	/** How long it may take until the far side has answered. */
-	static final Duration DEFAULT_ANSWER_TIMEOUT = Duration.ofSeconds(5);
+	/** How long it may take until the far side has answered, where nobody says otherwise. */
+	public static final Duration DEFAULT_ANSWER_TIMEOUT = Duration.ofSeconds(5);
 
 	// Some servers answer a request only if they recognize who is asking, and refuse everything
 	// else, so this checker names itself after a tool such a server is used to.
@@ -62,15 +67,57 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 	private final Map<URI, CompletableFuture<UriReachability>> answersByUri = new ConcurrentHashMap<>();
 
 	/**
-	 * Creates a checker asking over HTTP, giving an address about two seconds to accept the
-	 * connection and about five seconds to answer.
+	 * Creates a checker asking over HTTP, giving an address the times this class defaults to:
+	 * {@link #DEFAULT_CONNECT_TIMEOUT} to accept the connection and {@link #DEFAULT_ANSWER_TIMEOUT}
+	 * to answer.
 	 */
 	public HttpUriReachabilityChecker() {
-		this(HttpClient.newBuilder()
-				.connectTimeout(DEFAULT_CONNECT_TIMEOUT)
+		this(DEFAULT_CONNECT_TIMEOUT, DEFAULT_ANSWER_TIMEOUT);
+	}
+
+	/**
+	 * Creates a checker asking over HTTP, giving an address the times a caller says.
+	 * 
+	 * <p>What is long enough depends on the network a caller sits in and on what its addresses lead
+	 * to, which is nothing this library can know. Whoever needs other times says them here instead
+	 * of writing a check of their own: everything else this one does &ndash; remembering an answer,
+	 * joining a request already in flight, following a redirect, naming itself so that a server
+	 * refusing unknown callers answers, reading the reason a failure gives &ndash; is kept.</p>
+	 * 
+	 * <p>{@link #DEFAULT_CONNECT_TIMEOUT} and {@link #DEFAULT_ANSWER_TIMEOUT} are there so that
+	 * changing one of the two does not mean restating the other.</p>
+	 * 
+	 * @param untilConnected how long the far side has to accept the connection, must not be
+	 *        <code>null</code> and must be longer than nothing
+	 * @param untilAnswered how long the far side has to answer, must not be <code>null</code>, must
+	 *        be longer than nothing and must not be shorter than <code>untilConnected</code>,
+	 *        because connecting is part of answering
+	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>, if one of them
+	 *         is zero or negative, or if the time to answer is shorter than the time to connect
+	 */
+	public HttpUriReachabilityChecker(Duration untilConnected, Duration untilAnswered) {
+		this(clientConnectingWithin(untilConnected, untilAnswered), untilAnswered);
+	}
+
+	private static HttpClient clientConnectingWithin(Duration untilConnected, Duration untilAnswered) {
+		if (untilConnected == null || untilAnswered == null) {
+			throw new IllegalArgumentException("Arguments must not be null.");
+		}
+		if (untilConnected.isZero() || untilConnected.isNegative()
+				|| untilAnswered.isZero() || untilAnswered.isNegative()) {
+			throw new IllegalArgumentException("An address has to be given a time longer than nothing,"
+					+ " but was given " + untilConnected + " to connect and " + untilAnswered + " to answer.");
+		}
+		if (untilConnected.compareTo(untilAnswered) > 0) {
+			throw new IllegalArgumentException("Connecting is part of answering, so an address cannot be"
+					+ " given less time to answer than to connect, but was given " + untilConnected
+					+ " to connect and " + untilAnswered + " to answer.");
+		}
+
+		return HttpClient.newBuilder()
+				.connectTimeout(untilConnected)
 				.followRedirects(HttpClient.Redirect.NORMAL)
-				.build(),
-				DEFAULT_ANSWER_TIMEOUT);
+				.build();
 	}
 
 	/**
@@ -87,6 +134,16 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 		}
 		this.httpClient = httpClient;
 		this.answerTimeout = answerTimeout;
+	}
+
+	/** @return the client this checker asks with, so that a test can read what it was given */
+	HttpClient getHttpClient() {
+		return this.httpClient;
+	}
+
+	/** @return how long an address is given to answer, so that a test can read it */
+	Duration getAnswerTimeout() {
+		return this.answerTimeout;
 	}
 
 	@Override

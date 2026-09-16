@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -235,6 +236,28 @@ class MarkdownServiceBuilderTest {
 
 		assertInstanceOf(HttpUriReachabilityChecker.class,
 				service.getUriReachabilityChecker().orElseThrow());
+	}
+
+	@Test
+	void builderAsksAddressesWithTheShippedCheckGivenTheTimesItIsTold() {
+		MarkdownService service = MarkdownService.builder()
+				.withUriReachabilityCheck(Duration.ofSeconds(3), Duration.ofSeconds(30))
+				.build();
+
+		assertInstanceOf(HttpUriReachabilityChecker.class,
+				service.getUriReachabilityChecker().orElseThrow());
+	}
+
+	@Test
+	void builderRefusesTimesThatMakeNoSense() {
+		MarkdownService.Builder builder = MarkdownService.builder();
+
+		assertThrows(IllegalArgumentException.class,
+				() -> builder.withUriReachabilityCheck(null, Duration.ofSeconds(5)));
+		assertThrows(IllegalArgumentException.class,
+				() -> builder.withUriReachabilityCheck(Duration.ZERO, Duration.ofSeconds(5)));
+		assertThrows(IllegalArgumentException.class,
+				() -> builder.withUriReachabilityCheck(Duration.ofSeconds(15), Duration.ofSeconds(2)));
 	}
 
 	@Test

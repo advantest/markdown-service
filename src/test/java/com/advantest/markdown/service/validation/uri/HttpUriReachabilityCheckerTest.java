@@ -217,9 +217,71 @@ class HttpUriReachabilityCheckerTest {
 	@Test
 	void clientAndTimeoutMustBeGiven() {
 		assertThrows(IllegalArgumentException.class,
-				() -> new HttpUriReachabilityChecker(null, Duration.ofSeconds(1)));
+				() -> new HttpUriReachabilityChecker((HttpClient) null, Duration.ofSeconds(1)));
 		assertThrows(IllegalArgumentException.class,
 				() -> new HttpUriReachabilityChecker(HttpClient.newHttpClient(), null));
+	}
+
+	@Test
+	void checkerNobodyGaveTimesToUsesTheOnesThisClassDefaultsTo() {
+		HttpUriReachabilityChecker checker = new HttpUriReachabilityChecker();
+
+		assertEquals(HttpUriReachabilityChecker.DEFAULT_ANSWER_TIMEOUT, checker.getAnswerTimeout());
+		assertEquals(HttpUriReachabilityChecker.DEFAULT_CONNECT_TIMEOUT,
+				checker.getHttpClient().connectTimeout().orElseThrow());
+	}
+
+	@Test
+	void checkerGivenTimesUsesExactlyThose() {
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30));
+
+		assertEquals(Duration.ofSeconds(30), checker.getAnswerTimeout());
+		assertEquals(Duration.ofSeconds(3), checker.getHttpClient().connectTimeout().orElseThrow());
+	}
+
+	@Test
+	void checkerGivenTimesStillFollowsARedirect() {
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30));
+
+		assertEquals(HttpClient.Redirect.NORMAL, checker.getHttpClient().followRedirects());
+	}
+
+	@Test
+	void bothTimesMustBeGiven() {
+		assertThrows(IllegalArgumentException.class,
+				() -> new HttpUriReachabilityChecker((Duration) null, Duration.ofSeconds(5)));
+		assertThrows(IllegalArgumentException.class,
+				() -> new HttpUriReachabilityChecker(Duration.ofSeconds(2), null));
+	}
+
+	@Test
+	void aTimeOfNothingOrLessIsNoTime() {
+		assertThrows(IllegalArgumentException.class,
+				() -> new HttpUriReachabilityChecker(Duration.ZERO, Duration.ofSeconds(5)));
+		assertThrows(IllegalArgumentException.class,
+				() -> new HttpUriReachabilityChecker(Duration.ofSeconds(2), Duration.ZERO));
+		assertThrows(IllegalArgumentException.class,
+				() -> new HttpUriReachabilityChecker(Duration.ofSeconds(-2), Duration.ofSeconds(5)));
+		assertThrows(IllegalArgumentException.class,
+				() -> new HttpUriReachabilityChecker(Duration.ofSeconds(2), Duration.ofSeconds(-5)));
+	}
+
+	@Test
+	void answeringCannotBeGivenLessTimeThanConnecting() {
+		// the two are of one type and stand next to each other, so exchanging them is easy and
+		// would otherwise be silently wrong
+		assertThrows(IllegalArgumentException.class,
+				() -> new HttpUriReachabilityChecker(Duration.ofSeconds(15), Duration.ofSeconds(2)));
+	}
+
+	@Test
+	void connectingAndAnsweringMayBeGivenTheSameTime() {
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(Duration.ofSeconds(4), Duration.ofSeconds(4));
+
+		assertEquals(Duration.ofSeconds(4), checker.getAnswerTimeout());
 	}
 
 	private static HttpUriReachabilityChecker checkerUsing(HttpClient httpClient) {
