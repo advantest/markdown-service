@@ -47,7 +47,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 	static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(2);
 
 	/** How long it may take until the far side has answered. */
-	static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(5);
+	static final Duration DEFAULT_ANSWER_TIMEOUT = Duration.ofSeconds(5);
 
 	// Some servers answer a request only if they recognize who is asking, and refuse everything
 	// else, so this checker names itself after a tool such a server is used to.
@@ -57,7 +57,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 
 	private final HttpClient httpClient;
 
-	private final Duration requestTimeout;
+	private final Duration answerTimeout;
 
 	private final Map<URI, CompletableFuture<UriReachability>> answersByUri = new ConcurrentHashMap<>();
 
@@ -70,7 +70,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 				.connectTimeout(DEFAULT_CONNECT_TIMEOUT)
 				.followRedirects(HttpClient.Redirect.NORMAL)
 				.build(),
-				DEFAULT_REQUEST_TIMEOUT);
+				DEFAULT_ANSWER_TIMEOUT);
 	}
 
 	/**
@@ -78,15 +78,15 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 	 * answers.
 	 * 
 	 * @param httpClient the client to ask with, must not be <code>null</code>
-	 * @param requestTimeout how long an address has to answer, must not be <code>null</code>
+	 * @param answerTimeout how long an address has to answer, must not be <code>null</code>
 	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 */
-	HttpUriReachabilityChecker(HttpClient httpClient, Duration requestTimeout) {
-		if (httpClient == null || requestTimeout == null) {
+	HttpUriReachabilityChecker(HttpClient httpClient, Duration answerTimeout) {
+		if (httpClient == null || answerTimeout == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.httpClient = httpClient;
-		this.requestTimeout = requestTimeout;
+		this.answerTimeout = answerTimeout;
 	}
 
 	@Override
@@ -112,7 +112,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 		try {
 			request = HttpRequest.newBuilder(targetUri)
 					.method("HEAD", BodyPublishers.noBody())
-					.timeout(this.requestTimeout)
+					.timeout(this.answerTimeout)
 					.header("User-Agent", USER_AGENT)
 					.header("Accept", ACCEPTED_CONTENT)
 					.build();
