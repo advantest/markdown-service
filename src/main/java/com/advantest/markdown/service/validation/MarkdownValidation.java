@@ -165,8 +165,9 @@ public class MarkdownValidation {
 
 		for (MarkdownValidator validator : validatorsFor(node.getClass())) {
 			if (!ignoringFilters.contains(validator.getIgnoredNodes())
-					&& ValidatorGuard.saysItIsResponsible(() -> validator.isValidatorFor(node))) {
-				issues.addPromised(ValidatorGuard.findingsOf(() -> validator.validate(node, context)));
+					&& ValidatorGuard.saysItIsResponsible(validator, () -> validator.isValidatorFor(node))) {
+				issues.addPromised(
+						ValidatorGuard.findingsOf(validator, () -> validator.validate(node, context)));
 			}
 		}
 

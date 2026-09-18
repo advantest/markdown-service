@@ -12,6 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -234,6 +237,65 @@ class FailingValidatorTest {
 		assertFalse(issues.isEmpty(), "What is wrong with the other target is still said.");
 		assertTrue(issues.stream().noneMatch(issue -> issue.startOffset() == 0),
 				"Nothing is said about the anchor the failing rule was asked about.");
+	}
+
+	@Test
+	void failureOfAValidatorIsSaidToWhoeverRunsTheProgram() {
+		LinkValidator failing = new LinkValidator(node -> {
+			throw new IllegalStateException("This rule gave up.");
+		});
+
+		String reported = whatIsReportedWhile(() -> validate("[one](1.md)\n", failing));
+
+		assertTrue(reported.contains(LinkValidator.class.getName()),
+				"What is reported says which validator failed, so that the rule can be found again.");
+		assertTrue(reported.contains("This rule gave up."),
+				"What is reported carries what the validator failed with.");
+	}
+
+	@Test
+	void failureOfAValidatorAskedWhetherItAnswersIsSaidAsWell() {
+		MarkdownValidator refusingToDecide = new LinkValidator(node -> null) {
+			@Override
+			public boolean isValidatorFor(Node node) {
+				throw new IllegalStateException("This rule cannot tell.");
+			}
+		};
+
+		String reported = whatIsReportedWhile(() -> validate("[one](1.md)\n", refusingToDecide));
+
+		assertTrue(reported.contains("This rule cannot tell."),
+				"A validator that cannot even say whether it answers does not fail unheard either.");
+	}
+
+	@Test
+	void nothingIsSaidToTheAuthorAboutAValidatorThatFailed() {
+		LinkValidator failing = new LinkValidator(node -> {
+			throw new IllegalStateException("This rule gave up.");
+		});
+
+		assertTrue(validate("[one](1.md)\n", failing).isEmpty(),
+				"A failure is a matter for whoever runs the program, not for whoever writes the text.");
+	}
+
+	/**
+	 * Runs something and hands back what the composed log sink wrote while it ran.
+	 * 
+	 * <p>Which sink that is, and what a line in it looks like, is nobody's contract. This library
+	 * ships a logging API and no binding; the one reading along here is the one this test run
+	 * composes for itself.</p>
+	 */
+	private static String whatIsReportedWhile(Runnable something) {
+		ByteArrayOutputStream reported = new ByteArrayOutputStream();
+		PrintStream sinkOfTheTestRun = System.err;
+		System.setErr(new PrintStream(reported, true, StandardCharsets.UTF_8));
+		try {
+			something.run();
+		} finally {
+			System.err.flush();
+			System.setErr(sinkOfTheTestRun);
+		}
+		return reported.toString(StandardCharsets.UTF_8);
 	}
 
 	private static LinkValidator findingOneThingPerLink() {
