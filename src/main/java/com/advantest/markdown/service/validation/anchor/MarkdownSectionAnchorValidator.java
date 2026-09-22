@@ -11,13 +11,15 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.advantest.markdown.MarkdownFileExtensions;
 import com.advantest.markdown.service.validation.IssueSeverity;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
 import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.vladsch.flexmark.util.ast.Document;
-
 /**
  * Checks that a link into a Markdown document points to a section that document declares.
  * 
@@ -33,6 +35,8 @@ import com.vladsch.flexmark.util.ast.Document;
  * last.</p>
  */
 public class MarkdownSectionAnchorValidator implements AnchorValidator {
+
+	private static final Logger LOG = LoggerFactory.getLogger(MarkdownSectionAnchorValidator.class);
 
 	private final MarkdownFileExtensions markdownFileExtensions;
 
@@ -77,6 +81,8 @@ public class MarkdownSectionAnchorValidator implements AnchorValidator {
 				// whoever asks has read the target before asking, so the target can only have
 				// vanished between the two reads; that it cannot be read is said where it is read,
 				// and repeating it here would blame the fragment for what is wrong with the file
+				LOG.debug("The target {} vanished between being read and being parsed, so the"
+						+ " anchor in it is left unchecked.", target.targetResource(), failure);
 				return CompletableFuture.completedFuture(List.of());
 			}
 		}

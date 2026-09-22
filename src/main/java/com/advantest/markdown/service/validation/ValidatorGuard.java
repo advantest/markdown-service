@@ -30,7 +30,8 @@ import org.slf4j.LoggerFactory;
  * 
  * <p>A failure is written to a log, naming the validator that failed and carrying what it failed
  * with, because a caught failure that nobody hears of makes a broken rule look like a clean
- * document. Where those lines go is not decided here: this library uses a logging API and ships no
+ * document. That is what this library does wherever it survives something: whoever runs the program
+ * is told. Where those lines go is not decided here: this library uses a logging API and ships no
  * binding, so whoever composes it says where they are written, and without a binding they are
  * dropped.</p>
  * 

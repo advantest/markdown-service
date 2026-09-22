@@ -8,6 +8,9 @@ package com.advantest.markdown.service.parsing;
 
 import java.net.URI;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * The three parts of what a link points to: the scheme, the path and the fragment.
  * 
@@ -29,6 +32,8 @@ import java.net.URI;
  */
 public record LinkTarget(String scheme, String path, String fragment) {
 
+	private static final Logger LOG = LoggerFactory.getLogger(LinkTarget.class);
+
 	/**
 	 * Splits the given link target into its parts.
 	 * 
@@ -49,6 +54,8 @@ public record LinkTarget(String scheme, String path, String fragment) {
 			URI uri = URI.create(linkTarget);
 			return new LinkTarget(uri.getScheme(), uri.getPath(), uri.getFragment());
 		} catch (IllegalArgumentException exception) {
+			LOG.debug("The link target '{}' is no valid URI and is therefore split by hand.",
+					linkTarget, exception);
 			return splitByHand(linkTarget);
 		}
 	}

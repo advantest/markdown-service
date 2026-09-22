@@ -17,6 +17,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Asks an address over HTTP whether it is there, hands back the promise of what it answers, and
  * remembers that answer.
@@ -63,6 +66,8 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 
 	// Some servers answer a request only if they recognize who is asking, and refuse everything
 	// else, so this checker names itself after a tool such a server is used to.
+	private static final Logger LOG = LoggerFactory.getLogger(HttpUriReachabilityChecker.class);
+
 	private static final String USER_AGENT = "curl/8.11.0";
 
 	private static final String ACCEPTED_CONTENT = "*/*";
@@ -182,12 +187,30 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 					.build();
 		} catch (IllegalArgumentException exception) {
 			// an address HTTP cannot ask about, e.g. one naming another scheme
-			return CompletableFuture.completedFuture(new UriReachability.NotReached(reasonOf(exception)));
+			return CompletableFuture.completedFuture(notReached(targetUri, exception));
 		}
 
 		return this.httpClient.sendAsync(request, BodyHandlers.discarding())
 				.<UriReachability>thenApply(response -> new UriReachability.Answered(response.statusCode()))
-				.exceptionally(throwable -> new UriReachability.NotReached(reasonOf(throwable)));
+				.exceptionally(throwable -> notReached(targetUri, throwable));
+	}
+
+	/**
+	 * Says that an address was asked and gave no answer.
+	 * 
+	 * <p>The caller is handed the reason so that it can decide what the author of the document
+	 * should hear, and the author does hear it: an address that answers nothing becomes a finding
+	 * against the link that carries it. The log therefore keeps the exception rather than the
+	 * news, and keeps it at debug level, because an address that cannot be asked and an address
+	 * that is genuinely gone look alike from the outside and only the exception tells the two
+	 * apart. Saying that at warning level would put one line into the log for every address of a
+	 * document, which is loudest exactly when the network is down and every one of them is
+	 * wrong.</p>
+	 */
+	private static UriReachability notReached(URI targetUri, Throwable failure) {
+		String reason = reasonOf(failure);
+		LOG.debug("The web address {} was asked and gave no answer: {}", targetUri, reason, failure);
+		return new UriReachability.NotReached(reason);
 	}
 
 	private static String reasonOf(Throwable throwable) {

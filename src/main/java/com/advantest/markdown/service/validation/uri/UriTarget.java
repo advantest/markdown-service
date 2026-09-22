@@ -10,6 +10,9 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * The target of a link, an image or a link reference definition that names a scheme, handed to the
  * {@link UriValidator}s together with the place it was found.
@@ -28,6 +31,8 @@ import java.util.Optional;
  *        start offset
  */
 public record UriTarget(String uriText, Optional<URI> uri, int lineNumber, int startOffset, int endOffset) {
+
+	private static final Logger LOG = LoggerFactory.getLogger(UriTarget.class);
 
 	/**
 	 * Creates a target, rejecting incomplete or contradictory data.
@@ -89,6 +94,8 @@ public record UriTarget(String uriText, Optional<URI> uri, int lineNumber, int s
 		try {
 			return Optional.of(new URI(uriText));
 		} catch (URISyntaxException exception) {
+			LOG.debug("The link target '{}' is no valid URI, so nothing is known about its scheme.",
+					uriText, exception);
 			return Optional.empty();
 		}
 	}

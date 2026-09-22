@@ -17,6 +17,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.advantest.markdown.service.parsing.LinkTarget;
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
@@ -52,6 +55,8 @@ import com.vladsch.flexmark.util.sequence.BasedSequence;
  * for the parser and is therefore looked for in the paragraph it ends up in.</p>
  */
 class MarkdownLinkValidator implements MarkdownValidator {
+
+	private static final Logger LOG = LoggerFactory.getLogger(MarkdownLinkValidator.class);
 
 	private static final Set<Class<? extends Node>> TRIGGERING_NODE_TYPES = Set.of(
 			Link.class, Image.class, LinkRef.class, ImageRef.class,
@@ -439,6 +444,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 			try {
 				context.getContents(target.targetResource());
 			} catch (IOException failure) {
+				LOG.debug("The target {} of a link cannot be read, so the author is told that much"
+						+ " and the anchor in it is left unchecked.", target.targetResource(), failure);
 				issues.add(targetCannotBeReadIssue(target, targetMatch, document));
 				return;
 			}

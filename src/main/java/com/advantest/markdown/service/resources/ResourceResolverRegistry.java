@@ -12,6 +12,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.advantest.markdown.service.parsing.LinkTarget;
 import com.advantest.resources.FileSchemeUriResolver;
 import com.advantest.resources.LocalFileSystemResourceResolver;
@@ -39,6 +42,8 @@ import com.advantest.resources.UriResolver;
  * saying anything about it would be guessing.</p>
  */
 public final class ResourceResolverRegistry {
+
+	private static final Logger LOG = LoggerFactory.getLogger(ResourceResolverRegistry.class);
 
 	private final RelativePathResourceResolver relativePathResolver;
 
@@ -156,6 +161,8 @@ public final class ResourceResolverRegistry {
 		try {
 			targetUri = URI.create(targetResourcePathOrUri);
 		} catch (IllegalArgumentException exception) {
+			LOG.debug("The reference '{}' is no valid URI, so no resolver is asked about it.",
+					targetResourcePathOrUri, exception);
 			return Optional.empty();
 		}
 
