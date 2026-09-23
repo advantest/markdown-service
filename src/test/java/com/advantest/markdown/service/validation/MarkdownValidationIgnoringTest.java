@@ -96,8 +96,7 @@ public class MarkdownValidationIgnoringTest {
 	@Test
 	public void aLinkInAnInlineFormulaIsNotReported() {
 		assertNotReported("Some text with $" + BROKEN_LINK + "$ in it.\n",
-				"A formula is not Markdown code. The parser reads its content as Markdown all the same,"
-						+ " so ignoring the formula node is what keeps the link away.");
+				"An in-line formula is not Markdown code.");
 	}
 
 	@Test
