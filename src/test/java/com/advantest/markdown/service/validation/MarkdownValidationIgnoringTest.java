@@ -107,10 +107,8 @@ public class MarkdownValidationIgnoringTest {
 	}
 
 	@Test
-	public void aLinkInAFormulaClosedOnItsOwnLineIsReportedAsAKnownDeviation() {
-		assertReported("Some text.\n\n$$\n" + BROKEN_LINK + "\n$$\n",
-				"The parser does not recognise a display formula whose closing delimiter starts a line,"
-						+ " so there is no formula node to ignore and the paragraph is checked. This test"
-						+ " documents the shortcoming and is inverted once the parser is fixed.");
+	public void aLinkInAFormulaClosedOnItsOwnLineIsNotReported() {
+		assertNotReported("Some text.\n\n$$\n" + BROKEN_LINK + "\n$$\n",
+				"A display formula is not Markdown code, whichever line its closing delimiter starts on.");
 	}
 }
