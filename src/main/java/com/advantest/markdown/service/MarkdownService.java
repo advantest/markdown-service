@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.stream.Stream;
 
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
@@ -75,6 +76,9 @@ public class MarkdownService {
 
 	private final UriReachabilityChecker uriReachabilityChecker;
 
+	/** Everything this service is made of that remembers answers, in no particular order. */
+	private final List<CachesHolder> cachesHolders;
+
 	/**
 	 * Creates a service using the default Markdown parser and HTML renderer configuration
 	 * and resolving references in the local file system, without asking an address a document
@@ -134,6 +138,43 @@ public class MarkdownService {
 				withShippedValidators(uriValidators, uriReachabilityChecker),
 				withShippedAnchorValidators(anchorValidators, parserAndRenderer));
 		this.uriReachabilityChecker = uriReachabilityChecker;
+		this.cachesHolders = cachesHoldersAmong(uriReachabilityChecker, uriValidators,
+				anchorValidators);
+	}
+
+	/**
+	 * Picks out everything this service was built with that remembers answers, so that
+	 * {@link #clearCaches()} reaches it without asking anybody again what the service is made of.
+	 */
+	private static List<CachesHolder> cachesHoldersAmong(UriReachabilityChecker uriReachabilityChecker,
+			List<UriValidator> uriValidators, List<AnchorValidator> anchorValidators) {
+
+		List<CachesHolder> holders = new ArrayList<>();
+		Stream.concat(Stream.of(uriReachabilityChecker),
+						Stream.concat(uriValidators.stream(), anchorValidators.stream()))
+				.filter(CachesHolder.class::isInstance)
+				.map(CachesHolder.class::cast)
+				.forEach(holders::add);
+
+		return List.copyOf(holders);
+	}
+
+	/**
+	 * Tells everything this service is made of that remembers answers to forget them, so that the
+	 * next document naming an address costs the question again.
+	 * 
+	 * <p>The check asking an address whether it is there is told, and so is every
+	 * {@link Builder#withUriValidator(UriValidator) registered validator} and every
+	 * {@link Builder#withAnchorValidator(AnchorValidator) registered anchor validator} saying with
+	 * {@link CachesHolder} that it remembers something. A part that remembers nothing is not
+	 * touched, and a service nothing of which remembers anything does nothing here.</p>
+	 * 
+	 * <p>Say this where the answers may have gone stale, e.g. in a program running for a day, or
+	 * where a document that was reported unreachable is known to be there by now. It may be said
+	 * while documents are being validated; what is already being waited for is not taken back.</p>
+	 */
+	public void clearCaches() {
+		this.cachesHolders.forEach(CachesHolder::clearCaches);
 	}
 
 	/**

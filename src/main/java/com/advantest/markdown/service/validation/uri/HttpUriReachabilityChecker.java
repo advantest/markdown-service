@@ -20,6 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.advantest.markdown.service.CachesHolder;
+
 /**
  * Asks an address over HTTP whether it is there, hands back the promise of what it answers, and
  * remembers that answer.
@@ -49,7 +51,7 @@ import org.slf4j.LoggerFactory;
  * 
  * <p>Instances of this class can be used from several threads at once.</p>
  */
-public final class HttpUriReachabilityChecker implements UriReachabilityChecker {
+public final class HttpUriReachabilityChecker implements UriReachabilityChecker, CachesHolder {
 
 	/** How long it may take until the far side accepts the connection, where nobody says otherwise. */
 	public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(2);
@@ -172,6 +174,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 	/**
 	 * Forgets every answer, so that every address is asked again.
 	 */
+	@Override
 	public void clearCaches() {
 		this.answersByUri.clear();
 	}
