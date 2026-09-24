@@ -738,6 +738,8 @@ public class MarkdownService {
 			ResourceResolverRegistry resolvers =
 					new ResourceResolverRegistry(pathResolver, allUriResolvers);
 
+			this.parserAndRendererBuilder.withRelativePathResourceResolver(pathResolver);
+
 			// the validator registered last is asked first, so that a validator answering for a
 			// few addresses can be put in front of one answering for all of them
 			List<UriValidator> validatorsAskedInOrder = new ArrayList<>(this.uriValidators);

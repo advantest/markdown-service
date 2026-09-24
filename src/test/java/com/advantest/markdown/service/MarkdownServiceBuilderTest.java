@@ -13,15 +13,19 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedReader;
+import java.io.StringReader;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 
 import com.advantest.flexmark.ext.jira.tickets.JiraTicketExtension;
+import com.advantest.flexmark.ext.plantuml.PlantUmlExtension;
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
 import com.advantest.markdown.service.validation.ValidationIssue;
@@ -29,6 +33,8 @@ import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriReachability;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.RelativePathResourceResolver;
+import com.advantest.resources.Resource;
+import com.advantest.resources.ResourceKind;
 import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.html.AttributeProvider;
 import com.vladsch.flexmark.html.AttributeProviderFactory;
@@ -36,6 +42,7 @@ import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.html.IndependentAttributeProviderFactory;
 import com.vladsch.flexmark.html.renderer.AttributablePart;
 import com.vladsch.flexmark.html.renderer.LinkResolverContext;
+import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.DataKey;
 import com.vladsch.flexmark.util.data.MutableDataHolder;
@@ -80,6 +87,38 @@ class MarkdownServiceBuilderTest {
 					};
 				}
 			};
+		}
+	}
+
+	/** A resource saying the same text wherever it was resolved from. */
+	private static final class FixedTextResource implements Resource {
+
+		private static final String TEXT = "@startuml\nclass Foo\n@enduml\n";
+
+		private final String path;
+
+		private FixedTextResource(String path) {
+			this.path = path;
+		}
+
+		@Override
+		public String getResolvedPath() {
+			return this.path;
+		}
+
+		@Override
+		public boolean exists() {
+			return true;
+		}
+
+		@Override
+		public Optional<ResourceKind> getKind() {
+			return Optional.of(ResourceKind.FILE);
+		}
+
+		@Override
+		public BufferedReader readContents() {
+			return new BufferedReader(new StringReader(TEXT));
 		}
 	}
 
@@ -219,6 +258,20 @@ class MarkdownServiceBuilderTest {
 
 		assertNotNull(service);
 		assertTrue(service.validateMarkdown("[label]()").size() == 1);
+	}
+
+	@Test
+	void theResolverOfTheBuilderAlsoAnswersWhatADocumentRefersTo() {
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
+				.withRelativePathResourceResolver((linkTarget, document) -> new FixedTextResource(linkTarget))
+				.build();
+
+		Document document = service.parseMarkdown("![diagram](diagrams/classes.puml)",
+				new UnresolvedResource("readme.md"));
+
+		assertEquals(FixedTextResource.TEXT,
+				PlantUmlExtension.KEY_DOCUMENT_PATH_TO_FILE_CONTENTS_MAP.get(document)
+						.get("diagrams/classes.puml"));
 	}
 
 	@Test
