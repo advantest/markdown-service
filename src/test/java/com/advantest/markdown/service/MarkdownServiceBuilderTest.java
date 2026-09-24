@@ -239,6 +239,14 @@ class MarkdownServiceBuilderTest {
 	}
 
 	@Test
+	void builderCheckingUriReachabilityBringsTheShippedCheckAlong() {
+		MarkdownService service = MarkdownService.builderCheckingUriReachability().build();
+
+		assertInstanceOf(HttpUriReachabilityChecker.class,
+				service.getUriReachabilityChecker().orElseThrow());
+	}
+
+	@Test
 	void builderAsksAddressesWithTheShippedCheckGivenTheTimesItIsTold() {
 		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(Duration.ofSeconds(3), Duration.ofSeconds(30))

@@ -195,6 +195,25 @@ public class MarkdownService {
 	}
 
 	/**
+	 * Creates a builder for a service with a customized Markdown parser and HTML renderer, which
+	 * asks every address a document names whether it is there.
+	 * 
+	 * <p>This is {@link #builderNotCheckingUriReachability()} plus
+	 * {@link Builder#withUriReachabilityCheck()}, so the shipped check gives an address the times
+	 * it defaults to and remembers every answer. A caller needing other times, or a check of its
+	 * own, starts from the other builder and says so there.</p>
+	 * 
+	 * <p>A service built from here needs a network and takes the time an address takes, so a
+	 * caller that may run without one, e.g. a test, starts from
+	 * {@link #builderNotCheckingUriReachability()} instead.</p>
+	 * 
+	 * @return a new builder, never <code>null</code>
+	 */
+	public static Builder builderCheckingUriReachability() {
+		return new Builder().withUriReachabilityCheck();
+	}
+
+	/**
 	 * Reads the given Markdown source code and parses it, i.e. creates the source code's
 	 * abstract syntax tree representation, a so called {@link Document}.
 	 * 
