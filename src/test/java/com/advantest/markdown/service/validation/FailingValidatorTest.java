@@ -149,7 +149,7 @@ class FailingValidatorTest {
 
 	@Test
 	void uriValidatorThatFailsLeavesTheOtherFindingsOfTheDocument() {
-		MarkdownService serviceWithAFailingRule = MarkdownService.builder()
+		MarkdownService serviceWithAFailingRule = MarkdownService.builderNotCheckingUriReachability()
 				.withUriValidator(new UriValidator() {
 
 					@Override
@@ -176,7 +176,7 @@ class FailingValidatorTest {
 
 	@Test
 	void uriValidatorFailingWhereItIsAskedWhetherItAnswersLetsTheNextOneAnswer() {
-		MarkdownService serviceWithAFailingRule = MarkdownService.builder()
+		MarkdownService serviceWithAFailingRule = MarkdownService.builderNotCheckingUriReachability()
 				.withUriValidator(new UriValidator() {
 
 					@Override
@@ -214,7 +214,7 @@ class FailingValidatorTest {
 
 	@Test
 	void anchorValidatorThatFailsLeavesTheOtherFindingsOfTheDocument() {
-		MarkdownService serviceWithAFailingRule = MarkdownService.builder()
+		MarkdownService serviceWithAFailingRule = MarkdownService.builderNotCheckingUriReachability()
 				.withAnchorValidator(new AnchorValidator() {
 
 					@Override

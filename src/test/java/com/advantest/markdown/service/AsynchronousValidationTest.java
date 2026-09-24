@@ -40,7 +40,7 @@ class AsynchronousValidationTest {
 	@Timeout(value = 10, unit = TimeUnit.SECONDS)
 	void severalAddressesAreAskedAboutBeforeTheFirstOneAnswers() {
 		CountDownLatch bothAsked = new CountDownLatch(2);
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(answeringOnceEverybodyHasAsked(bothAsked))
 				.build();
 
@@ -54,7 +54,7 @@ class AsynchronousValidationTest {
 	@Timeout(value = 10, unit = TimeUnit.SECONDS)
 	void walkOverTheDocumentIsOverBeforeASlowAddressAnswers() {
 		CountDownLatch answersMayArrive = new CountDownLatch(1);
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(answeringOnceReleasedBy(answersMayArrive))
 				.build();
 
@@ -80,7 +80,7 @@ class AsynchronousValidationTest {
 	@Timeout(value = 10, unit = TimeUnit.SECONDS)
 	void findingsKeepTheirOrderHoweverLateAnAnswerArrives() {
 		CountDownLatch answersMayArrive = new CountDownLatch(1);
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(answeringOnceReleasedBy(answersMayArrive,
 						new UriReachability.Answered(404)))
 				.build();
@@ -135,7 +135,7 @@ class AsynchronousValidationTest {
 	@Timeout(value = 10, unit = TimeUnit.SECONDS)
 	void failureNothingIsMeantToCatchIsHandedOnAsItWasThrown() {
 		StackOverflowError failure = new StackOverflowError();
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(uri -> CompletableFuture.failedFuture(failure))
 				.build();
 
@@ -144,7 +144,7 @@ class AsynchronousValidationTest {
 				"What nothing is meant to catch reaches a caller as it was thrown.");
 	}
 	private static MarkdownService serviceAnswering(UriReachability answer) {
-		return MarkdownService.builder()
+		return MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(uri -> CompletableFuture.completedFuture(answer))
 				.build();
 	}

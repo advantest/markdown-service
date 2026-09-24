@@ -85,7 +85,7 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void builderCreatesUsableService() {
-		MarkdownService service = MarkdownService.builder().build();
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability().build();
 
 		assertNotNull(service);
 		assertTrue(service.parseMarkdownAndRenderHtml("Hello *world*").contains("<em>world</em>"));
@@ -93,7 +93,7 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void withExtensionAffectsRenderedOutput() {
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withExtension(new MarkerExtension())
 				.build();
 
@@ -102,7 +102,7 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void withExtensionKeepsDefaultExtensions() {
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withExtension(new MarkerExtension())
 				.build();
 
@@ -116,7 +116,7 @@ class MarkdownServiceBuilderTest {
 	void withOptionAffectsRenderedOutput() {
 		String customJiraUrl = "https://example.com/browse/";
 
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withOption(JiraTicketExtension.JIRA_URL, customJiraUrl)
 				.build();
 
@@ -125,7 +125,7 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void withOptionAcceptsNullValuesForNullableDataKeys() {
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withOption(NULLABLE_TEST_KEY, null)
 				.build();
 
@@ -136,7 +136,7 @@ class MarkdownServiceBuilderTest {
 	void withCustomizationIsApplied() {
 		String customJiraUrl = "https://example.com/from-customization/";
 
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withCustomization(options -> options.set(JiraTicketExtension.JIRA_URL, customJiraUrl))
 				.build();
 
@@ -147,7 +147,7 @@ class MarkdownServiceBuilderTest {
 	void customizationsAreAppliedInRegistrationOrder() {
 		List<String> applicationOrder = new ArrayList<>();
 
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withCustomization(options -> {
 					applicationOrder.add("first");
 					options.set(JiraTicketExtension.JIRA_URL, "https://example.com/first/");
@@ -166,7 +166,7 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void builderRejectsNullArguments() {
-		MarkdownService.Builder builder = MarkdownService.builder();
+		MarkdownService.Builder builder = MarkdownService.builderNotCheckingUriReachability();
 
 		assertThrows(IllegalArgumentException.class, () -> builder.withExtension(null));
 		assertThrows(IllegalArgumentException.class, () -> builder.withOption((DataKey<String>) null, "value"));
@@ -184,7 +184,7 @@ class MarkdownServiceBuilderTest {
 		RelativePathResourceResolver ownResolver =
 				(linkTarget, document) -> new UnresolvedResource(linkTarget);
 
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withRelativePathResourceResolver(ownResolver)
 				.build();
 
@@ -200,7 +200,7 @@ class MarkdownServiceBuilderTest {
 		RelativePathResourceResolver ownResolver =
 				(linkTarget, document) -> new UnresolvedResource(linkTarget);
 
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withRelativePathResourceResolver(ownResolver)
 				.build();
 
@@ -213,7 +213,7 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void builderResolvesInTheLocalFileSystemWhenAskedTo() {
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withLocalFileSystemResourceResolver()
 				.build();
 
@@ -223,14 +223,14 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void noAddressIsAskedAboutUnlessTheBuilderIsTold() {
-		MarkdownService service = MarkdownService.builder().build();
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability().build();
 
 		assertTrue(service.getUriReachabilityChecker().isEmpty());
 	}
 
 	@Test
 	void builderAsksAddressesWithTheShippedCheckWhenAskedTo() {
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck()
 				.build();
 
@@ -240,7 +240,7 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void builderAsksAddressesWithTheShippedCheckGivenTheTimesItIsTold() {
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(Duration.ofSeconds(3), Duration.ofSeconds(30))
 				.build();
 
@@ -250,7 +250,7 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void builderRefusesTimesThatMakeNoSense() {
-		MarkdownService.Builder builder = MarkdownService.builder();
+		MarkdownService.Builder builder = MarkdownService.builderNotCheckingUriReachability();
 
 		assertThrows(IllegalArgumentException.class,
 				() -> builder.withUriReachabilityCheck(null, Duration.ofSeconds(5)));
@@ -265,7 +265,7 @@ class MarkdownServiceBuilderTest {
 		UriReachabilityChecker ownChecker =
 				targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
 
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(ownChecker)
 				.build();
 
@@ -277,7 +277,7 @@ class MarkdownServiceBuilderTest {
 		UriReachabilityChecker ownChecker =
 				targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
 
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck()
 				.withUriReachabilityCheck(ownChecker)
 				.build();
@@ -287,7 +287,7 @@ class MarkdownServiceBuilderTest {
 
 	@Test
 	void builderRefusesACheckThatIsNotThere() {
-		MarkdownService.Builder builder = MarkdownService.builder();
+		MarkdownService.Builder builder = MarkdownService.builderNotCheckingUriReachability();
 
 		assertThrows(IllegalArgumentException.class, () -> builder.withUriReachabilityCheck(null));
 	}

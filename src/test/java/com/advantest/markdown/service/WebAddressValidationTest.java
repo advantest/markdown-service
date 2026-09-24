@@ -61,7 +61,7 @@ class WebAddressValidationTest {
 	@Test
 	void addressOfADocumentIsAskedAboutOnceACallerSaysSo() {
 		KnownAddresses addresses = new KnownAddresses(Map.of());
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(addresses)
 				.build();
 
@@ -116,7 +116,7 @@ class WebAddressValidationTest {
 	@Test
 	void targetNamingAnotherSchemeIsLeftAlone() {
 		KnownAddresses addresses = new KnownAddresses(Map.of());
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(addresses)
 				.build();
 
@@ -130,7 +130,7 @@ class WebAddressValidationTest {
 	void validatorOfACallerAnswersBeforeTheShippedOne() {
 		KnownAddresses addresses = new KnownAddresses(Map.of(
 				"https://example.org/gone", new UriReachability.Answered(404)));
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(addresses)
 				.withUriValidator(new UriValidator() {
 
@@ -154,7 +154,7 @@ class WebAddressValidationTest {
 	}
 
 	private static MarkdownService serviceKnowing(Map<String, UriReachability> answers) {
-		return MarkdownService.builder()
+		return MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(new KnownAddresses(answers))
 				.build();
 	}

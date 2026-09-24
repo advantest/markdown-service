@@ -141,7 +141,7 @@ class UriValidatorDispatchTest {
 		RecordingUriValidator allWebAddresses = new RecordingUriValidator("https", "all web addresses");
 		RecordingUriValidator oneTeamsAddresses = new RecordingUriValidator("https", "one team's addresses");
 
-		List<ValidationIssue> issues = MarkdownService.builder()
+		List<ValidationIssue> issues = MarkdownService.builderNotCheckingUriReachability()
 				.withUriValidator(allWebAddresses)
 				.withUriValidator(oneTeamsAddresses)
 				.build()
@@ -157,7 +157,7 @@ class UriValidatorDispatchTest {
 		RecordingUriValidator webAddresses = new RecordingUriValidator("https", "web addresses");
 		RecordingUriValidator mailAddresses = new RecordingUriValidator("mailto", "mail addresses");
 
-		List<ValidationIssue> issues = MarkdownService.builder()
+		List<ValidationIssue> issues = MarkdownService.builderNotCheckingUriReachability()
 				.withUriValidator(webAddresses)
 				.withUriValidator(mailAddresses)
 				.build()
@@ -181,7 +181,7 @@ class UriValidatorDispatchTest {
 	}
 
 	private static MarkdownService serviceWith(UriValidator validator) {
-		return MarkdownService.builder().withUriValidator(validator).build();
+		return MarkdownService.builderNotCheckingUriReachability().withUriValidator(validator).build();
 	}
 
 }

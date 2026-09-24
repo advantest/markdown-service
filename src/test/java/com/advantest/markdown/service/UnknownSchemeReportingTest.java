@@ -53,7 +53,7 @@ class UnknownSchemeReportingTest {
 
 	@Test
 	void targetOfASchemeACallerAnswersForIsNotReported() {
-		MarkdownService service = MarkdownService.builder()
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriValidator(new UriValidator() {
 
 					@Override

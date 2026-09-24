@@ -70,7 +70,7 @@ class ValidationCorpusTest {
 	private static final String ADDRESS_THAT_STAYS_SILENT = "https://silent.example.org/guide";
 	private static final String ADDRESS_THAT_IS_GONE = "https://example.org/gone";
 
-	private final MarkdownService service = MarkdownService.builder()
+	private final MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 			.withLocalFileSystemResourceResolver()
 			.withUriReachabilityCheck(reachabilityOfTheCorpus())
 			.build();

@@ -163,7 +163,7 @@ public class AnchorValidationTest {
 		Files.writeString(this.documentDirectory.resolve("SomeClass.java"), "class SomeClass {}\n");
 		RecordingAnchorValidator javaValidator = new RecordingAnchorValidator(".java");
 		MarkdownService serviceKnowingJava =
-				MarkdownService.builder().withAnchorValidator(javaValidator).build();
+				MarkdownService.builderNotCheckingUriReachability().withAnchorValidator(javaValidator).build();
 
 		String markdown = "See [the method](SomeClass.java#doSomething) for details.\n";
 
@@ -183,7 +183,7 @@ public class AnchorValidationTest {
 		Files.writeString(this.documentDirectory.resolve("guide.md"), "# Guide {#guide}\n");
 		RecordingAnchorValidator markdownValidator = new RecordingAnchorValidator(".md");
 		MarkdownService serviceWithItsOwnRule =
-				MarkdownService.builder().withAnchorValidator(markdownValidator).build();
+				MarkdownService.builderNotCheckingUriReachability().withAnchorValidator(markdownValidator).build();
 
 		String markdown = "See the [installation](guide.md#installation) for details.\n";
 

@@ -46,14 +46,18 @@ import com.vladsch.flexmark.util.misc.Extension;
  * 
  * <p>Use the parameter-less constructor to get a service with the default configuration.
  * If the underlying Markdown parser and HTML renderer needs to be customized, e.g. by adding
- * further flexmark extensions or by setting flexmark options, use the {@link #builder()}:</p>
+ * further flexmark extensions or by setting flexmark options, use a builder:</p>
  * 
  * <pre>
- * MarkdownService service = MarkdownService.builder()
+ * MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
  *         .withExtension(SomeFlexmarkExtension.create())
  *         .withOption(SomeExtension.SOME_OPTION, "some value")
  *         .build();
  * </pre>
+ * 
+ * <p>Neither that builder nor the parameter-less constructor asks an address a document names
+ * whether it is there, so nothing here needs a network. Whoever wants the addresses asked about
+ * says so, which is what {@link #builderCheckingUriReachability()} is for.</p>
  * 
  * <p>Markdown documents refer to other documents, to images and to directories. Where those live
  * is nothing this service knows: a {@link ResourceResolver} of the surrounding environment answers
@@ -73,8 +77,11 @@ public class MarkdownService {
 
 	/**
 	 * Creates a service using the default Markdown parser and HTML renderer configuration
-	 * and resolving references in the local file system.
-	 * Use {@link #builder()} if you need to customize the parser, the renderer or the resolver.
+	 * and resolving references in the local file system, without asking an address a document
+	 * names whether it is there.
+	 * Use {@link #builderNotCheckingUriReachability()} if you need to customize the parser, the
+	 * renderer or the resolver, and {@link #builderCheckingUriReachability()} if the addresses
+	 * shall be asked about.
 	 */
 	public MarkdownService() {
 		this(new MarkdownParserAndHtmlRenderer(), ResourceResolverRegistry.ofLocalFileSystem());
@@ -172,11 +179,18 @@ public class MarkdownService {
 	}
 
 	/**
-	 * Creates a builder for a service with a customized Markdown parser and HTML renderer.
+	 * Creates a builder for a service with a customized Markdown parser and HTML renderer, which
+	 * does not ask any address a document names whether it is there.
+	 * 
+	 * <p>A document naming a web address is read and validated without a network, and an address
+	 * leading nowhere stays unreported, because asking costs time and a network, which is nothing
+	 * a caller should pay without saying so. Whoever wants the addresses asked about starts from
+	 * {@link #builderCheckingUriReachability()} or says
+	 * {@link Builder#withUriReachabilityCheck()} here.</p>
 	 * 
 	 * @return a new builder, never <code>null</code>
 	 */
-	public static Builder builder() {
+	public static Builder builderNotCheckingUriReachability() {
 		return new Builder();
 	}
 
