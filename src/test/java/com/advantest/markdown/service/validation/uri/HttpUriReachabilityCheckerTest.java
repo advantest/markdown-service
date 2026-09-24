@@ -143,7 +143,7 @@ class HttpUriReachabilityCheckerTest {
 		HttpUriReachabilityChecker checker = checkerUsing(httpClient);
 
 		checker.check(SOME_ADDRESS);
-		checker.clearCache();
+		checker.clearCaches();
 		checker.check(SOME_ADDRESS);
 
 		verify(httpClient, times(2)).sendAsync(any(), any());

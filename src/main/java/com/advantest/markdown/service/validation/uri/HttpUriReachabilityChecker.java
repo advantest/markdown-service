@@ -39,7 +39,7 @@ import org.slf4j.LoggerFactory;
  * it, and an address is asked about only once even while several documents are validated at the
  * same time: the answer is put into the cache while it is still being waited for, so a second
  * document waits for the same request instead of starting another one. Nothing expires by itself,
- * so a checker living in a long running program is told to {@link #clearCache() forget} what it
+ * so a checker living in a long running program is told to {@link #clearCaches() forget} what it
  * knows when its answers may have gone stale.</p>
  * 
  * <p>Two times bound the asking: how long the far side has to accept the connection, and how long
@@ -172,7 +172,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker 
 	/**
 	 * Forgets every answer, so that every address is asked again.
 	 */
-	public void clearCache() {
+	public void clearCaches() {
 		this.answersByUri.clear();
 	}
 
