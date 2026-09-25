@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.parsing.LinkTarget;
 import com.advantest.markdown.service.parsing.MarkdownParsingTools;
 import com.advantest.markdown.service.parsing.RegexMatch;
@@ -82,11 +83,14 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * Creates the validator, resolving everything a link points to with the given resolvers and
 	 * checking no target naming a scheme.
 	 * 
+	 * @param parserAndRenderer the parser telling where a document came from, must not be
+	 *                          <code>null</code>
 	 * @param resourceResolvers the resolvers of the surrounding environment, must not be
 	 *                          <code>null</code>
 	 */
-	MarkdownLinkValidator(ResourceResolverRegistry resourceResolvers) {
-		this(resourceResolvers, List.of(), List.of());
+	MarkdownLinkValidator(MarkdownParserAndHtmlRenderer parserAndRenderer,
+			ResourceResolverRegistry resourceResolvers) {
+		this(parserAndRenderer, resourceResolvers, List.of(), List.of());
 	}
 
 	/**
@@ -94,6 +98,8 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 * handing a target naming a scheme to the given URI validators and a fragment of a target to
 	 * the given anchor validators.
 	 * 
+	 * @param parserAndRenderer the parser telling where a document came from, must not be
+	 *                          <code>null</code>
 	 * @param resourceResolvers the resolvers of the surrounding environment, must not be
 	 *                          <code>null</code>
 	 * @param uriValidators the validators of a target naming a scheme, asked in the given order, so
@@ -103,13 +109,16 @@ class MarkdownLinkValidator implements MarkdownValidator {
 	 *                         given order, so that the first one saying it is responsible answers
 	 *                         for a target, must not be <code>null</code>
 	 */
-	MarkdownLinkValidator(ResourceResolverRegistry resourceResolvers, List<UriValidator> uriValidators,
+	MarkdownLinkValidator(MarkdownParserAndHtmlRenderer parserAndRenderer,
+			ResourceResolverRegistry resourceResolvers, List<UriValidator> uriValidators,
 			List<AnchorValidator> anchorValidators) {
 
-		if (resourceResolvers == null || uriValidators == null || anchorValidators == null) {
+		if (parserAndRenderer == null || resourceResolvers == null || uriValidators == null
+				|| anchorValidators == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
-		this.relativePathValidator = new RelativePathValidator(resourceResolvers.relativePathResolver());
+		this.relativePathValidator =
+				new RelativePathValidator(parserAndRenderer, resourceResolvers.relativePathResolver());
 		this.uriValidators = List.copyOf(uriValidators);
 		this.anchorValidators = List.copyOf(anchorValidators);
 	}

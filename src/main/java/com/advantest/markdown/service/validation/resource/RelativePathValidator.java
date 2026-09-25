@@ -33,18 +33,24 @@ import com.vladsch.flexmark.util.ast.Document;
  */
 public class RelativePathValidator {
 
+	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
+
 	private final RelativePathResourceResolver resourceResolver;
 
 	/**
 	 * Creates the validator, resolving what a path points to with the given resolver.
 	 * 
+	 * @param parserAndRenderer the parser telling where a document came from, must not be
+	 *                          <code>null</code>
 	 * @param resourceResolver the resolver answering for the paths this validator is given, must
 	 *                         not be <code>null</code>
 	 */
-	public RelativePathValidator(RelativePathResourceResolver resourceResolver) {
-		if (resourceResolver == null) {
-			throw new IllegalArgumentException("Argument must not be null.");
+	public RelativePathValidator(MarkdownParserAndHtmlRenderer parserAndRenderer,
+			RelativePathResourceResolver resourceResolver) {
+		if (parserAndRenderer == null || resourceResolver == null) {
+			throw new IllegalArgumentException("Arguments must not be null.");
 		}
+		this.parserAndRenderer = parserAndRenderer;
 		this.resourceResolver = resourceResolver;
 	}
 
@@ -79,7 +85,7 @@ public class RelativePathValidator {
 		int endOffset = startOffset + target.path().length();
 		int lineNumber = TextUtils.getLineNumberForOffset(document, startOffset);
 
-		Resource documentResource = MarkdownParserAndHtmlRenderer.getDocumentResource(document);
+		Resource documentResource = this.parserAndRenderer.getDocumentResource(document);
 		if (UnresolvedResource.UNKNOWN_DOCUMENT.equals(documentResource)) {
 			// a target is resolved relative to the document, so without knowing where the document
 			// is there is nothing to look for

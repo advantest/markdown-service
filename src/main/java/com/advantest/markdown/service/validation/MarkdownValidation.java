@@ -76,7 +76,8 @@ public class MarkdownValidation {
 			List<UriValidator> uriValidators,
 			List<AnchorValidator> anchorValidators) {
 		this(parserAndRenderer,
-				List.of(new MarkdownLinkValidator(resourceResolvers, uriValidators, anchorValidators),
+				List.of(new MarkdownLinkValidator(parserAndRenderer, resourceResolvers, uriValidators,
+								anchorValidators),
 						new MarkdownAnchorValidator()));
 	}
 
