@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -124,7 +125,7 @@ class MarkdownServiceTest {
 
 		String html = serviceWithDefaultDelegate.parseMarkdownAndRenderHtml("Hello *world*");
 
-		assertTrue(html.contains("<em>world</em>"));
+		assertTrue(Pattern.compile("<em[^>]*>world</em>").matcher(html).find());
 	}
 
 	@Test

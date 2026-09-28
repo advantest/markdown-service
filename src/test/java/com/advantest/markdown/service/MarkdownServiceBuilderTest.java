@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
@@ -127,7 +128,8 @@ class MarkdownServiceBuilderTest {
 		MarkdownService service = MarkdownService.builderNotCheckingUriReachability().build();
 
 		assertNotNull(service);
-		assertTrue(service.parseMarkdownAndRenderHtml("Hello *world*").contains("<em>world</em>"));
+		assertTrue(Pattern.compile("<em[^>]*>world</em>")
+				.matcher(service.parseMarkdownAndRenderHtml("Hello *world*")).find());
 	}
 
 	@Test
