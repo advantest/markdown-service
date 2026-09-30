@@ -6,10 +6,12 @@
  */
 package com.advantest.markdown.service;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -36,11 +38,14 @@ import com.advantest.resources.UnresolvedResource;
 import com.advantest.resources.UriResolver;
 import com.advantest.markdown.service.validation.MarkdownValidation;
 import com.advantest.markdown.service.validation.ValidationIssue;
+import com.advantest.plantuml.PlantUmlSettings;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.DataKey;
 import com.vladsch.flexmark.util.data.NullableDataKey;
 import com.vladsch.flexmark.util.misc.Extension;
+
+import net.sourceforge.plantuml.security.SecurityProfile;
 
 /**
  * Facade offering Markdown parsing, HTML rendering and validation features.
@@ -133,6 +138,7 @@ public class MarkdownService {
 				|| anchorValidators == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
+		useTheUsualDotExecutableWhereNobodyNamedOne();
 		this.parserAndRenderer = parserAndRenderer;
 		this.validation = new MarkdownValidation(parserAndRenderer, resourceResolvers,
 				withShippedValidators(uriValidators, uriReachabilityChecker),
@@ -217,6 +223,133 @@ public class MarkdownService {
 	 */
 	Optional<UriReachabilityChecker> getUriReachabilityChecker() {
 		return Optional.ofNullable(this.uriReachabilityChecker);
+	}
+
+	/**
+	 * Names the Graphviz <code>dot</code> executable PlantUML runs to lay a diagram out.
+	 * 
+	 * <p>This is a setting of the machine rather than of a service: PlantUML keeps it once for the
+	 * whole process, so it applies to every diagram rendered afterwards, no matter which service
+	 * renders it. That is why it is said here and not on a builder, which would promise a scope
+	 * that does not exist.</p>
+	 * 
+	 * <p>What is named here wins over the <code>GRAPHVIZ_DOT</code> system property and over the
+	 * environment variable of that name, so that an application offering its user a setting can
+	 * let the user's choice win over what the machine happens to say. Where nobody names one, a
+	 * service built afterwards takes the place Graphviz is usually installed at on the operating
+	 * system it runs on, and where nothing is there either, PlantUML falls back to the Graphviz it
+	 * carries inside itself, which lays a graph out differently than an installed one does.</p>
+	 * 
+	 * @param dotExecutablePath the path of the executable, which must name an existing file that
+	 *                          can be run; <code>null</code> or blank takes the name back
+	 * @throws IllegalArgumentException if the given path names nothing that can be run
+	 */
+	public static void setDotExecutable(String dotExecutablePath) {
+		PlantUmlSettings.setDotExecutable(dotExecutablePath);
+	}
+
+	/**
+	 * Tells which Graphviz <code>dot</code> executable PlantUML runs, as far as anybody named one.
+	 * 
+	 * @return the path of the executable, or {@link Optional#empty()} where nobody named one
+	 */
+	public static Optional<String> getDotExecutable() {
+		return Optional.ofNullable(PlantUmlSettings.getDotExecutable());
+	}
+
+	/**
+	 * Sets the security profile PlantUML applies, which decides whether a diagram may read a file
+	 * of the machine it runs on and whether it may read an address.
+	 * 
+	 * <p>The choice belongs to whoever runs this service and it is not one that may be made in
+	 * passing: {@link SecurityProfile#INSECURE} lets a diagram read any file of the machine, which
+	 * is what an editor working on the files of its user wants and what a server rendering a
+	 * document somebody sent it must never do. Where nothing is said here, the profile PlantUML
+	 * chooses itself applies, so this library never raises it quietly.</p>
+	 * 
+	 * <p>PlantUML reads its profile once and keeps it for the rest of the process, so this has to
+	 * be said before the first diagram is rendered.</p>
+	 * 
+	 * @param profile the profile to apply, must not be <code>null</code>
+	 * @throws IllegalStateException if PlantUML already read a different profile
+	 */
+	public static void setPlantUmlSecurityProfile(SecurityProfile profile) {
+		PlantUmlSettings.setSecurityProfile(profile);
+	}
+
+	/**
+	 * Tells the security profile PlantUML applies, reading it where it was not read yet, so that
+	 * it cannot be changed afterwards.
+	 * 
+	 * @return the profile that applies, never <code>null</code>
+	 */
+	public static SecurityProfile getPlantUmlSecurityProfile() {
+		return PlantUmlSettings.getSecurityProfile();
+	}
+
+	/**
+	 * Sets the addresses a diagram may read, replacing whatever was allowed before.
+	 * 
+	 * <p>They only have an effect under the security profile {@link SecurityProfile#ALLOWLIST},
+	 * where a diagram may read the addresses named here and no other.</p>
+	 * 
+	 * @param urls the addresses a diagram may read, must not be <code>null</code>
+	 */
+	public static void setPlantUmlUrlAllowList(List<String> urls) {
+		PlantUmlSettings.setUrlAllowList(urls);
+	}
+
+	/**
+	 * Tells which addresses a diagram may read, as far as anybody allowed one.
+	 * 
+	 * @return the allowed addresses in the order they were allowed in, never <code>null</code>
+	 */
+	public static List<String> getPlantUmlUrlAllowList() {
+		return PlantUmlSettings.getUrlAllowList();
+	}
+
+	/**
+	 * Names the place Graphviz is usually installed at, so that a diagram is laid out by the
+	 * Graphviz of the machine rather than by the one PlantUML carries inside itself. Whatever
+	 * anybody named before stays, and a place nothing is installed at is no reason to complain:
+	 * PlantUML then renders as it did before.
+	 */
+	private static void useTheUsualDotExecutableWhereNobodyNamedOne() {
+		if (PlantUmlSettings.getDotExecutable() != null) {
+			return;
+		}
+
+		String usualPath = usualDotExecutablePath();
+		if (usualPath == null) {
+			return;
+		}
+
+		File executable = new File(usualPath);
+		if (executable.isFile() && executable.canExecute()) {
+			PlantUmlSettings.setDotExecutable(usualPath);
+		}
+	}
+
+	/**
+	 * Tells where Graphviz is usually installed on the operating system this runs on, whether
+	 * anything is installed there or not.
+	 * 
+	 * @return the path, or <code>null</code> on an operating system this library knows no usual
+	 *         place of, where PlantUML decides alone
+	 */
+	static String usualDotExecutablePath() {
+		String operatingSystem = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+		if (operatingSystem.startsWith("windows")) {
+			return "C:\\Program Files\\Graphviz\\bin\\dot.exe";
+		}
+		if (operatingSystem.startsWith("mac")) {
+			return "/usr/local/bin/dot";
+		}
+		if (operatingSystem.contains("nix") || operatingSystem.contains("nux")
+				|| operatingSystem.contains("aix")) {
+			return "/usr/bin/dot";
+		}
+		return null;
 	}
 
 	/**
