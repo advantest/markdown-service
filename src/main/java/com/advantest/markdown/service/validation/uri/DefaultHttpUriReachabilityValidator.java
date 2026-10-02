@@ -7,7 +7,6 @@
 package com.advantest.markdown.service.validation.uri;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
 import com.advantest.markdown.service.validation.IssueSeverity;
@@ -97,17 +96,15 @@ public class DefaultHttpUriReachabilityValidator implements UriValidator {
 	 * This is asked together with the question whether the text carries the separator after the scheme,
 	 * because {@code https:/example.org} is read as a URI naming {@code https} as well and is none of this
 	 * validator's business: it is an address nobody can ask, and {@link HttpUriSyntaxValidator} answers
-	 * for it instead. A scheme is written in either case, so it is
-	 * compared in lower case, folded with {@link Locale#ROOT} so that the answer does not depend on the
-	 * language of the machine the library runs on.
+	 * for it instead. A scheme is written in either case, so it is compared ignoring the case and without
+	 * folding the text first, so that asking this of every target of a document builds no string.
 	 *
 	 * @param target the target to ask, never {@code null}
 	 * @return whether the target was read as a URI naming one of the two schemes
 	 */
 	private static boolean namesTheHttpScheme(UriTarget target) {
 		return target.scheme()
-				.map(scheme -> scheme.toLowerCase(Locale.ROOT))
-				.filter(scheme -> SCHEME_HTTP.equals(scheme) || SCHEME_HTTPS.equals(scheme))
+				.filter(scheme -> SCHEME_HTTP.equalsIgnoreCase(scheme) || SCHEME_HTTPS.equalsIgnoreCase(scheme))
 				.isPresent();
 	}
 
