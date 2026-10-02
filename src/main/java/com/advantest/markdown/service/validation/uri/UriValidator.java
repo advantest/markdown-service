@@ -27,10 +27,10 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * target no validator claims is left alone rather than reported.</p>
  * 
  * <p>Claiming a target does two things. The validator answers for it, alone, and the target is
- * taken away from the check asking an address whether it is there: that check is asked last and
- * only about a target no validator claimed. A validator may therefore claim a target it has
- * nothing to say about and report nothing, which is how an address that must not be fetched, e.g.
- * one inside a network the check cannot reach, is kept away from it.</p>
+ * taken away from the validators this library ships, among them the one asking an address whether
+ * it is there, because those are asked after the registered ones. A validator may therefore claim
+ * a target it has nothing to say about and report nothing, which is how an address that must not
+ * be fetched, e.g. one inside a network the check cannot reach, is kept away from it.</p>
  * 
  * <p>A validator that cannot do its work says so by throwing an unchecked exception, or by breaking
  * the promise it gave. It then loses what it would have found about that target, and nothing else:

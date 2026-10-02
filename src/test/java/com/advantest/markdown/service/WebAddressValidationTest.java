@@ -59,6 +59,30 @@ class WebAddressValidationTest {
 	}
 
 	@Test
+	void addressNobodyCanAskAboutIsStillReportedAsNoAddress() {
+		MarkdownService serviceAskingNobody = new MarkdownService();
+
+		List<ValidationIssue> issues =
+				serviceAskingNobody.validateMarkdown("[label](https:/example.org/guide)");
+
+		assertEquals(1, issues.size());
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, issues.get(0).issueTypeId());
+		assertTrue(issues.get(0).message().contains("It has to start with https:// or http://"),
+				issues.get(0).message());
+	}
+
+	@Test
+	void addressNobodyCanReadIsStillReportedWithoutAnybodyBeingAsked() {
+		MarkdownService serviceAskingNobody = new MarkdownService();
+
+		List<ValidationIssue> issues =
+				serviceAskingNobody.validateMarkdown("[label](https://example.org/^guide)");
+
+		assertEquals(1, issues.size());
+		assertEquals(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, issues.get(0).issueTypeId());
+	}
+
+	@Test
 	void addressOfADocumentIsAskedAboutOnceACallerSaysSo() {
 		KnownAddresses addresses = new KnownAddresses(Map.of());
 		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()

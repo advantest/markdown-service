@@ -22,6 +22,7 @@ import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.validation.uri.DefaultHttpUriReachabilityValidator;
 import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
+import com.advantest.markdown.service.validation.uri.HttpUriSyntaxValidator;
 import com.advantest.markdown.service.validation.uri.UnknownSchemeUriValidator;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriTarget;
@@ -185,14 +186,21 @@ public class MarkdownService {
 
 	/**
 	 * Puts the validators this library ships behind the ones a caller registered, so that a caller
-	 * knowing a target better answers for it first. The web addresses are only checked where a
-	 * caller said that addresses may be asked about at all; a scheme nobody knows is reported
-	 * either way, because saying so costs nothing.
+	 * knowing a target better answers for it first. What a web address has to look like is said
+	 * either way, because reading the target text asks nobody; whether an address is there is only
+	 * asked where a caller said that addresses may be asked about at all. A scheme nobody knows is
+	 * reported either way as well, because saying so costs nothing.
+	 * 
+	 * <p>The two validators about web addresses claim targets that exclude each other &mdash; one
+	 * a text meant as an address and readable as none, the other an address that can be read
+	 * &mdash; so the order between them says nothing, and neither of them keeps a target from the
+	 * other.</p>
 	 */
 	private static List<UriValidator> withShippedValidators(List<UriValidator> registeredValidators,
 			UriReachabilityChecker uriReachabilityChecker) {
 
 		List<UriValidator> validatorsAskedInOrder = new ArrayList<>(registeredValidators);
+		validatorsAskedInOrder.add(new HttpUriSyntaxValidator());
 		if (uriReachabilityChecker != null) {
 			validatorsAskedInOrder.add(new DefaultHttpUriReachabilityValidator(uriReachabilityChecker));
 		}

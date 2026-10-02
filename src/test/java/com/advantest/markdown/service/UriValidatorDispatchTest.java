@@ -169,6 +169,28 @@ class UriValidatorDispatchTest {
 	}
 
 	@Test
+	void validatorOfACallerKeepsABrokenAddressFromTheShippedOne() {
+		List<ValidationIssue> issues = MarkdownService.builderNotCheckingUriReachability()
+				.withUriValidator(new UriValidator() {
+
+					@Override
+					public boolean isResponsibleFor(UriTarget target) {
+						return target.uriText().startsWith("https:");
+					}
+
+					@Override
+					public CompletableFuture<List<ValidationIssue>> validate(UriTarget target,
+							MarkdownValidationContext context) {
+						return CompletableFuture.completedFuture(List.of());
+					}
+				})
+				.build()
+				.validateMarkdown("[label](https:/example.org/guide)");
+
+		assertTrue(issues.isEmpty());
+	}
+
+	@Test
 	void everyTargetOfADocumentIsCheckedWhereItStands() {
 		RecordingUriValidator webAddresses = new RecordingUriValidator("https", "web addresses");
 

@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
@@ -76,11 +75,11 @@ class DefaultHttpUriReachabilityValidatorTest {
 	}
 
 	@Test
-	void validatorAnswersForATextThatOnlyLooksLikeAWebAddress() {
+	void validatorLeavesATextThatOnlyLooksLikeAWebAddressAlone() {
 		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 
-		assertTrue(validator.isResponsibleFor(targetOf("https:/example.org/guide")));
-		assertTrue(validator.isResponsibleFor(targetOf("https://example.org/a guide")));
+		assertFalse(validator.isResponsibleFor(targetOf("https:/example.org/guide")));
+		assertFalse(validator.isResponsibleFor(targetOf("https://example.org/a guide")));
 	}
 
 	@Test
@@ -98,55 +97,6 @@ class DefaultHttpUriReachabilityValidatorTest {
 
 		assertThrows(IllegalArgumentException.class, () -> validator.isResponsibleFor(null));
 		assertThrows(IllegalArgumentException.class, () -> validator.validate(null, CONTEXT));
-	}
-
-	@Test
-	void addressNotBeginningWithAWebSchemeIsReported() {
-		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
-
-		List<ValidationIssue> issues = validator.validate(targetOf("https:/example.org/guide"), CONTEXT)
-				.join();
-
-		assertEquals(1, issues.size());
-		ValidationIssue issue = issues.get(0);
-		assertEquals(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, issue.issueTypeId());
-		assertEquals(IssueSeverity.ERROR, issue.severity());
-		assertEquals("The referenced web address 'https:/example.org/guide' seems not to be a valid"
-				+ " HTTP web address. It has to start with https:// or http://", issue.message());
-	}
-
-	@Test
-	void addressNotBeginningWithAWebSchemeIsNotAskedAbout() {
-		StubbedReachabilityChecker checker = new StubbedReachabilityChecker(REACHED);
-
-		new DefaultHttpUriReachabilityValidator(checker).validate(targetOf("https:/example.org/guide"), CONTEXT);
-
-		assertTrue(checker.askedAddresses.isEmpty());
-	}
-
-	@Test
-	void addressThatCannotBeReadIsReportedWithTheReasonItCannotBeRead() {
-		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
-
-		List<ValidationIssue> issues = validator.validate(targetOf("https://example.org/a guide"), CONTEXT)
-				.join();
-
-		assertEquals(1, issues.size());
-		ValidationIssue issue = issues.get(0);
-		assertEquals(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS, issue.issueTypeId());
-		assertEquals(IssueSeverity.ERROR, issue.severity());
-		assertTrue(issue.message().startsWith("The referenced web address 'https://example.org/a guide'"
-				+ " seems not to be a valid HTTP web address. "), issue.message());
-		assertTrue(issue.message().contains("Illegal character in path"), issue.message());
-	}
-
-	@Test
-	void addressThatCannotBeReadIsNotAskedAbout() {
-		StubbedReachabilityChecker checker = new StubbedReachabilityChecker(REACHED);
-
-		new DefaultHttpUriReachabilityValidator(checker).validate(targetOf("https://example.org/a guide"), CONTEXT);
-
-		assertTrue(checker.askedAddresses.isEmpty());
 	}
 
 	@Test
@@ -238,28 +188,6 @@ class DefaultHttpUriReachabilityValidatorTest {
 		assertEquals(1, issues.size());
 		assertEquals("The referenced web address 'http://example.org/gone' is not reachable"
 				+ " (HTTP status code 404).", issues.get(0).message());
-	}
-
-	@Test
-	void addressThatCannotBeReadIsRecognizedWhicheverSchemeItNames() {
-		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
-
-		assertTrue(validator.isResponsibleFor(targetOf("http://example.org/a guide")));
-		assertEquals(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS,
-				validator.validate(targetOf("http://example.org/a guide"), CONTEXT).join().get(0).issueTypeId());
-	}
-
-	@Test
-	void addressHandedOverAsNoneWithoutAReasonIsReportedWithoutOne() {
-		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
-		UriTarget targetSayingItIsNoUri =
-				new UriTarget("https://example.org/guide", Optional.empty(), 1, 0, 25);
-
-		List<ValidationIssue> issues = validator.validate(targetSayingItIsNoUri, CONTEXT).join();
-
-		assertEquals(1, issues.size());
-		assertEquals("The referenced web address 'https://example.org/guide' seems not to be a valid"
-				+ " HTTP web address. ", issues.get(0).message());
 	}
 
 	private static DefaultHttpUriReachabilityValidator validatorAnswering(UriReachability reachability) {
