@@ -29,7 +29,7 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * Tests what the shipped validator of web addresses answers for a target, and which target it
  * answers for at all.
  */
-class DefaultHttpUriValidatorTest {
+class DefaultHttpUriReachabilityValidatorTest {
 
 	/** No validator of this test looks into another document, so what the context parses is never asked. */
 	private static final MarkdownValidationContext CONTEXT =
@@ -57,12 +57,12 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void validatorNeedsACheckToAskWith() {
-		assertThrows(IllegalArgumentException.class, () -> new DefaultHttpUriValidator(null));
+		assertThrows(IllegalArgumentException.class, () -> new DefaultHttpUriReachabilityValidator(null));
 	}
 
 	@Test
 	void validatorAnswersForAWebAddress() {
-		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 
 		assertTrue(validator.isResponsibleFor(targetOf("https://example.org/guide")));
 		assertTrue(validator.isResponsibleFor(targetOf("http://example.org/guide")));
@@ -70,14 +70,14 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void validatorAnswersForAWebAddressWhateverItIsWrittenLike() {
-		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 
 		assertTrue(validator.isResponsibleFor(targetOf("HTTPS://Example.org/guide")));
 	}
 
 	@Test
 	void validatorAnswersForATextThatOnlyLooksLikeAWebAddress() {
-		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 
 		assertTrue(validator.isResponsibleFor(targetOf("https:/example.org/guide")));
 		assertTrue(validator.isResponsibleFor(targetOf("https://example.org/a guide")));
@@ -85,7 +85,7 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void validatorLeavesEveryOtherSchemeAlone() {
-		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 
 		assertFalse(validator.isResponsibleFor(targetOf("mailto:someone@example.org")));
 		assertFalse(validator.isResponsibleFor(targetOf("ftp://example.org/guide")));
@@ -94,7 +94,7 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void validatorRejectsATargetItIsNotGiven() {
-		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 
 		assertThrows(IllegalArgumentException.class, () -> validator.isResponsibleFor(null));
 		assertThrows(IllegalArgumentException.class, () -> validator.validate(null, CONTEXT));
@@ -102,7 +102,7 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void addressNotBeginningWithAWebSchemeIsReported() {
-		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 
 		List<ValidationIssue> issues = validator.validate(targetOf("https:/example.org/guide"), CONTEXT)
 				.join();
@@ -119,14 +119,14 @@ class DefaultHttpUriValidatorTest {
 	void addressNotBeginningWithAWebSchemeIsNotAskedAbout() {
 		StubbedReachabilityChecker checker = new StubbedReachabilityChecker(REACHED);
 
-		new DefaultHttpUriValidator(checker).validate(targetOf("https:/example.org/guide"), CONTEXT);
+		new DefaultHttpUriReachabilityValidator(checker).validate(targetOf("https:/example.org/guide"), CONTEXT);
 
 		assertTrue(checker.askedAddresses.isEmpty());
 	}
 
 	@Test
 	void addressThatCannotBeReadIsReportedWithTheReasonItCannotBeRead() {
-		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 
 		List<ValidationIssue> issues = validator.validate(targetOf("https://example.org/a guide"), CONTEXT)
 				.join();
@@ -144,14 +144,14 @@ class DefaultHttpUriValidatorTest {
 	void addressThatCannotBeReadIsNotAskedAbout() {
 		StubbedReachabilityChecker checker = new StubbedReachabilityChecker(REACHED);
 
-		new DefaultHttpUriValidator(checker).validate(targetOf("https://example.org/a guide"), CONTEXT);
+		new DefaultHttpUriReachabilityValidator(checker).validate(targetOf("https://example.org/a guide"), CONTEXT);
 
 		assertTrue(checker.askedAddresses.isEmpty());
 	}
 
 	@Test
 	void addressThatDoesNotAnswerIsReportedAsAWarning() {
-		DefaultHttpUriValidator validator =
+		DefaultHttpUriReachabilityValidator validator =
 				validatorAnswering(new UriReachability.NotReached("HTTP connect timed out"));
 
 		List<ValidationIssue> issues = validator.validate(targetOf("https://plantxyzuml.com"), CONTEXT)
@@ -167,7 +167,7 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void addressAnsweringThatThereIsNothingThereIsReported() {
-		DefaultHttpUriValidator validator = validatorAnswering(new UriReachability.Answered(404));
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(new UriReachability.Answered(404));
 
 		List<ValidationIssue> issues = validator.validate(targetOf("https://example.org/gone"), CONTEXT)
 				.join();
@@ -182,7 +182,7 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void addressAnsweringThatItIsBrokenItselfIsReportedAsWell() {
-		DefaultHttpUriValidator validator = validatorAnswering(new UriReachability.Answered(500));
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(new UriReachability.Answered(500));
 
 		List<ValidationIssue> issues = validator.validate(targetOf("https://example.org/broken"), CONTEXT)
 				.join();
@@ -194,7 +194,7 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void addressThatIsThereIsNotReported() {
-		DefaultHttpUriValidator validator = validatorAnswering(new UriReachability.Answered(200));
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(new UriReachability.Answered(200));
 
 		assertTrue(validator.validate(targetOf("https://example.org/guide"), CONTEXT).join().isEmpty());
 	}
@@ -211,14 +211,14 @@ class DefaultHttpUriValidatorTest {
 	void addressIsAskedAboutAsItIsWritten() {
 		StubbedReachabilityChecker checker = new StubbedReachabilityChecker(REACHED);
 
-		new DefaultHttpUriValidator(checker).validate(targetOf("https://example.org/guide?q=1#top"), CONTEXT);
+		new DefaultHttpUriReachabilityValidator(checker).validate(targetOf("https://example.org/guide?q=1#top"), CONTEXT);
 
 		assertEquals(List.of(URI.create("https://example.org/guide?q=1#top")), checker.askedAddresses);
 	}
 
 	@Test
 	void reportedProblemMarksTheWholeAddressWhereItStands() {
-		DefaultHttpUriValidator validator = validatorAnswering(new UriReachability.Answered(404));
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(new UriReachability.Answered(404));
 		UriTarget target = UriTarget.of("https://example.org/gone", 7, 120, 144);
 
 		ValidationIssue issue = validator.validate(target, CONTEXT).join().get(0);
@@ -230,7 +230,7 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void addressWrittenWithoutTheSecureSchemeIsCheckedTheSameWay() {
-		DefaultHttpUriValidator validator = validatorAnswering(new UriReachability.Answered(404));
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(new UriReachability.Answered(404));
 
 		List<ValidationIssue> issues = validator.validate(targetOf("http://example.org/gone"), CONTEXT)
 				.join();
@@ -242,7 +242,7 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void addressThatCannotBeReadIsRecognizedWhicheverSchemeItNames() {
-		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 
 		assertTrue(validator.isResponsibleFor(targetOf("http://example.org/a guide")));
 		assertEquals(MarkdownIssueTypes.LINK_HTTP_INVALID_WEB_ADDRESS,
@@ -251,7 +251,7 @@ class DefaultHttpUriValidatorTest {
 
 	@Test
 	void addressHandedOverAsNoneWithoutAReasonIsReportedWithoutOne() {
-		DefaultHttpUriValidator validator = validatorAnswering(REACHED);
+		DefaultHttpUriReachabilityValidator validator = validatorAnswering(REACHED);
 		UriTarget targetSayingItIsNoUri =
 				new UriTarget("https://example.org/guide", Optional.empty(), 1, 0, 25);
 
@@ -262,8 +262,8 @@ class DefaultHttpUriValidatorTest {
 				+ " HTTP web address. ", issues.get(0).message());
 	}
 
-	private static DefaultHttpUriValidator validatorAnswering(UriReachability reachability) {
-		return new DefaultHttpUriValidator(new StubbedReachabilityChecker(reachability));
+	private static DefaultHttpUriReachabilityValidator validatorAnswering(UriReachability reachability) {
+		return new DefaultHttpUriReachabilityValidator(new StubbedReachabilityChecker(reachability));
 	}
 
 	private static UriTarget targetOf(String text) {

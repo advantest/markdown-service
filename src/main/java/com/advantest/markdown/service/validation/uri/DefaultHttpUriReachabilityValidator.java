@@ -32,7 +32,7 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * exactly what a reader of the document would run into. It answers for nothing else: what a target
  * naming another scheme has to look like is known by whoever owns that scheme.</p>
  */
-public class DefaultHttpUriValidator implements UriValidator {
+public class DefaultHttpUriReachabilityValidator implements UriValidator {
 
 	private static final String SCHEME_HTTP = "http";
 
@@ -47,7 +47,7 @@ public class DefaultHttpUriValidator implements UriValidator {
 	 *                            <code>null</code>
 	 * @throws IllegalArgumentException if the given check is <code>null</code>
 	 */
-	public DefaultHttpUriValidator(UriReachabilityChecker reachabilityChecker) {
+	public DefaultHttpUriReachabilityValidator(UriReachabilityChecker reachabilityChecker) {
 		if (reachabilityChecker == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}

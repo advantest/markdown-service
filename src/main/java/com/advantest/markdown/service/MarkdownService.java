@@ -20,7 +20,7 @@ import java.util.stream.Stream;
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
-import com.advantest.markdown.service.validation.uri.DefaultHttpUriValidator;
+import com.advantest.markdown.service.validation.uri.DefaultHttpUriReachabilityValidator;
 import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UnknownSchemeUriValidator;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
@@ -194,7 +194,7 @@ public class MarkdownService {
 
 		List<UriValidator> validatorsAskedInOrder = new ArrayList<>(registeredValidators);
 		if (uriReachabilityChecker != null) {
-			validatorsAskedInOrder.add(new DefaultHttpUriValidator(uriReachabilityChecker));
+			validatorsAskedInOrder.add(new DefaultHttpUriReachabilityValidator(uriReachabilityChecker));
 		}
 		validatorsAskedInOrder.add(new UnknownSchemeUriValidator());
 
