@@ -12,15 +12,17 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.resources.Resource;
+import com.advantest.resources.ResourceContentsCache;
 import com.vladsch.flexmark.util.ast.Document;
 
 /**
  * A {@link MarkdownValidationContext} reading every resource at most once.
  * 
- * <p>What was read is remembered under the resource's {@link Resource#getResolvedPath() resolved
- * path}, which is what tells two resources apart for whoever resolved them. A resource nobody
- * resolved has no such name, so nothing is remembered for it; asking for its Markdown document is
- * refused, as asking for any resource not named like a Markdown file is.</p>
+ * <p>What was read is remembered by a {@link ResourceContentsCache} of its own, which lives as long
+ * as this context and tells two resources apart by their {@link Resource#getResolvedPath() resolved
+ * path}. A resource nobody resolved has no such name, so it is read every time it is asked for;
+ * asking for its Markdown document is refused, as asking for any resource not named like a Markdown
+ * file is.</p>
  * 
  * <p>A failure of reading is remembered as well: a resource that cannot be read is not read again
  * for the next link pointing into it, and every one of those links is still told what went wrong.
@@ -29,14 +31,14 @@ import com.vladsch.flexmark.util.ast.Document;
  * 
  * <p>One instance belongs to one run, and a run is not one thread: a check that cannot answer at
  * once is waited for after the document has been walked, and what it does in between reads
- * resources through this context. Both maps therefore bear being read and written at the same
- * time, and a resource two threads ask for at once is read once.</p>
+ * resources through this context. The cache and the map of documents therefore bear being read
+ * and written at the same time, and a resource two threads ask for at once is read once.</p>
  */
 final class CachingMarkdownValidationContext implements MarkdownValidationContext {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
-	private final Map<String, Object> contentsByResolvedPath = new ConcurrentHashMap<>();
+	private final ResourceContentsCache contents = new ResourceContentsCache();
 
 	private final Map<String, Document> documentsByResolvedPath = new ConcurrentHashMap<>();
 
@@ -52,25 +54,7 @@ final class CachingMarkdownValidationContext implements MarkdownValidationContex
 		if (resource == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-
-		String resolvedPath = resource.getResolvedPath();
-		if (resolvedPath == null || resolvedPath.isEmpty()) {
-			// nothing tells this resource from another one, so nothing can be remembered for it
-			return resource.readAllContents();
-		}
-
-		Object remembered = this.contentsByResolvedPath.computeIfAbsent(resolvedPath, path -> {
-			try {
-				return resource.readAllContents();
-			} catch (IOException failure) {
-				return failure;
-			}
-		});
-
-		if (remembered instanceof IOException failure) {
-			throw failure;
-		}
-		return (String) remembered;
+		return this.contents.readAllContents(resource);
 	}
 
 	@Override
