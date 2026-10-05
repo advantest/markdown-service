@@ -9,7 +9,9 @@ package com.advantest.markdown.service.validation;
 import java.io.IOException;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
+import com.advantest.markdown.ParsedMarkdownDocumentsCache;
 import com.advantest.resources.Resource;
+import com.advantest.resources.ResourceContentsCache;
 import com.vladsch.flexmark.util.ast.Document;
 
 /**
@@ -41,7 +43,8 @@ public interface MarkdownValidationContext {
 	 * @throws IllegalArgumentException if the given parser is <code>null</code>
 	 */
 	static MarkdownValidationContext parsingWith(MarkdownParserAndHtmlRenderer parserAndRenderer) {
-		return new CachingMarkdownValidationContext(parserAndRenderer);
+		ResourceContentsCache contents = new ResourceContentsCache();
+		return new ValidationRunContext(contents, new ParsedMarkdownDocumentsCache(parserAndRenderer, contents));
 	}
 
 	/**
