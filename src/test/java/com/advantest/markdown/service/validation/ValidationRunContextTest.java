@@ -19,9 +19,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
-import com.advantest.markdown.ParsedMarkdownDocumentsCache;
+import com.advantest.markdown.service.parsing.ParsedMarkdownDocumentsCache;
+import com.advantest.markdown.service.resources.ResourceContentsCache;
 import com.advantest.resources.Resource;
-import com.advantest.resources.ResourceContentsCache;
 import com.advantest.resources.ResourceKind;
 import com.vladsch.flexmark.util.ast.Document;
 
