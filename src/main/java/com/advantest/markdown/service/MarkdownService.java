@@ -38,7 +38,7 @@ import com.advantest.resources.ResourceResolver;
 import com.advantest.resources.UnresolvedResource;
 import com.advantest.resources.UriResolver;
 import com.advantest.markdown.service.validation.MarkdownValidation;
-import com.advantest.markdown.service.validation.MarkdownValidationContext;
+import com.advantest.markdown.service.validation.MarkdownValidationRun;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.plantuml.PlantUmlSettings;
 import com.vladsch.flexmark.util.ast.Document;
@@ -481,7 +481,7 @@ public class MarkdownService {
 	 * @throws IllegalArgumentException if the given document is <code>null</code>
 	 */
 	public List<ValidationIssue> validateMarkdown(Document markdownDocument) {
-		return waitFor(this.validation.validate(markdownDocument, newRunContext()));
+		return validateInOneRun(markdownDocument);
 	}
 
 	/**
@@ -497,7 +497,7 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return waitFor(this.validation.validate(parseMarkdown(markdownSourceCode), newRunContext()));
+		return validateInOneRun(parseMarkdown(markdownSourceCode));
 	}
 
 	/**
@@ -516,7 +516,7 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return waitFor(this.validation.validate(parseMarkdown(markdownSourceCode, documentResource), newRunContext()));
+		return validateInOneRun(parseMarkdown(markdownSourceCode, documentResource));
 	}
 
 	/**
@@ -537,7 +537,7 @@ public class MarkdownService {
 	 * @throws IllegalArgumentException if the given document is <code>null</code>
 	 */
 	public CompletableFuture<List<ValidationIssue>> validateMarkdownAsync(Document markdownDocument) {
-		return this.validation.validate(markdownDocument, newRunContext());
+		return validateInOneRunAsync(markdownDocument);
 	}
 
 	/**
@@ -554,7 +554,7 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return this.validation.validate(parseMarkdown(markdownSourceCode), newRunContext());
+		return validateInOneRunAsync(parseMarkdown(markdownSourceCode));
 	}
 
 	/**
@@ -574,16 +574,65 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return this.validation.validate(parseMarkdown(markdownSourceCode, documentResource), newRunContext());
+		return validateInOneRunAsync(parseMarkdown(markdownSourceCode, documentResource));
 	}
 
 	/**
-	 * Creates what one validation run knows, so that a run reads and parses every resource once and
-	 * keeps nothing for the next run.
+	 * Creates a validation run, which checks one document or several, reading and parsing every
+	 * resource the documents refer to at most once.
+	 * 
+	 * <p>Checking several documents in one run is what makes a run worth it: a document many others
+	 * point into is read and parsed once for all of them, not once for each. Nothing a run read is
+	 * kept for the next one, so a file changed in between is read anew by the next run. Each of the
+	 * methods {@link #validateMarkdown(Document)} and {@link #validateMarkdownAsync(Document)} checks
+	 * its document in a run of its own.</p>
+	 * 
+	 * <pre>
+	 * try (MarkdownValidationRun run = service.createValidationRun()) {
+	 *     for (Resource resource : resources) {
+	 *         findings.put(resource, run.validate(resource.readAllContents(), resource));
+	 *     }
+	 * }
+	 * </pre>
+	 * 
+	 * @return a new run, never <code>null</code>, to be closed by the caller
+	 * @see MarkdownValidationRun
 	 */
-	private MarkdownValidationContext newRunContext() {
-		return MarkdownValidationContext.parsingWith(this.parserAndRenderer);
+	public MarkdownValidationRun createValidationRun() {
+		return this.validation.createRun();
 	}
+
+	private List<ValidationIssue> validateInOneRun(Document markdownDocument) {
+		try (MarkdownValidationRun run = createValidationRun()) {
+			return waitFor(run.validate(markdownDocument));
+		}
+	}
+
+	/**
+	 * Checks the given document in a run of its own, which is closed once the findings are there.
+	 * 
+	 * <p>The run is closed on a thread of its own: closing waits for the findings of the run, and
+	 * the thread completing them must not be the one waiting. A caller cancelling the promise
+	 * cancels the run, which stops what is still being asked.</p>
+	 */
+	private CompletableFuture<List<ValidationIssue>> validateInOneRunAsync(Document markdownDocument) {
+		MarkdownValidationRun run = createValidationRun();
+		CompletableFuture<List<ValidationIssue>> promisedIssues;
+		try {
+			promisedIssues = run.validate(markdownDocument);
+		} catch (RuntimeException | Error failure) {
+			run.close();
+			throw failure;
+		}
+		promisedIssues.whenComplete((issues, failure) -> {
+			if (promisedIssues.isCancelled()) {
+				run.cancel();
+			}
+			Thread.startVirtualThread(run::close);
+		});
+		return promisedIssues;
+	}
+
 	/**
 	 * Waits for the promised findings and hands them over.
 	 * 

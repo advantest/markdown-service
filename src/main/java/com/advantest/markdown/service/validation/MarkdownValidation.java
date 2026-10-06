@@ -30,6 +30,10 @@ import com.vladsch.flexmark.util.ast.Node;
  * covering one kind of Markdown construct. This class walks the document once and offers every
  * node to the validators triggered by it, leaving out what a validator
  * {@link MarkdownValidator#getIgnoredNodes() ignores}.</p>
+ * 
+ * <p>The rules are applied in a {@link #createRun() run}, which holds what was read and parsed
+ * while it checks its documents. The rules themselves hold nothing of a document and live as long
+ * as the service they belong to.</p>
  */
 public class MarkdownValidation {
 
@@ -113,6 +117,17 @@ public class MarkdownValidation {
 	}
 
 	/**
+	 * Creates a run applying these rules, which reads and parses everything the documents handed to
+	 * it refer to at most once.
+	 * 
+	 * @return a new run, never <code>null</code>, to be closed by the caller
+	 */
+	public MarkdownValidationRun createRun() {
+		return new MarkdownValidationRun(this, this.parserAndRenderer,
+				MarkdownValidationContext.parsingWith(this.parserAndRenderer));
+	}
+
+	/**
 	 * Checks the given Markdown document.
 	 * 
 	 * <p>A validator that cannot answer at once is not waited for where it is asked: the document
@@ -134,7 +149,7 @@ public class MarkdownValidation {
 	 *         and kept with a list that is not modifiable
 	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 */
-	public CompletableFuture<List<ValidationIssue>> validate(Document document, MarkdownValidationContext context) {
+	CompletableFuture<List<ValidationIssue>> validate(Document document, MarkdownValidationContext context) {
 		if (document == null || context == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}

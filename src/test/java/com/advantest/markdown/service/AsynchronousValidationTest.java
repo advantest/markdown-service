@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Timeout;
 
 import com.vladsch.flexmark.util.ast.Document;
 
+import com.advantest.markdown.service.validation.MarkdownValidationRun;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.markdown.service.validation.uri.UriReachability;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
@@ -117,6 +118,44 @@ class AsynchronousValidationTest {
 		assertThrows(IllegalArgumentException.class, () -> service.validateMarkdownAsync((String) null));
 		assertThrows(IllegalArgumentException.class,
 				() -> service.validateMarkdownAsync(null, UnresolvedResource.UNKNOWN_DOCUMENT));
+	}
+
+	@Test
+	@Timeout(value = 10, unit = TimeUnit.SECONDS)
+	void documentsCheckedInOneRunFindWhatTheyFindOneByOne() {
+		MarkdownService service = serviceAnswering(new UriReachability.Answered(404));
+		String other = "[gone](https://example.org/three)";
+
+		List<ValidationIssue> first;
+		List<ValidationIssue> second;
+		try (MarkdownValidationRun run = service.createValidationRun()) {
+			CompletableFuture<List<ValidationIssue>> promisedFirst = run.validate(TWO_ADDRESSES,
+					UnresolvedResource.UNKNOWN_DOCUMENT);
+			CompletableFuture<List<ValidationIssue>> promisedSecond = run.validate(other,
+					UnresolvedResource.UNKNOWN_DOCUMENT);
+			first = promisedFirst.join();
+			second = promisedSecond.join();
+		}
+
+		assertEquals(service.validateMarkdown(TWO_ADDRESSES), first,
+				"A document checked in a run with others finds what it finds on its own.");
+		assertEquals(service.validateMarkdown(other), second,
+				"A document checked in a run with others finds what it finds on its own.");
+	}
+
+	@Test
+	@Timeout(value = 10, unit = TimeUnit.SECONDS)
+	void promiseNobodyWaitsForAnyMoreCanBeCancelled() {
+		CountDownLatch answersMayArrive = new CountDownLatch(1);
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
+				.withUriReachabilityCheck(answeringOnceReleasedBy(answersMayArrive))
+				.build();
+
+		CompletableFuture<List<ValidationIssue>> promisedIssues = service.validateMarkdownAsync(TWO_ADDRESSES);
+		promisedIssues.cancel(false);
+		answersMayArrive.countDown();
+
+		assertTrue(promisedIssues.isCancelled(), "A promise cancelled before the answers arrived stays cancelled.");
 	}
 
 	@Test

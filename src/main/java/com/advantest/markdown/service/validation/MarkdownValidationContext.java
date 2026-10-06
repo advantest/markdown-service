@@ -19,8 +19,8 @@ import com.vladsch.flexmark.util.ast.Document;
  * 
  * <p>Every validator is handed the same context for the whole run and none of them keeps anything
  * of it: a validator is used for more than one document, so what it learns about one document must
- * not travel to the next. The context is created when a document is checked and is dropped when
- * that check returns. It is asked from more than one thread, because a check that cannot answer at
+ * not travel to the next. The context is created with a {@link MarkdownValidationRun run} and is
+ * dropped when that run is closed. It is asked from more than one thread, because a check that cannot answer at
  * once is waited for after the walk and asks the context while it works, so an implementation has
  * to bear that.</p>
  * 
