@@ -38,6 +38,7 @@ import com.advantest.resources.ResourceResolver;
 import com.advantest.resources.UnresolvedResource;
 import com.advantest.resources.UriResolver;
 import com.advantest.markdown.service.validation.MarkdownValidation;
+import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.plantuml.PlantUmlSettings;
 import com.vladsch.flexmark.util.ast.Document;
@@ -480,7 +481,7 @@ public class MarkdownService {
 	 * @throws IllegalArgumentException if the given document is <code>null</code>
 	 */
 	public List<ValidationIssue> validateMarkdown(Document markdownDocument) {
-		return waitFor(this.validation.validate(markdownDocument));
+		return waitFor(this.validation.validate(markdownDocument, newRunContext()));
 	}
 
 	/**
@@ -496,7 +497,7 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return waitFor(this.validation.validate(parseMarkdown(markdownSourceCode)));
+		return waitFor(this.validation.validate(parseMarkdown(markdownSourceCode), newRunContext()));
 	}
 
 	/**
@@ -515,7 +516,7 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return waitFor(this.validation.validate(parseMarkdown(markdownSourceCode, documentResource)));
+		return waitFor(this.validation.validate(parseMarkdown(markdownSourceCode, documentResource), newRunContext()));
 	}
 
 	/**
@@ -536,7 +537,7 @@ public class MarkdownService {
 	 * @throws IllegalArgumentException if the given document is <code>null</code>
 	 */
 	public CompletableFuture<List<ValidationIssue>> validateMarkdownAsync(Document markdownDocument) {
-		return this.validation.validate(markdownDocument);
+		return this.validation.validate(markdownDocument, newRunContext());
 	}
 
 	/**
@@ -553,7 +554,7 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return this.validation.validate(parseMarkdown(markdownSourceCode));
+		return this.validation.validate(parseMarkdown(markdownSourceCode), newRunContext());
 	}
 
 	/**
@@ -573,9 +574,16 @@ public class MarkdownService {
 		if (markdownSourceCode == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return this.validation.validate(parseMarkdown(markdownSourceCode, documentResource));
+		return this.validation.validate(parseMarkdown(markdownSourceCode, documentResource), newRunContext());
 	}
 
+	/**
+	 * Creates what one validation run knows, so that a run reads and parses every resource once and
+	 * keeps nothing for the next run.
+	 */
+	private MarkdownValidationContext newRunContext() {
+		return MarkdownValidationContext.parsingWith(this.parserAndRenderer);
+	}
 	/**
 	 * Waits for the promised findings and hands them over.
 	 * 

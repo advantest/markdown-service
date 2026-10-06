@@ -124,17 +124,22 @@ public class MarkdownValidation {
 	 * goes on: the other validators are asked, the walk reaches the end of the document, and what
 	 * the other rules found is reported. A failure is not said out loud anywhere yet.</p>
 	 * 
+	 * <p>Every validator is handed the given context, which belongs to the run the document is
+	 * checked in, so that whatever that run read or parsed is read and parsed once, however many
+	 * documents of the run ask for it.</p>
+	 * 
 	 * @param document the parsed Markdown document to be checked, must not be <code>null</code>
+	 * @param context what the run the document is checked in knows, must not be <code>null</code>
 	 * @return the promise of the problems found, ordered by start offset, never <code>null</code>
 	 *         and kept with a list that is not modifiable
+	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 */
-	public CompletableFuture<List<ValidationIssue>> validate(Document document) {
-		if (document == null) {
-			throw new IllegalArgumentException("Argument must not be null.");
+	public CompletableFuture<List<ValidationIssue>> validate(Document document, MarkdownValidationContext context) {
+		if (document == null || context == null) {
+			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 
 		ValidationIssueCollector issues = new ValidationIssueCollector();
-		MarkdownValidationContext context = MarkdownValidationContext.parsingWith(this.parserAndRenderer);
 
 		visit(document, Collections.newSetFromMap(new IdentityHashMap<>()), context, issues);
 
