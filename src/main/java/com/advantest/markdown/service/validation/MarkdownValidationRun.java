@@ -20,6 +20,7 @@ import com.advantest.markdown.service.parsing.ParsedMarkdownDocumentsCache;
 import com.advantest.markdown.service.resources.ResourceContentsCache;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.Resource;
+import com.advantest.resources.ResourceContentsReader;
 import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.util.ast.Document;
 
@@ -78,11 +79,13 @@ public final class MarkdownValidationRun implements AutoCloseable {
 	 *                          document the run looks into, must not be <code>null</code>
 	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
 	 *                               <code>null</code>, in which case no address is asked about
-	 * @throws IllegalArgumentException if the rules or the parser are <code>null</code>
+	 * @param contentsReader what answers with the contents of a resource the run reads, at most
+	 *                       once per resource, must not be <code>null</code>
+	 * @throws IllegalArgumentException if the rules, the parser or the reader are <code>null</code>
 	 */
 	MarkdownValidationRun(MarkdownValidation rules, MarkdownParserAndHtmlRenderer parserAndRenderer,
-			UriReachabilityChecker uriReachabilityChecker) {
-		if (rules == null || parserAndRenderer == null) {
+			UriReachabilityChecker uriReachabilityChecker, ResourceContentsReader contentsReader) {
+		if (rules == null || parserAndRenderer == null || contentsReader == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.rules = rules;
@@ -92,7 +95,7 @@ public final class MarkdownValidationRun implements AutoCloseable {
 				? null
 				: uriReachabilityChecker.openForRun(this.executor);
 
-		ResourceContentsCache contents = new ResourceContentsCache();
+		ResourceContentsCache contents = new ResourceContentsCache(contentsReader);
 		this.context = new ValidationRunContext(contents,
 				new ParsedMarkdownDocumentsCache(parserAndRenderer, contents), this.uriReachabilityChecker);
 	}

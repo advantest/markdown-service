@@ -198,6 +198,42 @@ class ResourceContentsCacheTest {
 	}
 
 	@Test
+	void asksTheReaderItWasGivenOnceForAResource() throws IOException {
+		CountingResource resource = new CountingResource("/docs/guide.md", "# Saved\n");
+		AtomicInteger readerAsked = new AtomicInteger();
+		ResourceContentsCache cacheReadingUnsavedText = new ResourceContentsCache(asked -> {
+			readerAsked.incrementAndGet();
+			return "# Unsaved\n";
+		});
+
+		assertEquals("# Unsaved\n", cacheReadingUnsavedText.readAllContents(resource));
+		assertEquals("# Unsaved\n", cacheReadingUnsavedText.readAllContents(resource));
+
+		assertEquals(1, readerAsked.get());
+		assertEquals(0, resource.reads());
+	}
+
+	@Test
+	void asksTheReaderItWasGivenEveryTimeForAResourceNobodyResolved() throws IOException {
+		AtomicInteger readerAsked = new AtomicInteger();
+		ResourceContentsCache cacheReadingUnsavedText = new ResourceContentsCache(asked -> {
+			readerAsked.incrementAndGet();
+			return "# Unsaved\n";
+		});
+		Resource unresolved = new UnresolvedResource("guide.md");
+
+		cacheReadingUnsavedText.readAllContents(unresolved);
+		cacheReadingUnsavedText.readAllContents(unresolved);
+
+		assertEquals(2, readerAsked.get());
+	}
+
+	@Test
+	void refusesAMissingReader() {
+		assertThrows(IllegalArgumentException.class, () -> new ResourceContentsCache(null));
+	}
+
+	@Test
 	void refusesToReadNothing() {
 		assertThrows(IllegalArgumentException.class, () -> this.cache.readAllContents(null));
 	}

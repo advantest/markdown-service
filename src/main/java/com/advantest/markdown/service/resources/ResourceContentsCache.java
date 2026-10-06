@@ -13,17 +13,22 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.advantest.resources.Resource;
+import com.advantest.resources.ResourceContentsReader;
 import com.advantest.resources.UnresolvedResource;
 
 /**
- * Remembers what {@link Resource#readAllContents()} answered, so that a resource is read at most
+ * Remembers what a {@link ResourceContentsReader} answered, so that a resource is read at most
  * once for as long as this cache lives.
  * 
  * <p>A cache is meant to live as long as one run, e.g. one validation of a document or of a
  * directory tree: whoever runs creates it when the run starts and drops it when the run ends. That
  * is why it has neither a bound nor a way to clear it, and why a file changed while a run reads it
- * is seen by that run as it was first read. Reading without a cache is done by asking the resource
- * itself.</p>
+ * is seen by that run as it was first read. Reading without a cache is done by asking a reader
+ * directly.</p>
+ * 
+ * <p>The reader decides who answers with the contents of a resource: the resource itself, unless
+ * the cache is given a reader knowing better, e.g. one answering with the text an editor holds and
+ * did not save yet.</p>
  * 
  * <p>What was read is remembered under the resource's {@link Resource#getResolvedPath() resolved
  * path}, which is what tells two resources apart for whoever resolved them. A resource without such
@@ -40,6 +45,28 @@ public final class ResourceContentsCache {
 
 	private final Map<String, CompletableFuture<String>> contentsByResolvedPath = new ConcurrentHashMap<>();
 
+	private final ResourceContentsReader reader;
+
+	/**
+	 * Creates a cache asking every resource itself for its contents.
+	 */
+	public ResourceContentsCache() {
+		this(ResourceContentsReader.FROM_THE_RESOURCE);
+	}
+
+	/**
+	 * Creates a cache asking the given reader for the contents of a resource.
+	 * 
+	 * @param reader what answers with the contents of a resource, must not be <code>null</code>
+	 * @throws IllegalArgumentException if the given reader is <code>null</code>
+	 */
+	public ResourceContentsCache(ResourceContentsReader reader) {
+		if (reader == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
+		this.reader = reader;
+	}
+
 	/**
 	 * Answers the contents of the given resource, reading them only if nobody asked for them before.
 	 * 
@@ -55,7 +82,7 @@ public final class ResourceContentsCache {
 
 		String resolvedPath = resource.getResolvedPath();
 		if (resource instanceof UnresolvedResource || resolvedPath == null || resolvedPath.isEmpty()) {
-			return resource.readAllContents();
+			return this.reader.readAllContents(resource);
 		}
 
 		CompletableFuture<String> ownRead = new CompletableFuture<>();
@@ -63,7 +90,7 @@ public final class ResourceContentsCache {
 		if (rememberedRead == null) {
 			// read outside the map, so that a slow resource does not block asking for other ones
 			try {
-				ownRead.complete(resource.readAllContents());
+				ownRead.complete(this.reader.readAllContents(resource));
 			} catch (Throwable failure) {
 				ownRead.completeExceptionally(failure);
 			}

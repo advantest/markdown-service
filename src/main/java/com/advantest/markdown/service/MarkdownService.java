@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.markdown.service.resources.UnsavedResourceContents;
 import com.advantest.markdown.service.validation.uri.DefaultHttpUriReachabilityValidator;
 import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.HttpUriSyntaxValidator;
@@ -83,6 +84,8 @@ public class MarkdownService {
 
 	private final UriReachabilityChecker uriReachabilityChecker;
 
+	private final UnsavedResourceContents unsavedContents;
+
 	/** Everything this service is made of that remembers answers, in no particular order. */
 	private final List<CachesHolder> cachesHolders;
 
@@ -95,12 +98,22 @@ public class MarkdownService {
 	 * shall be asked about.
 	 */
 	public MarkdownService() {
-		this(new MarkdownParserAndHtmlRenderer(), ResourceResolverRegistry.ofLocalFileSystem());
+		this(new UnsavedResourceContents());
+	}
+
+	private MarkdownService(UnsavedResourceContents unsavedContents) {
+		this(MarkdownParserAndHtmlRenderer.builder()
+				.withResourceContentsReader(unsavedContents.readerOfCurrentContents())
+				.build(),
+				ResourceResolverRegistry.ofLocalFileSystem(), unsavedContents, null, List.of(), List.of());
 	}
 
 	/**
 	 * Creates a service delegating to the given Markdown parser and HTML renderer and resolving
 	 * references with the given resolvers, without asking any address whether it is there.
+	 * 
+	 * <p>The given parser reads what a document refers to as it was given a reader to; the unsaved
+	 * contents put into this service reach the validation, not that parser.</p>
 	 * 
 	 * @param parserAndRenderer the parser and renderer to delegate to, must not be <code>null</code>
 	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
@@ -108,7 +121,7 @@ public class MarkdownService {
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers) {
-		this(parserAndRenderer, resourceResolvers, null, List.of(), List.of());
+		this(parserAndRenderer, resourceResolvers, new UnsavedResourceContents(), null, List.of(), List.of());
 	}
 
 	/**
@@ -120,6 +133,9 @@ public class MarkdownService {
 	 * @param parserAndRenderer the parser and renderer to delegate to, must not be <code>null</code>
 	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
 	 *                          <code>null</code>
+	 * @param unsavedContents the contents a validation run reads instead of what the resources
+	 *                        contain, must not be <code>null</code>; the parser is expected to
+	 *                        read through them as well
 	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
 	 *                               <code>null</code>, in which case no address is asked about
 	 * @param uriValidators the validators of a target naming a scheme, asked in the given order, so
@@ -133,11 +149,12 @@ public class MarkdownService {
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers,
+			UnsavedResourceContents unsavedContents,
 			UriReachabilityChecker uriReachabilityChecker,
 			List<UriValidator> uriValidators,
 			List<AnchorValidator> anchorValidators) {
-		if (parserAndRenderer == null || resourceResolvers == null || uriValidators == null
-				|| anchorValidators == null) {
+		if (parserAndRenderer == null || resourceResolvers == null || unsavedContents == null
+				|| uriValidators == null || anchorValidators == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		useTheUsualDotExecutableWhereNobodyNamedOne();
@@ -146,6 +163,7 @@ public class MarkdownService {
 				withShippedValidators(uriValidators, uriReachabilityChecker),
 				withShippedAnchorValidators(anchorValidators, parserAndRenderer));
 		this.uriReachabilityChecker = uriReachabilityChecker;
+		this.unsavedContents = unsavedContents;
 		this.cachesHolders = cachesHoldersAmong(uriReachabilityChecker, uriValidators,
 				anchorValidators);
 	}
@@ -599,7 +617,49 @@ public class MarkdownService {
 	 * @see MarkdownValidationRun
 	 */
 	public MarkdownValidationRun createValidationRun() {
-		return this.validation.createRun(this.uriReachabilityChecker);
+		return this.validation.createRun(this.uriReachabilityChecker,
+				this.unsavedContents.readerOfContentsAsTheyAreNow());
+	}
+
+	/**
+	 * Says that the given resource contains the given text rather than what it contains where it
+	 * is stored, e.g. because an editor holds the text and its user did not save it yet.
+	 * 
+	 * <p>Until the contents are {@link #dropUnsavedContents(Resource) dropped} or replaced by the
+	 * next ones put for the same resource, every rendering and every validation run created
+	 * afterwards reads the resource as the given text, wherever a document refers to it. A run
+	 * created before goes on reading the contents it started with, so that it checks one state of
+	 * every file; an editor cancels such a run and creates the next one. Putting the contents of a
+	 * resource that does not exist where it is stored does not make it exist: a link to it is still
+	 * reported as broken.</p>
+	 * 
+	 * <p>The contents are kept until they are dropped, however long that is; nothing forgets them on
+	 * its own.</p>
+	 * 
+	 * @param resource the resource the contents are meant for, must not be <code>null</code>, must
+	 *                 not be an {@link UnresolvedResource} and must have a
+	 *                 resolved path
+	 * @param contents what the resource is to be read as, must not be <code>null</code>
+	 * @throws IllegalArgumentException if an argument is <code>null</code>, or if the resource is
+	 *                                  unresolved or has no resolved path
+	 */
+	public void putUnsavedContents(Resource resource, String contents) {
+		this.unsavedContents.put(resource, contents);
+	}
+
+	/**
+	 * Lets go of the contents {@link #putUnsavedContents(Resource, String) put} for the given
+	 * resource, e.g. because the editor holding them saved them or was closed, so that the resource
+	 * is read as it is stored again. Dropping a resource nothing was put for changes nothing.
+	 * 
+	 * @param resource the resource whose contents were put, must not be <code>null</code>, must not
+	 *                 be an {@link UnresolvedResource} and must have a
+	 *                 resolved path
+	 * @throws IllegalArgumentException if the given resource is <code>null</code>, unresolved or has
+	 *                                  no resolved path
+	 */
+	public void dropUnsavedContents(Resource resource) {
+		this.unsavedContents.drop(resource);
 	}
 
 	private List<ValidationIssue> validateInOneRun(Document markdownDocument) {
@@ -938,6 +998,9 @@ public class MarkdownService {
 
 			this.parserAndRendererBuilder.withRelativePathResourceResolver(pathResolver);
 
+			UnsavedResourceContents unsavedContents = new UnsavedResourceContents();
+			this.parserAndRendererBuilder.withResourceContentsReader(unsavedContents.readerOfCurrentContents());
+
 			// the validator registered last is asked first, so that a validator answering for a
 			// few addresses can be put in front of one answering for all of them
 			List<UriValidator> validatorsAskedInOrder = new ArrayList<>(this.uriValidators);
@@ -946,7 +1009,7 @@ public class MarkdownService {
 			List<AnchorValidator> anchorValidatorsAskedInOrder = new ArrayList<>(this.anchorValidators);
 			Collections.reverse(anchorValidatorsAskedInOrder);
 
-			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers,
+			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers, unsavedContents,
 					this.uriReachabilityChecker, validatorsAskedInOrder, anchorValidatorsAskedInOrder);
 		}
 

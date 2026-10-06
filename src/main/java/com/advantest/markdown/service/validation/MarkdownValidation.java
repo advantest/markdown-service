@@ -21,6 +21,7 @@ import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.validation.anchor.AnchorValidator;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriValidator;
+import com.advantest.resources.ResourceContentsReader;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 
@@ -137,7 +138,30 @@ public class MarkdownValidation {
 	 * @return a new run, never <code>null</code>, to be closed by the caller
 	 */
 	public MarkdownValidationRun createRun(UriReachabilityChecker uriReachabilityChecker) {
-		return new MarkdownValidationRun(this, this.parserAndRenderer, uriReachabilityChecker);
+		return createRun(uriReachabilityChecker, ResourceContentsReader.FROM_THE_RESOURCE);
+	}
+
+	/**
+	 * Creates a run applying these rules, which reads everything the documents handed to it refer
+	 * to at most once, through the given reader, parses it at most once, and asks an address
+	 * whether it is there through the given check,
+	 * {@link UriReachabilityChecker#openForRun(java.util.concurrent.Executor) opened} for the run.
+	 * 
+	 * <p>The reader decides who answers with the contents of a resource, e.g. the text an editor
+	 * holds and did not save yet rather than the resource itself. It is to answer with one state of
+	 * every resource for as long as the run lives, so that the run checks one state of all of
+	 * them.</p>
+	 * 
+	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
+	 *                               <code>null</code>, in which case no address is asked about
+	 * @param contentsReader what answers with the contents of a resource the run reads, must not be
+	 *                       <code>null</code>
+	 * @return a new run, never <code>null</code>, to be closed by the caller
+	 * @throws IllegalArgumentException if the given reader is <code>null</code>
+	 */
+	public MarkdownValidationRun createRun(UriReachabilityChecker uriReachabilityChecker,
+			ResourceContentsReader contentsReader) {
+		return new MarkdownValidationRun(this, this.parserAndRenderer, uriReachabilityChecker, contentsReader);
 	}
 
 	/**
