@@ -8,6 +8,7 @@ package com.advantest.markdown.service.validation;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
@@ -103,6 +104,10 @@ final class ValidatorGuard {
 		Throwable reason = failure instanceof CompletionException ? failure.getCause() : failure;
 		if (reason instanceof Error seriousFailure) {
 			throw seriousFailure;
+		}
+		if (reason instanceof CancellationException notWaitedFor) {
+			// the run was cancelled, so nobody waits for what the validator would have found
+			throw notWaitedFor;
 		}
 
 		LOG.warn("The validator {} broke the promise it gave. What it would have found is lost, and"

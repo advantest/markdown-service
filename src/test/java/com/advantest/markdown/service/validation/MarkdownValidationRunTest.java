@@ -13,15 +13,21 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
+import com.advantest.markdown.service.validation.uri.UriReachability;
+import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
@@ -163,6 +169,102 @@ public class MarkdownValidationRunTest {
 		validator.promises.get(1).complete(List.of());
 
 		run.close();
+	}
+
+	/** A check counting how often a run opened, cancelled and closed it. */
+	private static final class CountingChecker implements UriReachabilityChecker {
+
+		private final AtomicInteger opened = new AtomicInteger();
+
+		private final AtomicInteger cancelled = new AtomicInteger();
+
+		private final AtomicInteger closed = new AtomicInteger();
+
+		private final List<UriReachabilityChecker.OfRun> views = new CopyOnWriteArrayList<>();
+
+		@Override
+		public CompletableFuture<UriReachability> check(URI targetUri) {
+			return CompletableFuture.completedFuture(new UriReachability.Answered(200));
+		}
+
+		@Override
+		public OfRun openForRun(Executor executor) {
+			this.opened.incrementAndGet();
+			OfRun view = new OfRun() {
+
+				@Override
+				public CompletableFuture<UriReachability> check(URI targetUri) {
+					return CountingChecker.this.check(targetUri);
+				}
+
+				@Override
+				public void cancel() {
+					CountingChecker.this.cancelled.incrementAndGet();
+				}
+
+				@Override
+				public void close() {
+					CountingChecker.this.closed.incrementAndGet();
+				}
+			};
+			this.views.add(view);
+			return view;
+		}
+	}
+
+	@Test
+	void theContextOfARunHandsOutTheCheckOpenedForTheRun() {
+		DocumentValidator validator = new DocumentValidator(true);
+		CountingChecker checker = new CountingChecker();
+
+		try (MarkdownValidationRun run = rulesOf(validator).createRun(checker)) {
+			run.validate("# One\n", UnresolvedResource.UNKNOWN_DOCUMENT).join();
+			assertEquals(0, checker.closed.get(), "The check is expected to stay open while the run lasts.");
+		}
+
+		assertEquals(1, checker.opened.get(), "The run is expected to open the check once.");
+		assertSame(checker.views.get(0), validator.contexts.get(0).getUriReachabilityChecker().orElseThrow(),
+				"A validator is expected to be handed the check opened for its run.");
+		assertEquals(1, checker.closed.get(), "Closing the run is expected to close the check opened for it.");
+	}
+
+	@Test
+	void cancellingARunCancelsTheCheckOpenedForIt() {
+		CountingChecker checker = new CountingChecker();
+		MarkdownValidationRun run = rulesOf(new DocumentValidator(true)).createRun(checker);
+
+		run.cancel();
+		run.close();
+		run.close();
+
+		assertEquals(1, checker.cancelled.get(), "Cancelling the run is expected to cancel its check.");
+		assertEquals(1, checker.closed.get(), "A run is expected to close its check once, however often it is closed.");
+	}
+
+	@Test
+	void aRunWithoutACheckOffersNone() {
+		DocumentValidator validator = new DocumentValidator(true);
+
+		try (MarkdownValidationRun run = rulesOf(validator).createRun()) {
+			run.validate("# One\n", UnresolvedResource.UNKNOWN_DOCUMENT).join();
+		}
+
+		assertTrue(validator.contexts.get(0).getUriReachabilityChecker().isEmpty(),
+				"A run that may ask no address is expected to offer no check.");
+	}
+
+	@Test
+	void findingsNobodyWaitedForAreNotReadAsNothingFound() {
+		DocumentValidator validator = new DocumentValidator(false);
+
+		try (MarkdownValidationRun run = rulesOf(validator).createRun()) {
+			CompletableFuture<List<ValidationIssue>> findings =
+					run.validate("# One\n", UnresolvedResource.UNKNOWN_DOCUMENT);
+			validator.promises.get(0).cancel(false);
+
+			assertThrows(CancellationException.class, findings::join,
+					"A check that was not waited for is expected to leave the findings unfinished, not empty.");
+		}
 	}
 
 	@Test

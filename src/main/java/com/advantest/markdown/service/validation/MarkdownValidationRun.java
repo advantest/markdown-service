@@ -12,8 +12,13 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
+import com.advantest.markdown.service.parsing.ParsedMarkdownDocumentsCache;
+import com.advantest.markdown.service.resources.ResourceContentsCache;
+import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.Resource;
 import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.util.ast.Document;
@@ -28,10 +33,14 @@ import com.vladsch.flexmark.util.ast.Document;
  * pointing into the same one have it read and parsed once. A file that changes while a run reads
  * it is seen by that run as it was first read; a run checks one state of every file.</p>
  * 
+ * <p>A run owns what it works with: the executor its work runs on, what it read and parsed, and the
+ * check asking an address whether it is there, opened for this run. What that check learnt about an
+ * address outlives the run, so the next run asks only about what is new.</p>
+ * 
  * <p>Whoever creates a run closes it. {@link #close()} waits for the findings that are still being
  * waited for and then lets go of everything the run holds. An editor whose text changed while a
- * run checked it {@link #cancel() cancels} that run, which stops waiting for anything, and creates
- * the next one.</p>
+ * run checked it {@link #cancel() cancels} that run, which stops what is still being asked over the
+ * network, and creates the next one.</p>
  * 
  * <pre>
  * try (MarkdownValidationRun run = service.createValidationRun()) {
@@ -51,6 +60,10 @@ public final class MarkdownValidationRun implements AutoCloseable {
 
 	private final MarkdownValidationContext context;
 
+	private final ExecutorService executor;
+
+	private final UriReachabilityChecker.OfRun uriReachabilityChecker;
+
 	private final Set<CompletableFuture<List<ValidationIssue>>> awaitedFindings = ConcurrentHashMap.newKeySet();
 
 	private volatile boolean cancelled;
@@ -58,22 +71,30 @@ public final class MarkdownValidationRun implements AutoCloseable {
 	private volatile boolean closed;
 
 	/**
-	 * Creates a run applying the given rules in the given context.
+	 * Creates a run applying the given rules, opening the given check for the run.
 	 * 
 	 * @param rules the rules every document of the run is checked by, must not be <code>null</code>
-	 * @param parserAndRenderer the parser reading the source code handed to the run, must not be
-	 *                          <code>null</code>
-	 * @param context what the run knows, handed to every validator, must not be <code>null</code>
-	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
+	 * @param parserAndRenderer the parser reading the source code handed to the run and every
+	 *                          document the run looks into, must not be <code>null</code>
+	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
+	 *                               <code>null</code>, in which case no address is asked about
+	 * @throws IllegalArgumentException if the rules or the parser are <code>null</code>
 	 */
 	MarkdownValidationRun(MarkdownValidation rules, MarkdownParserAndHtmlRenderer parserAndRenderer,
-			MarkdownValidationContext context) {
-		if (rules == null || parserAndRenderer == null || context == null) {
+			UriReachabilityChecker uriReachabilityChecker) {
+		if (rules == null || parserAndRenderer == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		this.rules = rules;
 		this.parserAndRenderer = parserAndRenderer;
-		this.context = context;
+		this.executor = Executors.newVirtualThreadPerTaskExecutor();
+		this.uriReachabilityChecker = uriReachabilityChecker == null
+				? null
+				: uriReachabilityChecker.openForRun(this.executor);
+
+		ResourceContentsCache contents = new ResourceContentsCache();
+		this.context = new ValidationRunContext(contents,
+				new ParsedMarkdownDocumentsCache(parserAndRenderer, contents), this.uriReachabilityChecker);
 	}
 
 	/**
@@ -170,6 +191,9 @@ public final class MarkdownValidationRun implements AutoCloseable {
 	public void cancel() {
 		this.cancelled = true;
 		this.awaitedFindings.forEach(findings -> findings.cancel(false));
+		if (this.uriReachabilityChecker != null) {
+			this.uriReachabilityChecker.cancel();
+		}
 	}
 
 	/**
@@ -183,15 +207,18 @@ public final class MarkdownValidationRun implements AutoCloseable {
 
 	/**
 	 * Waits for every promise of findings still being waited for, and then lets go of everything
-	 * the run holds. A document handed to a closed run is refused. Closing a closed run does
-	 * nothing.
+	 * the run holds: the check opened for it first, then the executor its work ran on. A document
+	 * handed to a closed run is refused. Closing a closed run does nothing.
 	 * 
 	 * <p>Close a run from the thread that created it, or from any other thread that is not waiting
 	 * for the findings of this run itself: closing waits for them, so a callback completing one of
 	 * them that closes the run would wait for itself.</p>
 	 */
 	@Override
-	public void close() {
+	public synchronized void close() {
+		if (this.closed) {
+			return;
+		}
 		this.closed = true;
 
 		for (CompletableFuture<List<ValidationIssue>> findings : List.copyOf(this.awaitedFindings)) {
@@ -200,6 +227,14 @@ public final class MarkdownValidationRun implements AutoCloseable {
 			} catch (CancellationException | CompletionException failure) {
 				// whoever waits for these findings is told what happened; closing only waits
 			}
+		}
+
+		try {
+			if (this.uriReachabilityChecker != null) {
+				this.uriReachabilityChecker.close();
+			}
+		} finally {
+			this.executor.close();
 		}
 	}
 

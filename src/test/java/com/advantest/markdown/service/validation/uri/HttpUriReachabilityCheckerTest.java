@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -27,8 +28,11 @@ import java.net.http.HttpResponse.BodyHandler;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -289,6 +293,102 @@ class HttpUriReachabilityCheckerTest {
 				new HttpUriReachabilityChecker(Duration.ofSeconds(4), Duration.ofSeconds(4));
 
 		assertEquals(Duration.ofSeconds(4), checker.getAnswerTimeout());
+	}
+
+	@Test
+	void viewOfARunAsksWithAClientOfItsOwnExecutingOnTheExecutorOfTheRun() {
+		HttpClient clientOfTheRun = clientAnswering(200);
+		List<Executor> executorsGiven = new ArrayList<>();
+		HttpUriReachabilityChecker checker = new HttpUriReachabilityChecker(executor -> {
+			executorsGiven.add(executor);
+			return clientOfTheRun;
+		}, Duration.ofSeconds(1));
+		Executor executorOfTheRun = Runnable::run;
+
+		try (UriReachabilityChecker.OfRun view = checker.openForRun(executorOfTheRun)) {
+			assertEquals(new UriReachability.Answered(200), view.check(SOME_ADDRESS).join());
+		}
+
+		assertEquals(List.of(executorOfTheRun), executorsGiven,
+				"Only the view is expected to create a client, executing on the executor of the run.");
+		verify(clientOfTheRun).sendAsync(any(), any());
+	}
+
+	@Test
+	void closingAViewClosesItsClient() {
+		HttpClient clientOfTheRun = clientAnswering(200);
+		HttpUriReachabilityChecker checker = checkerUsing(clientOfTheRun);
+
+		checker.openForRun(Runnable::run).close();
+
+		verify(clientOfTheRun).close();
+	}
+
+	@Test
+	void viewsShareTheAnswersOfTheChecker() {
+		HttpClient firstClient = clientAnswering(200);
+		HttpClient secondClient = clientAnswering(200);
+		List<HttpClient> clients = new ArrayList<>(List.of(firstClient, secondClient));
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(executor -> clients.remove(0), Duration.ofSeconds(1));
+
+		try (UriReachabilityChecker.OfRun first = checker.openForRun(Runnable::run)) {
+			first.check(SOME_ADDRESS).join();
+		}
+		try (UriReachabilityChecker.OfRun second = checker.openForRun(Runnable::run)) {
+			assertEquals(new UriReachability.Answered(200), second.check(SOME_ADDRESS).join());
+		}
+
+		verify(firstClient, times(1)).sendAsync(any(), any());
+		verify(secondClient, times(0)).sendAsync(any(), any());
+	}
+
+	@Test
+	void cancellingAViewStopsItsClientAndRemembersNothingItDidNotWaitFor() {
+		CompletableFuture<HttpResponse<Void>> pendingAnswer = new CompletableFuture<>();
+		HttpClient clientOfTheRun = clientAnsweringWith(pendingAnswer);
+		doAnswer(invocation -> pendingAnswer.completeExceptionally(new IOException("shut down")))
+				.when(clientOfTheRun).shutdownNow();
+		HttpUriReachabilityChecker checker = checkerUsing(clientOfTheRun);
+
+		UriReachabilityChecker.OfRun view = checker.openForRun(Runnable::run);
+		CompletableFuture<UriReachability> answer = view.check(SOME_ADDRESS);
+		view.cancel();
+
+		verify(clientOfTheRun).shutdownNow();
+		CompletionException failure = assertThrows(CompletionException.class, answer::join);
+		assertInstanceOf(CancellationException.class, failure.getCause(),
+				"An answer nobody waited for is expected to be cancelled rather than to say the address did not answer.");
+
+		pendingAnswer.obtrudeValue(responseWith(200));
+		assertEquals(new UriReachability.Answered(200), checker.check(SOME_ADDRESS).join(),
+				"The address is expected to be asked again, since its earlier answer was not waited for.");
+		verify(clientOfTheRun, times(2)).sendAsync(any(), any());
+	}
+
+	@Test
+	void viewWaitingForAnAnswerAnotherViewDidNotWaitForAsksItself() {
+		CompletableFuture<HttpResponse<Void>> pendingAnswer = new CompletableFuture<>();
+		HttpClient cancelledClient = clientAnsweringWith(pendingAnswer);
+		doAnswer(invocation -> pendingAnswer.completeExceptionally(new IOException("shut down")))
+				.when(cancelledClient).shutdownNow();
+		HttpClient goingOnClient = clientAnswering(404);
+		List<HttpClient> clients = new ArrayList<>(List.of(cancelledClient, goingOnClient));
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(executor -> clients.remove(0), Duration.ofSeconds(1));
+
+		UriReachabilityChecker.OfRun cancelled = checker.openForRun(Runnable::run);
+		UriReachabilityChecker.OfRun goingOn = checker.openForRun(Runnable::run);
+		cancelled.check(SOME_ADDRESS);
+		CompletableFuture<UriReachability> answer = goingOn.check(SOME_ADDRESS);
+		assertFalse(answer.isDone(), "The second view is expected to wait for the request of the first one.");
+
+		cancelled.cancel();
+
+		assertEquals(new UriReachability.Answered(404), answer.join(),
+				"The view still waiting is expected to ask the address itself.");
+		verify(goingOnClient).sendAsync(any(), any());
+		goingOn.close();
 	}
 
 	private static HttpUriReachabilityChecker checkerUsing(HttpClient httpClient) {

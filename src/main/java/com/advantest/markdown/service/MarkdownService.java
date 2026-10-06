@@ -203,7 +203,7 @@ public class MarkdownService {
 		List<UriValidator> validatorsAskedInOrder = new ArrayList<>(registeredValidators);
 		validatorsAskedInOrder.add(new HttpUriSyntaxValidator());
 		if (uriReachabilityChecker != null) {
-			validatorsAskedInOrder.add(new DefaultHttpUriReachabilityValidator(uriReachabilityChecker));
+			validatorsAskedInOrder.add(new DefaultHttpUriReachabilityValidator());
 		}
 		validatorsAskedInOrder.add(new UnknownSchemeUriValidator());
 
@@ -599,7 +599,7 @@ public class MarkdownService {
 	 * @see MarkdownValidationRun
 	 */
 	public MarkdownValidationRun createValidationRun() {
-		return this.validation.createRun();
+		return this.validation.createRun(this.uriReachabilityChecker);
 	}
 
 	private List<ValidationIssue> validateInOneRun(Document markdownDocument) {

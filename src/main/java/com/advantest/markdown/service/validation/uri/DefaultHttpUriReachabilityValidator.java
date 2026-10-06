@@ -7,6 +7,7 @@
 package com.advantest.markdown.service.validation.uri;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.advantest.markdown.service.validation.IssueSeverity;
@@ -20,8 +21,8 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * 
  * <p>Two things can be wrong with an address that can be read: it does not answer at all, or it
  * answers by saying that there is nothing there. Both are decided by asking it, which is what the
- * {@link UriReachabilityChecker} does, and both are therefore reported only by a service that was
- * given such a check.</p>
+ * {@link UriReachabilityChecker} of the run does, and both are therefore reported only in a run that
+ * was given such a check. In a run without one, this validator finds nothing.</p>
  * 
  * <p>This validator answers for a target naming the scheme <code>http</code> or <code>https</code>
  * that was read as an address. A text that was meant as a web address and is none belongs to
@@ -36,21 +37,6 @@ public class DefaultHttpUriReachabilityValidator implements UriValidator {
 
 	private static final String SCHEME_HTTPS = "https";
 
-	private final UriReachabilityChecker reachabilityChecker;
-
-	/**
-	 * Creates the validator, asking the given check whether an address is there.
-	 * 
-	 * @param reachabilityChecker the check asking an address whether it is there, must not be
-	 *                            <code>null</code>
-	 * @throws IllegalArgumentException if the given check is <code>null</code>
-	 */
-	public DefaultHttpUriReachabilityValidator(UriReachabilityChecker reachabilityChecker) {
-		if (reachabilityChecker == null) {
-			throw new IllegalArgumentException("Argument must not be null.");
-		}
-		this.reachabilityChecker = reachabilityChecker;
-	}
 
 	@Override
 	public boolean isResponsibleFor(UriTarget target) {
@@ -66,15 +52,16 @@ public class DefaultHttpUriReachabilityValidator implements UriValidator {
 	public CompletableFuture<List<ValidationIssue>> validate(UriTarget target,
 			MarkdownValidationContext context) {
 
-		if (target == null) {
-			throw new IllegalArgumentException("Argument must not be null.");
+		if (target == null || context == null) {
+			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 
-		if (target.uri().isEmpty()) {
+		Optional<UriReachabilityChecker> reachabilityChecker = context.getUriReachabilityChecker();
+		if (target.uri().isEmpty() || reachabilityChecker.isEmpty()) {
 			return CompletableFuture.completedFuture(List.of());
 		}
 
-		return this.reachabilityChecker.check(target.uri().orElseThrow())
+		return reachabilityChecker.orElseThrow().check(target.uri().orElseThrow())
 				.thenApply(reachability -> whatIsWrongWith(target, reachability));
 	}
 

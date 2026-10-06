@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.validation.anchor.AnchorValidator;
+import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriValidator;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
@@ -118,13 +119,25 @@ public class MarkdownValidation {
 
 	/**
 	 * Creates a run applying these rules, which reads and parses everything the documents handed to
-	 * it refer to at most once.
+	 * it refer to at most once, and asks no address whether it is there.
 	 * 
 	 * @return a new run, never <code>null</code>, to be closed by the caller
 	 */
 	public MarkdownValidationRun createRun() {
-		return new MarkdownValidationRun(this, this.parserAndRenderer,
-				MarkdownValidationContext.parsingWith(this.parserAndRenderer));
+		return createRun(null);
+	}
+
+	/**
+	 * Creates a run applying these rules, which reads and parses everything the documents handed to
+	 * it refer to at most once, and asks an address whether it is there through the given check,
+	 * {@link UriReachabilityChecker#openForRun(java.util.concurrent.Executor) opened} for the run.
+	 * 
+	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
+	 *                               <code>null</code>, in which case no address is asked about
+	 * @return a new run, never <code>null</code>, to be closed by the caller
+	 */
+	public MarkdownValidationRun createRun(UriReachabilityChecker uriReachabilityChecker) {
+		return new MarkdownValidationRun(this, this.parserAndRenderer, uriReachabilityChecker);
 	}
 
 	/**

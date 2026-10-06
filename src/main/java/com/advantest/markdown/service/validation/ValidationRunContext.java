@@ -7,9 +7,11 @@
 package com.advantest.markdown.service.validation;
 
 import java.io.IOException;
+import java.util.Optional;
 
 import com.advantest.markdown.service.parsing.ParsedMarkdownDocumentsCache;
 import com.advantest.markdown.service.resources.ResourceContentsCache;
+import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.Resource;
 import com.vladsch.flexmark.util.ast.Document;
 
@@ -25,14 +27,23 @@ import com.vladsch.flexmark.util.ast.Document;
  *                  <code>null</code>
  * @param documents the cache every Markdown resource of the run is parsed through, reading through
  *                  <code>contents</code>, must not be <code>null</code>
+ * @param uriReachabilityChecker the check of the run asking an address whether it is there, may be
+ *                               <code>null</code>, in which case no address is asked about
  */
-record ValidationRunContext(ResourceContentsCache contents, ParsedMarkdownDocumentsCache documents)
-		implements MarkdownValidationContext {
+record ValidationRunContext(ResourceContentsCache contents, ParsedMarkdownDocumentsCache documents,
+		UriReachabilityChecker uriReachabilityChecker) implements MarkdownValidationContext {
 
 	ValidationRunContext {
 		if (contents == null || documents == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
+	}
+
+	/**
+	 * Creates the context of a run asking no address whether it is there.
+	 */
+	ValidationRunContext(ResourceContentsCache contents, ParsedMarkdownDocumentsCache documents) {
+		this(contents, documents, null);
 	}
 
 	@Override
@@ -43,6 +54,11 @@ record ValidationRunContext(ResourceContentsCache contents, ParsedMarkdownDocume
 	@Override
 	public Document getParsedMarkdownDocument(Resource markdownResource) throws IOException {
 		return this.documents.parseMarkdown(markdownResource);
+	}
+
+	@Override
+	public Optional<UriReachabilityChecker> getUriReachabilityChecker() {
+		return Optional.ofNullable(this.uriReachabilityChecker);
 	}
 
 }

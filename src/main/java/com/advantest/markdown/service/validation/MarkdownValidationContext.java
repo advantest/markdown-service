@@ -7,10 +7,12 @@
 package com.advantest.markdown.service.validation;
 
 import java.io.IOException;
+import java.util.Optional;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.parsing.ParsedMarkdownDocumentsCache;
 import com.advantest.markdown.service.resources.ResourceContentsCache;
+import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.Resource;
 import com.vladsch.flexmark.util.ast.Document;
 
@@ -86,5 +88,19 @@ public interface MarkdownValidationContext {
 	 *                                  them
 	 */
 	Document getParsedMarkdownDocument(Resource markdownResource) throws IOException;
+
+	/**
+	 * Hands out the check of this run asking an address whether it is there.
+	 * 
+	 * <p>The check belongs to the run: whatever it opened to ask with is let go of when the run
+	 * ends, and stopped when the run is cancelled. What it learnt about an address is remembered
+	 * beyond the run, so a validator asks it rather than remembering an answer itself.</p>
+	 * 
+	 * @return the check, or {@link Optional#empty()} if no address is asked about in this run, which
+	 *         this default answers
+	 */
+	default Optional<UriReachabilityChecker> getUriReachabilityChecker() {
+		return Optional.empty();
+	}
 
 }
