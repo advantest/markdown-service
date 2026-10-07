@@ -209,6 +209,14 @@ public final class MarkdownValidationRun implements AutoCloseable {
 	}
 
 	/**
+	 * Tells whether the run was {@link #close() closed}, which it is from the moment closing began.
+	 * 
+	 * @return <code>true</code> if the run was closed
+	 */
+	public boolean isClosed() {
+		return this.closed;
+	}
+	/**
 	 * Waits for every promise of findings still being waited for, and then lets go of everything
 	 * the run holds: the check opened for it first, then the executor its work ran on. A document
 	 * handed to a closed run is refused. Closing a closed run does nothing.

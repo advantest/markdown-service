@@ -130,6 +130,17 @@ public class MarkdownValidationRunTest {
 	}
 
 	@Test
+	void aRunSaysWhetherItWasClosed() {
+		MarkdownValidationRun run = rulesOf(new DocumentValidator(true)).createRun();
+		assertFalse(run.isClosed(), "A new run is expected to be open.");
+
+		run.cancel();
+		assertFalse(run.isClosed(), "A cancelled run is expected to be open until it is closed.");
+
+		run.close();
+		assertTrue(run.isClosed(), "A closed run is expected to say so.");
+	}
+	@Test
 	void aClosedRunRefusesADocument() {
 		DocumentValidator validator = new DocumentValidator(true);
 		MarkdownValidationRun run = rulesOf(validator).createRun();
