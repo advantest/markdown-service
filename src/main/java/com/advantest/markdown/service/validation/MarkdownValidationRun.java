@@ -55,7 +55,7 @@ import com.vladsch.flexmark.util.ast.Document;
  */
 public final class MarkdownValidationRun implements AutoCloseable {
 
-	private final MarkdownValidation rules;
+	private final MarkdownValidationRules rules;
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
@@ -83,7 +83,7 @@ public final class MarkdownValidationRun implements AutoCloseable {
 	 *                       once per resource, must not be <code>null</code>
 	 * @throws IllegalArgumentException if the rules, the parser or the reader are <code>null</code>
 	 */
-	MarkdownValidationRun(MarkdownValidation rules, MarkdownParserAndHtmlRenderer parserAndRenderer,
+	MarkdownValidationRun(MarkdownValidationRules rules, MarkdownParserAndHtmlRenderer parserAndRenderer,
 			UriReachabilityChecker uriReachabilityChecker, ResourceContentsReader contentsReader) {
 		if (rules == null || parserAndRenderer == null || contentsReader == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");

@@ -38,7 +38,7 @@ import com.advantest.resources.Resource;
 import com.advantest.resources.ResourceResolver;
 import com.advantest.resources.UnresolvedResource;
 import com.advantest.resources.UriResolver;
-import com.advantest.markdown.service.validation.MarkdownValidation;
+import com.advantest.markdown.service.validation.MarkdownValidationRules;
 import com.advantest.markdown.service.validation.MarkdownValidationRun;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.plantuml.PlantUmlSettings;
@@ -80,7 +80,7 @@ public class MarkdownService {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
-	private final MarkdownValidation validation;
+	private final MarkdownValidationRules validation;
 
 	private final UriReachabilityChecker uriReachabilityChecker;
 
@@ -159,7 +159,7 @@ public class MarkdownService {
 		}
 		useTheUsualDotExecutableWhereNobodyNamedOne();
 		this.parserAndRenderer = parserAndRenderer;
-		this.validation = new MarkdownValidation(parserAndRenderer, resourceResolvers,
+		this.validation = new MarkdownValidationRules(parserAndRenderer, resourceResolvers,
 				withShippedValidators(uriValidators, uriReachabilityChecker),
 				withShippedAnchorValidators(anchorValidators, parserAndRenderer));
 		this.uriReachabilityChecker = uriReachabilityChecker;

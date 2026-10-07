@@ -16,7 +16,7 @@ import com.vladsch.flexmark.util.ast.Node;
  * A rule checking one kind of Markdown construct.
  * 
  * <p>A validator does not search the document. It names the node types it is triggered by, and
- * {@link MarkdownValidation} hands it every node of those types the document contains, one at a
+ * {@link MarkdownValidationRules} hands it every node of those types the document contains, one at a
  * time. Nodes below a node its {@link #getIgnoredNodes() node filter} rejects are not offered.</p>
  * 
  * <p>A validator checking the whole document at once, e.g. one comparing all link reference

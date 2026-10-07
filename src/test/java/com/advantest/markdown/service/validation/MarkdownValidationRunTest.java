@@ -77,14 +77,14 @@ public class MarkdownValidationRunTest {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer = new MarkdownParserAndHtmlRenderer();
 
-	private MarkdownValidation rulesOf(MarkdownValidator validator) {
-		return new MarkdownValidation(this.parserAndRenderer, List.of(validator));
+	private MarkdownValidationRules rulesOf(MarkdownValidator validator) {
+		return new MarkdownValidationRules(this.parserAndRenderer, List.of(validator));
 	}
 
 	@Test
 	void theDocumentsOfOneRunShareTheContextOfTheRun() {
 		DocumentValidator validator = new DocumentValidator(true);
-		MarkdownValidation rules = rulesOf(validator);
+		MarkdownValidationRules rules = rulesOf(validator);
 
 		try (MarkdownValidationRun run = rules.createRun()) {
 			run.validate("# One\n", UnresolvedResource.UNKNOWN_DOCUMENT).join();

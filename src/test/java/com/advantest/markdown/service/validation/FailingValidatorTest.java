@@ -311,7 +311,7 @@ class FailingValidatorTest {
 	private List<ValidationIssue> validate(String markdown, MarkdownValidator... validators) {
 		Document document = this.service.parseMarkdown(markdown);
 		MarkdownParserAndHtmlRenderer parserAndRenderer = new MarkdownParserAndHtmlRenderer();
-		return new MarkdownValidation(parserAndRenderer, List.of(validators))
+		return new MarkdownValidationRules(parserAndRenderer, List.of(validators))
 				.validate(document, MarkdownValidationContext.parsingWith(parserAndRenderer)).join();
 	}
 

@@ -27,10 +27,10 @@ import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 
 /**
- * Checks the document traversal of {@link MarkdownValidation}, i.e. which nodes a validator is
+ * Checks the document traversal of {@link MarkdownValidationRules}, i.e. which nodes a validator is
  * offered and which ones are kept away from it.
  */
-public class MarkdownValidationTraversalTest {
+public class MarkdownValidationRulesTraversalTest {
 
 	private final MarkdownService service = new MarkdownService();
 
@@ -78,7 +78,7 @@ public class MarkdownValidationTraversalTest {
 	private List<ValidationIssue> validate(String markdown, MarkdownValidator... validators) {
 		Document document = this.service.parseMarkdown(markdown);
 		MarkdownParserAndHtmlRenderer parserAndRenderer = new MarkdownParserAndHtmlRenderer();
-		return new MarkdownValidation(parserAndRenderer, List.of(validators))
+		return new MarkdownValidationRules(parserAndRenderer, List.of(validators))
 				.validate(document, MarkdownValidationContext.parsingWith(parserAndRenderer)).join();
 	}
 

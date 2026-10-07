@@ -37,7 +37,7 @@ import com.vladsch.flexmark.util.ast.Node;
  * while it checks its documents. The rules themselves hold nothing of a document and live as long
  * as the service they belong to.</p>
  */
-public class MarkdownValidation {
+public class MarkdownValidationRules {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
@@ -56,7 +56,7 @@ public class MarkdownValidation {
 	 * @param resourceResolvers the resolvers of everything a document refers to, must not be
 	 *                          <code>null</code>
 	 */
-	public MarkdownValidation(MarkdownParserAndHtmlRenderer parserAndRenderer,
+	public MarkdownValidationRules(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers) {
 		this(parserAndRenderer, resourceResolvers, List.of(), List.of());
 	}
@@ -77,7 +77,7 @@ public class MarkdownValidation {
 	 *                         given order, so that the first one saying it is responsible answers
 	 *                         for a target, must not be <code>null</code>
 	 */
-	public MarkdownValidation(MarkdownParserAndHtmlRenderer parserAndRenderer,
+	public MarkdownValidationRules(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers,
 			List<UriValidator> uriValidators,
 			List<AnchorValidator> anchorValidators) {
@@ -94,7 +94,7 @@ public class MarkdownValidation {
 	 *                          <code>null</code>
 	 * @param validators the validators to be applied, must not be <code>null</code>
 	 */
-	MarkdownValidation(MarkdownParserAndHtmlRenderer parserAndRenderer,
+	MarkdownValidationRules(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			List<MarkdownValidator> validators) {
 		if (parserAndRenderer == null || validators == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
@@ -195,7 +195,7 @@ public class MarkdownValidation {
 
 		visit(document, Collections.newSetFromMap(new IdentityHashMap<>()), context, issues);
 
-		return issues.promised().thenApply(MarkdownValidation::orderedByPosition);
+		return issues.promised().thenApply(MarkdownValidationRules::orderedByPosition);
 	}
 
 	/**
