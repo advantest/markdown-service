@@ -209,6 +209,37 @@ class MarkdownServiceCloseTest {
 	}
 
 	@Test
+	void aPartHandedOverToBeClosedIsClosedAfterThePartsUsingIt() {
+		CloseableRelativePathResolver relativePathResolver = new CloseableRelativePathResolver();
+		CloseableUriValidator uriValidator = new CloseableUriValidator();
+		CountingPart sharedClient = new CountingPart();
+		CountingPart otherSharedClient = new CountingPart();
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
+				.withRelativePathResourceResolver(relativePathResolver)
+				.withUriValidator(uriValidator)
+				.withPartToClose(sharedClient)
+				.withPartToClose(otherSharedClient)
+				.build();
+
+		service.close();
+
+		assertEquals(1, sharedClient.timesClosed);
+		assertEquals(1, otherSharedClient.timesClosed);
+		assertTrue(uriValidator.closedAt < sharedClient.closedAt,
+				"A part handed over to be closed is expected to be closed after the validators.");
+		assertTrue(relativePathResolver.closedAt < sharedClient.closedAt,
+				"A part handed over to be closed is expected to be closed after the resolvers.");
+		assertTrue(sharedClient.closedAt < otherSharedClient.closedAt,
+				"The parts handed over to be closed are expected to be closed in the order given.");
+	}
+
+	@Test
+	void noPartToCloseIsTakenThatIsNotThere() {
+		assertThrows(IllegalArgumentException.class,
+				() -> MarkdownService.builderNotCheckingUriReachability().withPartToClose(null));
+	}
+
+	@Test
 	void closingAClosedServiceDoesNothing() {
 		CloseableUriValidator uriValidator = new CloseableUriValidator();
 		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()

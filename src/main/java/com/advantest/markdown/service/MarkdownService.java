@@ -80,8 +80,10 @@ import net.sourceforge.plantuml.security.SecurityProfile;
  * <p>A service owns what it is made of. Every part handed to its {@link Builder} that is
  * {@link AutoCloseable} &ndash; a resolver, the check asking an address whether it is there, a
  * validator &ndash; is closed when the service is {@link #close() closed}, and so is every part the
- * service created itself. A service is meant to live as long as the program using it, e.g. from
- * the start of a plug-in to its end, and to be closed then.</p>
+ * service created itself. Something the parts use without owning it, e.g. a client several
+ * validators share, is handed over with {@link Builder#withPartToClose(AutoCloseable)} and closed
+ * after them. A service is meant to live as long as the program using it, e.g. from the start of a
+ * plug-in to its end, and to be closed then.</p>
  * 
  * @see ResourceResolver
  */
@@ -100,6 +102,9 @@ public class MarkdownService implements AutoCloseable {
 	private final List<UriValidator> uriValidators;
 
 	private final List<AnchorValidator> anchorValidators;
+
+	/** What the parts of this service use without owning it, closed after them. */
+	private final List<AutoCloseable> partsToClose;
 
 	/** Everything this service is made of that remembers answers, in no particular order. */
 	private final List<CachesHolder> cachesHolders;
@@ -125,7 +130,8 @@ public class MarkdownService implements AutoCloseable {
 		this(MarkdownParserAndHtmlRenderer.builder()
 				.withResourceContentsReader(unsavedContents.readerOfCurrentContents())
 				.build(),
-				ResourceResolverRegistry.ofLocalFileSystem(), unsavedContents, null, List.of(), List.of());
+				ResourceResolverRegistry.ofLocalFileSystem(), unsavedContents, null, List.of(), List.of(),
+				List.of());
 	}
 
 	/**
@@ -141,7 +147,8 @@ public class MarkdownService implements AutoCloseable {
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers) {
-		this(parserAndRenderer, resourceResolvers, new UnsavedResourceContents(), null, List.of(), List.of());
+		this(parserAndRenderer, resourceResolvers, new UnsavedResourceContents(), null, List.of(), List.of(),
+				List.of());
 	}
 
 	/**
@@ -166,15 +173,18 @@ public class MarkdownService implements AutoCloseable {
 	 *                         given order, so that the first one saying it is responsible answers
 	 *                         for a target; the builder hands them over in the reverse of the order
 	 *                         they were registered in, must not be <code>null</code>
+	 * @param partsToClose what the other parts use without owning it, closed after them in the
+	 *                     given order, must not be <code>null</code>
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers,
 			UnsavedResourceContents unsavedContents,
 			UriReachabilityChecker uriReachabilityChecker,
 			List<UriValidator> uriValidators,
-			List<AnchorValidator> anchorValidators) {
+			List<AnchorValidator> anchorValidators,
+			List<AutoCloseable> partsToClose) {
 		if (parserAndRenderer == null || resourceResolvers == null || unsavedContents == null
-				|| uriValidators == null || anchorValidators == null) {
+				|| uriValidators == null || anchorValidators == null || partsToClose == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		useTheUsualDotExecutableWhereNobodyNamedOne();
@@ -187,6 +197,7 @@ public class MarkdownService implements AutoCloseable {
 		this.resourceResolvers = resourceResolvers;
 		this.uriValidators = List.copyOf(uriValidators);
 		this.anchorValidators = List.copyOf(anchorValidators);
+		this.partsToClose = List.copyOf(partsToClose);
 		this.cachesHolders = cachesHoldersAmong(uriReachabilityChecker, uriValidators,
 				anchorValidators);
 	}
@@ -234,7 +245,8 @@ public class MarkdownService implements AutoCloseable {
 	 * {@link MarkdownValidationRun#cancel() cancelled} and closed, and afterwards every part of the
 	 * service that is {@link AutoCloseable} is closed, whether it was handed to the builder or
 	 * created by the service: the validators first, then the check asking an address whether it
-	 * is there, and finally the resolvers, which the validators use.
+	 * is there, then the resolvers, which the validators use, and finally every part handed over
+	 * with {@link Builder#withPartToClose(AutoCloseable)}.
 	 * 
 	 * <p>A closed service does nothing any more: every method of it but this one raises an
 	 * {@link IllegalStateException}. Closing a closed service does nothing. A part handed to the
@@ -265,6 +277,7 @@ public class MarkdownService implements AutoCloseable {
 		parts.addAll(this.anchorValidators);
 		parts.add(this.uriReachabilityChecker);
 		parts.add(this.resourceResolvers);
+		parts.addAll(this.partsToClose);
 
 		RuntimeException firstFailure = null;
 		for (Object part : parts) {
@@ -862,6 +875,8 @@ public class MarkdownService implements AutoCloseable {
 
 		private final List<AnchorValidator> anchorValidators = new ArrayList<>();
 
+		private final List<AutoCloseable> partsToClose = new ArrayList<>();
+
 		private Builder() {
 		}
 
@@ -1067,6 +1082,26 @@ public class MarkdownService implements AutoCloseable {
 		}
 
 		/**
+		 * Hands the service something to close when the service is
+		 * {@link MarkdownService#close() closed}, e.g. a client that several validators ask and
+		 * none of them owns. It belongs to the service from now on.
+		 * 
+		 * <p>The parts handed over here are closed after the validators, the check and the
+		 * resolvers, which may use them, in the order they were handed over.</p>
+		 * 
+		 * @param part the part to be closed with the service, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the given part is <code>null</code>
+		 */
+		public Builder withPartToClose(AutoCloseable part) {
+			if (part == null) {
+				throw new IllegalArgumentException("Argument must not be null.");
+			}
+			this.partsToClose.add(part);
+			return this;
+		}
+
+		/**
 		 * Adds the given flexmark extension to the extensions already configured,
 		 * i.e. it does not replace or remove any of the default extensions.
 		 * 
@@ -1152,7 +1187,8 @@ public class MarkdownService implements AutoCloseable {
 			Collections.reverse(anchorValidatorsAskedInOrder);
 
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers, unsavedContents,
-					this.uriReachabilityChecker, validatorsAskedInOrder, anchorValidatorsAskedInOrder);
+					this.uriReachabilityChecker, validatorsAskedInOrder, anchorValidatorsAskedInOrder,
+					this.partsToClose);
 		}
 
 	}
