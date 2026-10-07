@@ -10,11 +10,15 @@ import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 import com.advantest.markdown.MarkdownCustomization;
@@ -74,9 +78,15 @@ import net.sourceforge.plantuml.security.SecurityProfile;
  * method taking Markdown source code therefore has a variant taking that resource as well; the
  * variants without it read a document of unknown origin, whose references cannot be resolved.</p>
  * 
+ * <p>A service owns what it is made of. Every part handed to its {@link Builder} that is
+ * {@link AutoCloseable} &ndash; a resolver, the check asking an address whether it is there, a
+ * validator &ndash; is closed when the service is {@link #close() closed}, and so is every part the
+ * service created itself. A service is meant to live as long as the program using it, e.g. from
+ * the start of a plug-in to its end, and to be closed then.</p>
+ * 
  * @see ResourceResolver
  */
-public class MarkdownService {
+public class MarkdownService implements AutoCloseable {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
@@ -88,6 +98,14 @@ public class MarkdownService {
 
 	/** Everything this service is made of that remembers answers, in no particular order. */
 	private final List<CachesHolder> cachesHolders;
+
+	/** Everything this service is made of that is to be closed with it, each part once. */
+	private final List<AutoCloseable> closeableParts;
+
+	/** The runs this service handed out that may not have been closed yet. */
+	private final Set<MarkdownValidationRun> openRuns = ConcurrentHashMap.newKeySet();
+
+	private final AtomicBoolean closed = new AtomicBoolean();
 
 	/**
 	 * Creates a service using the default Markdown parser and HTML renderer configuration
@@ -166,6 +184,29 @@ public class MarkdownService {
 		this.unsavedContents = unsavedContents;
 		this.cachesHolders = cachesHoldersAmong(uriReachabilityChecker, uriValidators,
 				anchorValidators);
+		this.closeableParts = closeablePartsAmong(resourceResolvers, uriReachabilityChecker,
+				uriValidators, anchorValidators);
+	}
+
+	/**
+	 * Collects the parts among the given ones that are to be closed with the service, each of them
+	 * once however often it was handed over.
+	 */
+	private static List<AutoCloseable> closeablePartsAmong(ResourceResolverRegistry resourceResolvers,
+			UriReachabilityChecker uriReachabilityChecker, List<UriValidator> uriValidators,
+			List<AnchorValidator> anchorValidators) {
+
+		Set<AutoCloseable> parts = Collections.newSetFromMap(new IdentityHashMap<>());
+		List<AutoCloseable> partsInOrder = new ArrayList<>();
+		Stream.of(resourceResolvers.resolvers().stream(), Stream.of(uriReachabilityChecker),
+						uriValidators.stream(), anchorValidators.stream())
+				.flatMap(stream -> stream)
+				.filter(AutoCloseable.class::isInstance)
+				.map(AutoCloseable.class::cast)
+				.filter(parts::add)
+				.forEach(partsInOrder::add);
+
+		return List.copyOf(partsInOrder);
 	}
 
 	/**
@@ -198,9 +239,67 @@ public class MarkdownService {
 	 * <p>Say this where the answers may have gone stale, e.g. in a program running for a day, or
 	 * where a document that was reported unreachable is known to be there by now. It may be said
 	 * while documents are being validated; what is already being waited for is not taken back.</p>
+	 * 
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public void clearCaches() {
+		requireOpen();
 		this.cachesHolders.forEach(CachesHolder::clearCaches);
+	}
+
+	/**
+	 * Closes this service: every validation run it handed out and that is still open is
+	 * {@link MarkdownValidationRun#cancel() cancelled} and closed, and afterwards every part of the
+	 * service that is {@link AutoCloseable} is closed, whether it was handed to the builder or
+	 * created by the service.
+	 * 
+	 * <p>A closed service does nothing any more: every method of it but this one raises an
+	 * {@link IllegalStateException}. Closing a closed service does nothing.</p>
+	 * 
+	 * <p>Every part is closed even if closing another one failed. The first failure is raised
+	 * afterwards, carrying the later ones as suppressed; a failure that is not a
+	 * {@link RuntimeException} is wrapped into an {@link IllegalStateException}.</p>
+	 * 
+	 * <p>Close a service from a thread that does no work of a run the service handed out:
+	 * closing a run waits for the work it started.</p>
+	 */
+	@Override
+	public void close() {
+		if (!this.closed.compareAndSet(false, true)) {
+			return;
+		}
+
+		List<MarkdownValidationRun> runs = this.openRuns.stream()
+				.filter(run -> !run.isClosed())
+				.toList();
+		runs.forEach(MarkdownValidationRun::cancel);
+		runs.forEach(MarkdownValidationRun::close);
+		this.openRuns.clear();
+
+		RuntimeException firstFailure = null;
+		for (AutoCloseable part : this.closeableParts) {
+			try {
+				part.close();
+			} catch (Exception failure) {
+				RuntimeException closingFailed = failure instanceof RuntimeException runtimeFailure
+						? runtimeFailure
+						: new IllegalStateException("A part of the service could not be closed.", failure);
+				if (firstFailure == null) {
+					firstFailure = closingFailed;
+				} else {
+					firstFailure.addSuppressed(closingFailed);
+				}
+			}
+		}
+		if (firstFailure != null) {
+			throw firstFailure;
+		}
+	}
+
+	private void requireOpen() {
+		if (this.closed.get()) {
+			throw new IllegalStateException("The service was closed and does nothing any more.");
+		}
 	}
 
 	/**
@@ -424,8 +523,10 @@ public class MarkdownService {
 	 * @param markdownSourceCode the Markdown source code to be parsed
 	 * @return the parsed abstract syntax tree's root, never <code>null</code>
 	 * @see MarkdownParserAndHtmlRenderer#parseMarkdown(String)
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public Document parseMarkdown(String markdownSourceCode) {
+		requireOpen();
 		return this.parserAndRenderer.parseMarkdown(markdownSourceCode);
 	}
 
@@ -440,8 +541,10 @@ public class MarkdownService {
 	 * @return the parsed abstract syntax tree's root, never <code>null</code>
 	 * @throws IllegalArgumentException if the given resource is <code>null</code>
 	 * @see MarkdownParserAndHtmlRenderer#parseMarkdown(String, Resource)
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public Document parseMarkdown(String markdownSourceCode, Resource documentResource) {
+		requireOpen();
 		return this.parserAndRenderer.parseMarkdown(markdownSourceCode, documentResource);
 	}
 
@@ -451,8 +554,10 @@ public class MarkdownService {
 	 * @param markdownAstNode the root of the abstract syntax tree to be translated to HTML code
 	 * @return the resulting HTML source code
 	 * @see MarkdownParserAndHtmlRenderer#renderHtml(Node)
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public String renderHtml(Node markdownAstNode) {
+		requireOpen();
 		return this.parserAndRenderer.renderHtml(markdownAstNode);
 	}
 
@@ -462,8 +567,10 @@ public class MarkdownService {
 	 * @param markdownSourceCode the Markdown source code to be parsed and translated to HTML
 	 * @return the resulting HTML source code
 	 * @see MarkdownParserAndHtmlRenderer#parseMarkdownAndRenderHtml(String)
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public String parseMarkdownAndRenderHtml(String markdownSourceCode) {
+		requireOpen();
 		return this.parserAndRenderer.parseMarkdownAndRenderHtml(markdownSourceCode);
 	}
 
@@ -477,8 +584,10 @@ public class MarkdownService {
 	 * @return the resulting HTML source code
 	 * @throws IllegalArgumentException if the given resource is <code>null</code>
 	 * @see MarkdownParserAndHtmlRenderer#parseMarkdownAndRenderHtml(String, Resource)
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public String parseMarkdownAndRenderHtml(String markdownSourceCode, Resource documentResource) {
+		requireOpen();
 		return this.parserAndRenderer.parseMarkdownAndRenderHtml(markdownSourceCode, documentResource);
 	}
 
@@ -497,8 +606,10 @@ public class MarkdownService {
 	 * @return the problems found, ordered by start offset, empty if there are none,
 	 *         never <code>null</code> and not modifiable
 	 * @throws IllegalArgumentException if the given document is <code>null</code>
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public List<ValidationIssue> validateMarkdown(Document markdownDocument) {
+		requireOpen();
 		return validateInOneRun(markdownDocument);
 	}
 
@@ -510,6 +621,7 @@ public class MarkdownService {
 	 *         never <code>null</code> and not modifiable
 	 * @throws IllegalArgumentException if the given source code is <code>null</code>
 	 * @see #validateMarkdown(Document)
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public List<ValidationIssue> validateMarkdown(String markdownSourceCode) {
 		if (markdownSourceCode == null) {
@@ -529,6 +641,7 @@ public class MarkdownService {
 	 *         never <code>null</code> and not modifiable
 	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 * @see #validateMarkdown(Document)
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public List<ValidationIssue> validateMarkdown(String markdownSourceCode, Resource documentResource) {
 		if (markdownSourceCode == null) {
@@ -553,8 +666,10 @@ public class MarkdownService {
 	 * @return the promise of the problems found, ordered by start offset, empty if there are none,
 	 *         never <code>null</code> and not modifiable
 	 * @throws IllegalArgumentException if the given document is <code>null</code>
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public CompletableFuture<List<ValidationIssue>> validateMarkdownAsync(Document markdownDocument) {
+		requireOpen();
 		return validateInOneRunAsync(markdownDocument);
 	}
 
@@ -567,6 +682,7 @@ public class MarkdownService {
 	 *         never <code>null</code> and not modifiable
 	 * @throws IllegalArgumentException if the given source code is <code>null</code>
 	 * @see #validateMarkdownAsync(Document)
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public CompletableFuture<List<ValidationIssue>> validateMarkdownAsync(String markdownSourceCode) {
 		if (markdownSourceCode == null) {
@@ -586,6 +702,7 @@ public class MarkdownService {
 	 *         never <code>null</code> and not modifiable
 	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 * @see #validateMarkdownAsync(Document)
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public CompletableFuture<List<ValidationIssue>> validateMarkdownAsync(String markdownSourceCode,
 			Resource documentResource) {
@@ -615,10 +732,23 @@ public class MarkdownService {
 	 * 
 	 * @return a new run, never <code>null</code>, to be closed by the caller
 	 * @see MarkdownValidationRun
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public MarkdownValidationRun createValidationRun() {
-		return this.validation.createRun(this.uriReachabilityChecker,
+		requireOpen();
+		this.openRuns.removeIf(MarkdownValidationRun::isClosed);
+
+		MarkdownValidationRun run = this.validation.createRun(this.uriReachabilityChecker,
 				this.unsavedContents.readerOfContentsSnapshot());
+		this.openRuns.add(run);
+		// remembered before the service is asked again whether it was closed, so that closing
+		// either sees this run and closes it, or this check sees that the service was closed
+		if (this.closed.get()) {
+			run.cancel();
+			run.close();
+			throw new IllegalStateException("The service was closed and does nothing any more.");
+		}
+		return run;
 	}
 
 	/**
@@ -642,8 +772,10 @@ public class MarkdownService {
 	 * @param contents what the resource is to be read as, must not be <code>null</code>
 	 * @throws IllegalArgumentException if an argument is <code>null</code>, or if the resource is
 	 *                                  unresolved or has no resolved path
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public void putUnsavedContents(Resource resource, String contents) {
+		requireOpen();
 		this.unsavedContents.put(resource, contents);
 	}
 
@@ -657,8 +789,10 @@ public class MarkdownService {
 	 *                 resolved path
 	 * @throws IllegalArgumentException if the given resource is <code>null</code>, unresolved or has
 	 *                                  no resolved path
+	 * @throws IllegalStateException if the service was closed
 	 */
 	public void dropUnsavedContents(Resource resource) {
+		requireOpen();
 		this.unsavedContents.drop(resource);
 	}
 
@@ -761,6 +895,9 @@ public class MarkdownService {
 		 * author meant on one machine and nowhere else, and is reported rather than looked
 		 * for.</p>
 		 * 
+		 * <p>A resolver that is {@link AutoCloseable} belongs to the service from now on, which
+		 * closes it when it is {@link MarkdownService#close() closed}.</p>
+		 * 
 		 * @param resolver the resolver of a reference without a scheme, must not be
 		 *                 <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
@@ -782,6 +919,9 @@ public class MarkdownService {
 		 * the beginning of the address, so the one added last that says it is
 		 * {@link UriResolver#isResponsibleFor(java.net.URI) responsible} answers for a
 		 * reference.</p>
+		 * 
+		 * <p>A resolver that is {@link AutoCloseable} belongs to the service from now on, which
+		 * closes it when it is {@link MarkdownService#close() closed}.</p>
 		 * 
 		 * @param resolver the resolver to be added, must not be <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
@@ -862,6 +1002,9 @@ public class MarkdownService {
 		 * {@link #withUriReachabilityCheck()} does, and that validator is asked only about a target
 		 * no {@link #withUriValidator(UriValidator) registered validator} claimed.</p>
 		 * 
+		 * <p>A check that is {@link AutoCloseable} belongs to the service from now on, which
+		 * closes it when it is {@link MarkdownService#close() closed}.</p>
+		 * 
 		 * @param checker the check to be used, must not be <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
 		 * @throws IllegalArgumentException if the given check is <code>null</code>
@@ -890,6 +1033,9 @@ public class MarkdownService {
 		 * ({@link #withUriReachabilityCheck()}), whether the validator reports anything about it or
 		 * not.</p>
 		 * 
+		 * <p>A validator that is {@link AutoCloseable} belongs to the service from now on, which
+		 * closes it when it is {@link MarkdownService#close() closed}.</p>
+		 * 
 		 * @param validator the validator to be added, must not be <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>
 		 * @throws IllegalArgumentException if the given validator is <code>null</code>
@@ -912,6 +1058,9 @@ public class MarkdownService {
 		 * and it answers alone. Looking into a Markdown file is what this library ships, so a
 		 * validator added here is asked before that one. A target no validator claims is reported,
 		 * because nothing would ever look at what the link names.</p>
+		 * 
+		 * <p>A validator that is {@link AutoCloseable} belongs to the service from now on, which
+		 * closes it when it is {@link MarkdownService#close() closed}.</p>
 		 * 
 		 * @param validator the validator to be added, must not be <code>null</code>
 		 * @return this builder for method chaining, never <code>null</code>

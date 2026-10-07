@@ -115,6 +115,19 @@ public final class ResourceResolverRegistry {
 	}
 
 	/**
+	 * Returns every resolver of this registry: the one saying what a path means first, followed by
+	 * the resolvers of references naming a scheme in the order in which they were registered.
+	 * 
+	 * @return the resolvers, never <code>null</code> and not modifiable
+	 */
+	public List<ResourceResolver> resolvers() {
+		List<ResourceResolver> resolvers = new ArrayList<>();
+		resolvers.add(this.relativePathResolver);
+		resolvers.addAll(this.uriResolvers.reversed());
+		return List.copyOf(resolvers);
+	}
+
+	/**
 	 * Returns the resolver answering for the given reference.
 	 * 
 	 * <p>A path naming its resource on its own reaches no resolver: it leads to the resource the
