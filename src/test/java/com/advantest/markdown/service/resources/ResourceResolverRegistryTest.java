@@ -12,7 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -177,6 +179,67 @@ class ResourceResolverRegistryTest {
 				() -> new ResourceResolverRegistry(this.localResolver, null));
 		assertThrows(IllegalArgumentException.class,
 				() -> new ResourceResolverRegistry(null, List.of()));
+	}
+
+	/** A resolver writing into a shared list when it is closed, failing doing so if told to. */
+	private static final class CloseableUriResolver implements UriResolver, AutoCloseable {
+
+		private final String name;
+
+		private final List<String> closed;
+
+		private final Exception failure;
+
+		private CloseableUriResolver(String name, List<String> closed, Exception failure) {
+			this.name = name;
+			this.closed = closed;
+			this.failure = failure;
+		}
+
+		@Override
+		public boolean isResponsibleFor(URI targetUri) {
+			return false;
+		}
+
+		@Override
+		public Resource resolve(URI targetUri, Resource referencingDocument) {
+			return new UnresolvedResource(targetUri.toString());
+		}
+
+		@Override
+		public void close() throws Exception {
+			this.closed.add(this.name);
+			if (this.failure != null) {
+				throw this.failure;
+			}
+		}
+	}
+
+	@Test
+	void closesTheResolversThatCanBeClosedInTheOrderTheyWereRegistered() {
+		List<String> closed = new ArrayList<>();
+		ResourceResolverRegistry registry = new ResourceResolverRegistry(this.localResolver,
+				List.of(new CloseableUriResolver("first", closed, null),
+						new RecordingUriResolver("https://"),
+						new CloseableUriResolver("second", closed, null)));
+
+		registry.close();
+
+		assertEquals(List.of("first", "second"), closed);
+	}
+
+	@Test
+	void closesEveryResolverEvenIfClosingAnotherOneFailed() {
+		List<String> closed = new ArrayList<>();
+		IOException failure = new IOException("failed");
+		ResourceResolverRegistry registry = new ResourceResolverRegistry(this.localResolver,
+				List.of(new CloseableUriResolver("failing", closed, failure),
+						new CloseableUriResolver("fine", closed, null)));
+
+		IllegalStateException raised = assertThrows(IllegalStateException.class, registry::close);
+
+		assertSame(failure, raised.getCause());
+		assertEquals(List.of("failing", "fine"), closed);
 	}
 
 }

@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -49,9 +50,14 @@ class MarkdownServiceCloseTest {
 	/** Counts how often it was closed, and fails doing so if it is told to. */
 	private static class CountingPart implements AutoCloseable {
 
+		/** Hands out the moments of closing, so that a test can tell which part was closed first. */
+		private static final AtomicInteger CLOCK = new AtomicInteger();
+
 		private final Exception failure;
 
 		int timesClosed;
+
+		int closedAt;
 
 		CountingPart() {
 			this(null);
@@ -64,6 +70,7 @@ class MarkdownServiceCloseTest {
 		@Override
 		public void close() throws Exception {
 			this.timesClosed++;
+			this.closedAt = CLOCK.incrementAndGet();
 			if (this.failure != null) {
 				throw this.failure;
 			}
@@ -175,16 +182,30 @@ class MarkdownServiceCloseTest {
 	}
 
 	@Test
-	void aPartHandedOverTwiceIsClosedOnce() {
+	void thePartsAreClosedBeforeWhatTheyUse() {
+		CloseableRelativePathResolver relativePathResolver = new CloseableRelativePathResolver();
+		CloseableUriResolver uriResolver = new CloseableUriResolver();
+		CloseableChecker checker = new CloseableChecker();
 		CloseableUriValidator uriValidator = new CloseableUriValidator();
+		CloseableAnchorValidator anchorValidator = new CloseableAnchorValidator();
 		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
+				.withRelativePathResourceResolver(relativePathResolver)
+				.withUriResolver(uriResolver)
+				.withUriReachabilityCheck(checker)
 				.withUriValidator(uriValidator)
-				.withUriValidator(uriValidator)
+				.withAnchorValidator(anchorValidator)
 				.build();
 
 		service.close();
 
-		assertEquals(1, uriValidator.timesClosed);
+		assertTrue(uriValidator.closedAt < anchorValidator.closedAt,
+				"The validators of addresses are expected to be closed first.");
+		assertTrue(anchorValidator.closedAt < checker.closedAt,
+				"The check is expected to be closed after the validators asking it.");
+		assertTrue(checker.closedAt < relativePathResolver.closedAt,
+				"The resolvers are expected to be closed last.");
+		assertTrue(relativePathResolver.closedAt < uriResolver.closedAt,
+				"The resolver of a path is expected to be closed before the resolvers of a scheme.");
 	}
 
 	@Test

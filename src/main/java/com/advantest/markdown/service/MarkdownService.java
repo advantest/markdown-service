@@ -10,7 +10,6 @@ import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -96,11 +95,14 @@ public class MarkdownService implements AutoCloseable {
 
 	private final UnsavedResourceContents unsavedContents;
 
+	private final ResourceResolverRegistry resourceResolvers;
+
+	private final List<UriValidator> uriValidators;
+
+	private final List<AnchorValidator> anchorValidators;
+
 	/** Everything this service is made of that remembers answers, in no particular order. */
 	private final List<CachesHolder> cachesHolders;
-
-	/** Everything this service is made of that is to be closed with it, each part once. */
-	private final List<AutoCloseable> closeableParts;
 
 	/** The runs this service handed out that may not have been closed yet. */
 	private final Set<MarkdownValidationRun> openRuns = ConcurrentHashMap.newKeySet();
@@ -182,31 +184,11 @@ public class MarkdownService implements AutoCloseable {
 				withShippedAnchorValidators(anchorValidators, parserAndRenderer));
 		this.uriReachabilityChecker = uriReachabilityChecker;
 		this.unsavedContents = unsavedContents;
+		this.resourceResolvers = resourceResolvers;
+		this.uriValidators = List.copyOf(uriValidators);
+		this.anchorValidators = List.copyOf(anchorValidators);
 		this.cachesHolders = cachesHoldersAmong(uriReachabilityChecker, uriValidators,
 				anchorValidators);
-		this.closeableParts = closeablePartsAmong(resourceResolvers, uriReachabilityChecker,
-				uriValidators, anchorValidators);
-	}
-
-	/**
-	 * Collects the parts among the given ones that are to be closed with the service, each of them
-	 * once however often it was handed over.
-	 */
-	private static List<AutoCloseable> closeablePartsAmong(ResourceResolverRegistry resourceResolvers,
-			UriReachabilityChecker uriReachabilityChecker, List<UriValidator> uriValidators,
-			List<AnchorValidator> anchorValidators) {
-
-		Set<AutoCloseable> parts = Collections.newSetFromMap(new IdentityHashMap<>());
-		List<AutoCloseable> partsInOrder = new ArrayList<>();
-		Stream.of(resourceResolvers.resolvers().stream(), Stream.of(uriReachabilityChecker),
-						uriValidators.stream(), anchorValidators.stream())
-				.flatMap(stream -> stream)
-				.filter(AutoCloseable.class::isInstance)
-				.map(AutoCloseable.class::cast)
-				.filter(parts::add)
-				.forEach(partsInOrder::add);
-
-		return List.copyOf(partsInOrder);
 	}
 
 	/**
@@ -251,10 +233,13 @@ public class MarkdownService implements AutoCloseable {
 	 * Closes this service: every validation run it handed out and that is still open is
 	 * {@link MarkdownValidationRun#cancel() cancelled} and closed, and afterwards every part of the
 	 * service that is {@link AutoCloseable} is closed, whether it was handed to the builder or
-	 * created by the service.
+	 * created by the service: the validators first, then the check asking an address whether it
+	 * is there, and finally the resolvers, which the validators use.
 	 * 
 	 * <p>A closed service does nothing any more: every method of it but this one raises an
-	 * {@link IllegalStateException}. Closing a closed service does nothing.</p>
+	 * {@link IllegalStateException}. Closing a closed service does nothing. A part handed to the
+	 * builder twice is closed twice, so its <code>close()</code> is expected to do nothing the
+	 * second time, as {@link java.io.Closeable#close()} demands.</p>
 	 * 
 	 * <p>Every part is closed even if closing another one failed. The first failure is raised
 	 * afterwards, carrying the later ones as suppressed; a failure that is not a
@@ -276,18 +261,25 @@ public class MarkdownService implements AutoCloseable {
 		runs.forEach(MarkdownValidationRun::close);
 		this.openRuns.clear();
 
+		List<Object> parts = new ArrayList<>(this.uriValidators);
+		parts.addAll(this.anchorValidators);
+		parts.add(this.uriReachabilityChecker);
+		parts.add(this.resourceResolvers);
+
 		RuntimeException firstFailure = null;
-		for (AutoCloseable part : this.closeableParts) {
-			try {
-				part.close();
-			} catch (Exception failure) {
-				RuntimeException closingFailed = failure instanceof RuntimeException runtimeFailure
-						? runtimeFailure
-						: new IllegalStateException("A part of the service could not be closed.", failure);
-				if (firstFailure == null) {
-					firstFailure = closingFailed;
-				} else {
-					firstFailure.addSuppressed(closingFailed);
+		for (Object part : parts) {
+			if (part instanceof AutoCloseable closeablePart) {
+				try {
+					closeablePart.close();
+				} catch (Exception failure) {
+					RuntimeException closingFailed = failure instanceof RuntimeException runtimeFailure
+							? runtimeFailure
+							: new IllegalStateException("A part of the service could not be closed.", failure);
+					if (firstFailure == null) {
+						firstFailure = closingFailed;
+					} else {
+						firstFailure.addSuppressed(closingFailed);
+					}
 				}
 			}
 		}

@@ -41,7 +41,7 @@ import com.advantest.resources.UriResolver;
  * <p>A reference nobody answers for is left alone: it is not this environment's business, and
  * saying anything about it would be guessing.</p>
  */
-public final class ResourceResolverRegistry {
+public final class ResourceResolverRegistry implements AutoCloseable {
 
 	private static final Logger LOG = LoggerFactory.getLogger(ResourceResolverRegistry.class);
 
@@ -115,16 +115,40 @@ public final class ResourceResolverRegistry {
 	}
 
 	/**
-	 * Returns every resolver of this registry: the one saying what a path means first, followed by
-	 * the resolvers of references naming a scheme in the order in which they were registered.
+	 * Closes every resolver of this registry that is {@link AutoCloseable}: the one saying what a
+	 * path means first, followed by the resolvers of references naming a scheme in the order in
+	 * which they were registered. A registry owns its resolvers.
 	 * 
-	 * @return the resolvers, never <code>null</code> and not modifiable
+	 * <p>Every resolver is closed even if closing another one failed. The first failure is raised
+	 * afterwards, carrying the later ones as suppressed; a failure that is not a
+	 * {@link RuntimeException} is wrapped into an {@link IllegalStateException}.</p>
 	 */
-	public List<ResourceResolver> resolvers() {
+	@Override
+	public void close() {
 		List<ResourceResolver> resolvers = new ArrayList<>();
 		resolvers.add(this.relativePathResolver);
 		resolvers.addAll(this.uriResolvers.reversed());
-		return List.copyOf(resolvers);
+
+		RuntimeException firstFailure = null;
+		for (ResourceResolver resolver : resolvers) {
+			if (resolver instanceof AutoCloseable closeable) {
+				try {
+					closeable.close();
+				} catch (Exception failure) {
+					RuntimeException closingFailed = failure instanceof RuntimeException runtimeFailure
+							? runtimeFailure
+							: new IllegalStateException("A resolver could not be closed.", failure);
+					if (firstFailure == null) {
+						firstFailure = closingFailed;
+					} else {
+						firstFailure.addSuppressed(closingFailed);
+					}
+				}
+			}
+		}
+		if (firstFailure != null) {
+			throw firstFailure;
+		}
 	}
 
 	/**
