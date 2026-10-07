@@ -49,7 +49,7 @@ class UnsavedResourceContentsTest {
 	@Test
 	void readsWhatTheResourceContainsWhereNothingWasPut() throws IOException {
 		assertEquals("# Saved\n", this.unsavedContents.readerOfCurrentContents().readAllContents(this.guide));
-		assertEquals("# Saved\n", this.unsavedContents.readerOfContentsAsTheyAreNow().readAllContents(this.guide));
+		assertEquals("# Saved\n", this.unsavedContents.readerOfContentsSnapshot().readAllContents(this.guide));
 	}
 
 	@Test
@@ -57,7 +57,7 @@ class UnsavedResourceContentsTest {
 		this.unsavedContents.put(this.guide, "# Unsaved\n");
 
 		assertEquals("# Unsaved\n", this.unsavedContents.readerOfCurrentContents().readAllContents(this.guide));
-		assertEquals("# Unsaved\n", this.unsavedContents.readerOfContentsAsTheyAreNow().readAllContents(this.guide));
+		assertEquals("# Unsaved\n", this.unsavedContents.readerOfContentsSnapshot().readAllContents(this.guide));
 	}
 
 	@Test
@@ -114,9 +114,9 @@ class UnsavedResourceContentsTest {
 	}
 
 	@Test
-	void readerOfContentsAsTheyAreNowSeesNothingPutOrDroppedAfterItWasHandedOut() throws IOException {
+	void readerOfContentsSnapshotSeesNothingPutOrDroppedAfterItWasHandedOut() throws IOException {
 		this.unsavedContents.put(this.guide, "# Before\n");
-		ResourceContentsReader reader = this.unsavedContents.readerOfContentsAsTheyAreNow();
+		ResourceContentsReader reader = this.unsavedContents.readerOfContentsSnapshot();
 
 		this.unsavedContents.put(this.guide, "# After\n");
 		assertEquals("# Before\n", reader.readAllContents(this.guide));

@@ -28,7 +28,7 @@ import com.advantest.resources.UnresolvedResource;
  * 
  * <p>The contents are kept in a map that is never changed: every put and every drop replaces it by
  * a new one, which copies the references to the texts, never the texts themselves. Reading through
- * {@link #readerOfContentsAsTheyAreNow()} therefore costs nothing, and whoever reads through it sees
+ * {@link #readerOfContentsSnapshot()} therefore costs nothing, and whoever reads through it sees
  * one state of all contents, however they change in the meantime.</p>
  * 
  * <p>The contents can be put, dropped and read from several threads at once.</p>
@@ -104,7 +104,7 @@ public final class UnsavedResourceContents {
 	 * 
 	 * @return a reader of the contents as they are now, never <code>null</code>
 	 */
-	public ResourceContentsReader readerOfContentsAsTheyAreNow() {
+	public ResourceContentsReader readerOfContentsSnapshot() {
 		Map<String, String> contentsByPath = this.contentsByResolvedPath.get();
 		return resource -> readFrom(contentsByPath, resource);
 	}

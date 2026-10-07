@@ -618,7 +618,7 @@ public class MarkdownService {
 	 */
 	public MarkdownValidationRun createValidationRun() {
 		return this.validation.createRun(this.uriReachabilityChecker,
-				this.unsavedContents.readerOfContentsAsTheyAreNow());
+				this.unsavedContents.readerOfContentsSnapshot());
 	}
 
 	/**
