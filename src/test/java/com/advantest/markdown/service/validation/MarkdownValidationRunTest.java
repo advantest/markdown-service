@@ -183,18 +183,13 @@ public class MarkdownValidationRunTest {
 		private final List<UriReachabilityChecker.OfRun> views = new CopyOnWriteArrayList<>();
 
 		@Override
-		public CompletableFuture<UriReachability> check(URI targetUri) {
-			return CompletableFuture.completedFuture(new UriReachability.Answered(200));
-		}
-
-		@Override
 		public OfRun openForRun(Executor executor) {
 			this.opened.incrementAndGet();
 			OfRun view = new OfRun() {
 
 				@Override
 				public CompletableFuture<UriReachability> check(URI targetUri) {
-					return CountingChecker.this.check(targetUri);
+					return CompletableFuture.completedFuture(new UriReachability.Answered(200));
 				}
 
 				@Override

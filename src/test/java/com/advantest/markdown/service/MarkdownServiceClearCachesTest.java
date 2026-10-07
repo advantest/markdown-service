@@ -9,9 +9,9 @@ package com.advantest.markdown.service;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.net.URI;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 import org.junit.jupiter.api.Test;
 
@@ -36,8 +36,8 @@ class MarkdownServiceClearCachesTest {
 		private int timesTold;
 
 		@Override
-		public CompletableFuture<UriReachability> check(URI targetUri) {
-			return CompletableFuture.completedFuture(new UriReachability.Answered(200));
+		public OfRun openForRun(Executor executor) {
+			return targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
 		}
 
 		@Override

@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +44,11 @@ class WebAddressValidationTest {
 		}
 
 		@Override
-		public CompletableFuture<UriReachability> check(URI uri) {
+		public OfRun openForRun(Executor executor) {
+			return this::check;
+		}
+
+		private CompletableFuture<UriReachability> check(URI uri) {
 			this.askedAddresses.add(uri);
 			return CompletableFuture.completedFuture(
 					this.answers.getOrDefault(uri.toString(), new UriReachability.Answered(200)));

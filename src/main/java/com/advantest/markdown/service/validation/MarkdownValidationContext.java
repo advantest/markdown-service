@@ -99,7 +99,7 @@ public interface MarkdownValidationContext {
 	 * @return the check, or {@link Optional#empty()} if no address is asked about in this run, which
 	 *         this default answers
 	 */
-	default Optional<UriReachabilityChecker> getUriReachabilityChecker() {
+	default Optional<UriReachabilityChecker.OfRun> getUriReachabilityChecker() {
 		return Optional.empty();
 	}
 

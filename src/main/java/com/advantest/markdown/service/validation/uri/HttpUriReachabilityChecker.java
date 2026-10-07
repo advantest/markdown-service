@@ -48,12 +48,13 @@ import com.advantest.markdown.service.CachesHolder;
  * so a checker living in a long running program is told to {@link #clearCaches() forget} what it
  * knows when its answers may have gone stale.</p>
  * 
- * <p>A validation run asks through a view {@link #openForRun(Executor) opened} for it, which asks
- * with a client of its own and shares the answers with this checker and every other view. The run
- * closes the view and with it the client, so that a client lives no longer than the run that asked
- * with it; the answers live as long as this checker. A run that is cancelled stops what its view is
- * still asking, and an answer it did not wait for is not remembered: the address did not fail to
- * answer, nobody waited for it. Another run waiting for the same answer asks again itself.</p>
+ * <p>The checker is asked only through a view {@link #openForRun(Executor) opened} for a validation
+ * run, which asks with a client of its own and shares the answers with this checker and every other
+ * view. The run closes the view and with it the client, so that a client lives no longer than the
+ * run that asked with it, and no client is created that nobody closes; the answers live as long as
+ * this checker. A run that is cancelled stops what its view is still asking, and an answer it did
+ * not wait for is not remembered: the address did not fail to answer, nobody waited for it. Another
+ * run waiting for the same answer asks again itself.</p>
  * 
  * <p>Two times bound the asking: how long the far side has to accept the connection, and how long
  * it has to answer. Both have a default, so a caller needing neither says nothing, and both can be
@@ -89,9 +90,6 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	private final Function<Executor, HttpClient> clientFactory;
 
 	private final Duration answerTimeout;
-
-	/** The client asked with where this checker is asked directly rather than through a view. */
-	private volatile HttpClient ownClient;
 
 	private final Map<URI, CompletableFuture<UriReachability>> answersByUri = new ConcurrentHashMap<>();
 
@@ -144,20 +142,16 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 					+ " to connect and " + untilAnswered + " to answer.");
 		}
 
-		return executor -> {
-			HttpClient.Builder client = HttpClient.newBuilder()
-					.connectTimeout(untilConnected)
-					.followRedirects(HttpClient.Redirect.NORMAL);
-			if (executor != null) {
-				client.executor(executor);
-			}
-			return client.build();
-		};
+		return executor -> HttpClient.newBuilder()
+				.connectTimeout(untilConnected)
+				.followRedirects(HttpClient.Redirect.NORMAL)
+				.executor(executor)
+				.build();
 	}
 
 	/**
-	 * Creates a checker asking with the given client, directly and in every view, so that a test
-	 * can say what an address answers.
+	 * Creates a checker asking with the given client in every view, so that a test can say what an
+	 * address answers.
 	 * 
 	 * @param httpClient the client to ask with, must not be <code>null</code>
 	 * @param answerTimeout how long an address has to answer, must not be <code>null</code>
@@ -175,8 +169,8 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 * Creates a checker asking with the clients the given factory creates, so that a test can say
 	 * what an address answers in each view.
 	 * 
-	 * @param clientFactory creates a client executing on the executor it is given, or on its own if
-	 *                      it is given <code>null</code>, must not be <code>null</code>
+	 * @param clientFactory creates a client executing on the executor it is given, must not be
+	 *                      <code>null</code>
 	 * @param answerTimeout how long an address has to answer, must not be <code>null</code>
 	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 */
@@ -189,37 +183,18 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	}
 
 	/**
-	 * Hands out the client this checker asks with where it is asked directly, creating it the
-	 * first time, so that a checker only ever asked through views creates none.
+	 * Creates a client asking as this checker says, as a view opened for a run does.
 	 * 
-	 * @return the client, so that a test can read what it was given as well
+	 * @param executor what the client executes on, must not be <code>null</code>
+	 * @return the client, so that a test can read what it was given; whoever calls this closes it
 	 */
-	HttpClient getHttpClient() {
-		HttpClient client = this.ownClient;
-		if (client == null) {
-			synchronized (this) {
-				client = this.ownClient;
-				if (client == null) {
-					client = this.clientFactory.apply(null);
-					this.ownClient = client;
-				}
-			}
-		}
-		return client;
+	HttpClient createClient(Executor executor) {
+		return this.clientFactory.apply(executor);
 	}
 
 	/** @return how long an address is given to answer, so that a test can read it */
 	Duration getAnswerTimeout() {
 		return this.answerTimeout;
-	}
-
-	@Override
-	public CompletableFuture<UriReachability> check(URI targetUri) {
-		if (targetUri == null) {
-			throw new IllegalArgumentException("Argument must not be null.");
-		}
-
-		return answerOf(targetUri, getHttpClient(), () -> false);
 	}
 
 	/**
@@ -236,7 +211,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 		if (executor == null) {
 			throw new IllegalArgumentException("Argument must not be null.");
 		}
-		return new ViewOfRun(this.clientFactory.apply(executor));
+		return new ViewOfRun(createClient(executor));
 	}
 
 	/**

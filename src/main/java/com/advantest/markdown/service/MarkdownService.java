@@ -853,9 +853,10 @@ public class MarkdownService {
 		 * one going through a proxy, one asking a service instead of the address itself, or one a
 		 * test answers for.
 		 * 
-		 * <p>There is one such check, so a later call replaces an earlier one. It is asked from
-		 * several threads at once and for the same address again and again, so it has to bear the
-		 * former and is expected to remember an answer rather than to ask again.</p>
+		 * <p>There is one such check, so a later call replaces an earlier one. Every validation run
+		 * opens it for itself and asks through what it opened, so the check is opened from several
+		 * threads at once and asked for the same address again and again; it has to bear the former
+		 * and is expected to remember an answer rather than to ask again.</p>
 		 * 
 		 * <p>Saying this also puts the shipped validator of web addresses to work, the same way
 		 * {@link #withUriReachabilityCheck()} does, and that validator is asked only about a target

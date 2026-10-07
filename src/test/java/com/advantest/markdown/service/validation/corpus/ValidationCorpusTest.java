@@ -195,7 +195,7 @@ class ValidationCorpusTest {
 	 * web address are checked without a network and answer the same thing every day.
 	 */
 	private static UriReachabilityChecker reachabilityOfTheCorpus() {
-		return targetUri -> {
+		return executor -> targetUri -> {
 			String address = targetUri.toString();
 
 			if (ADDRESS_THAT_STAYS_SILENT.equals(address)) {

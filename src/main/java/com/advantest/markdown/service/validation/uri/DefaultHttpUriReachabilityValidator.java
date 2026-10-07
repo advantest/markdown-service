@@ -56,7 +56,7 @@ public class DefaultHttpUriReachabilityValidator implements UriValidator {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 
-		Optional<UriReachabilityChecker> reachabilityChecker = context.getUriReachabilityChecker();
+		Optional<UriReachabilityChecker.OfRun> reachabilityChecker = context.getUriReachabilityChecker();
 		if (target.uri().isEmpty() || reachabilityChecker.isEmpty()) {
 			return CompletableFuture.completedFuture(List.of());
 		}

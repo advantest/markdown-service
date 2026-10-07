@@ -31,7 +31,7 @@ import com.vladsch.flexmark.util.ast.Document;
  *                               <code>null</code>, in which case no address is asked about
  */
 record ValidationRunContext(ResourceContentsCache contents, ParsedMarkdownDocumentsCache documents,
-		UriReachabilityChecker uriReachabilityChecker) implements MarkdownValidationContext {
+		UriReachabilityChecker.OfRun uriReachabilityChecker) implements MarkdownValidationContext {
 
 	ValidationRunContext {
 		if (contents == null || documents == null) {
@@ -57,7 +57,7 @@ record ValidationRunContext(ResourceContentsCache contents, ParsedMarkdownDocume
 	}
 
 	@Override
-	public Optional<UriReachabilityChecker> getUriReachabilityChecker() {
+	public Optional<UriReachabilityChecker.OfRun> getUriReachabilityChecker() {
 		return Optional.ofNullable(this.uriReachabilityChecker);
 	}
 

@@ -175,7 +175,7 @@ class AsynchronousValidationTest {
 	void failureNothingIsMeantToCatchIsHandedOnAsItWasThrown() {
 		StackOverflowError failure = new StackOverflowError();
 		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
-				.withUriReachabilityCheck(uri -> CompletableFuture.failedFuture(failure))
+				.withUriReachabilityCheck(executor -> uri -> CompletableFuture.failedFuture(failure))
 				.build();
 
 		assertSame(failure, assertThrows(StackOverflowError.class,
@@ -184,13 +184,13 @@ class AsynchronousValidationTest {
 	}
 	private static MarkdownService serviceAnswering(UriReachability answer) {
 		return MarkdownService.builderNotCheckingUriReachability()
-				.withUriReachabilityCheck(uri -> CompletableFuture.completedFuture(answer))
+				.withUriReachabilityCheck(executor -> uri -> CompletableFuture.completedFuture(answer))
 				.build();
 	}
 
 	/** Answers for an address only once every address of the document has been asked about. */
 	private static UriReachabilityChecker answeringOnceEverybodyHasAsked(CountDownLatch everybodyAsked) {
-		return uri -> {
+		return executor -> uri -> {
 			everybodyAsked.countDown();
 			return CompletableFuture.supplyAsync(() -> {
 				awaitQuietly(everybodyAsked);
@@ -205,7 +205,7 @@ class AsynchronousValidationTest {
 
 	private static UriReachabilityChecker answeringOnceReleasedBy(CountDownLatch release,
 			UriReachability answer) {
-		return uri -> CompletableFuture.supplyAsync(() -> {
+		return executor -> uri -> CompletableFuture.supplyAsync(() -> {
 			awaitQuietly(release);
 			return answer;
 		});

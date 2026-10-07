@@ -326,7 +326,7 @@ class MarkdownServiceBuilderTest {
 	@Test
 	void builderTakesACheckOfItsOwn() {
 		UriReachabilityChecker ownChecker =
-				targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
+				executor -> targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
 
 		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck(ownChecker)
@@ -338,7 +338,7 @@ class MarkdownServiceBuilderTest {
 	@Test
 	void laterCheckReplacesTheEarlierOne() {
 		UriReachabilityChecker ownChecker =
-				targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
+				executor -> targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
 
 		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
 				.withUriReachabilityCheck()

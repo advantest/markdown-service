@@ -41,7 +41,7 @@ class DefaultHttpUriReachabilityValidatorTest {
 	private static final DefaultHttpUriReachabilityValidator VALIDATOR = new DefaultHttpUriReachabilityValidator();
 
 	/** A context handing out the given check, and nothing else a validator of this test asks for. */
-	private static MarkdownValidationContext contextAsking(UriReachabilityChecker checker) {
+	private static MarkdownValidationContext contextAsking(UriReachabilityChecker.OfRun checker) {
 		return new MarkdownValidationContext() {
 
 			@Override
@@ -55,7 +55,7 @@ class DefaultHttpUriReachabilityValidatorTest {
 			}
 
 			@Override
-			public Optional<UriReachabilityChecker> getUriReachabilityChecker() {
+			public Optional<UriReachabilityChecker.OfRun> getUriReachabilityChecker() {
 				return Optional.of(checker);
 			}
 		};
@@ -66,7 +66,7 @@ class DefaultHttpUriReachabilityValidatorTest {
 	}
 
 	/** Answers what a test tells it to and remembers which addresses it was asked about. */
-	private static final class StubbedReachabilityChecker implements UriReachabilityChecker {
+	private static final class StubbedReachabilityChecker implements UriReachabilityChecker.OfRun {
 
 		private final List<URI> askedAddresses = new ArrayList<>();
 
