@@ -7,6 +7,7 @@
 package com.advantest.markdown.service.resources.walk;
 
 import static com.advantest.markdown.service.resources.walk.TestTrees.create;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -73,6 +74,28 @@ public class BlacklistedPathsTest {
 
 		assertFalse(listed.contains(at("doc")), "A folder is expected to be dropped from the list.");
 		assertTrue(listed.contains(at("doc/a.md")), "The other entries are expected to be kept.");
+	}
+
+	@Test
+	void entriesNamingNothingThatExistsAreReported() throws IOException {
+		create(this.root, "doc/a.md");
+
+		BlacklistedPaths listed = BlacklistedPaths.of(List.of("doc/a.md", "doc\\gone.md", " /old/b.md "), this.root,
+				"test");
+
+		assertEquals(List.of("doc/gone.md", "old/b.md"), listed.entriesNamingNothing(),
+				"Every entry naming nothing that exists is expected to be reported, as written once cleaned up.");
+		assertTrue(listed.contains(at("doc/a.md")), "An entry naming an existing file is expected to be listed.");
+	}
+
+	@Test
+	void aListWhoseEntriesAllExistReportsNothing() throws IOException {
+		create(this.root, "doc/a.md");
+
+		BlacklistedPaths listed = BlacklistedPaths.of(List.of("# comment", "doc", "doc/a.md"), this.root, "test");
+
+		assertEquals(List.of(), listed.entriesNamingNothing(),
+				"Neither a comment nor a folder nor an existing file is expected to be reported as naming nothing.");
 	}
 
 	@Test
