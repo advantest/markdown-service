@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -343,6 +344,18 @@ public class DefaultMarkdownValidationResourcesFilterTest {
 				"A git rule not bound to a run is expected to refuse to answer.");
 		assertThrows(IllegalStateException.class, () -> filter.skipsFolder(this.root, at("a"), null),
 				"A git rule not bound to a run is expected to refuse to answer.");
+	}
+
+	@Test
+	void whatGitIgnoresIsSkippedInAWalk() throws IOException, InterruptedException {
+		create(this.root, "build/a.md", "doc/b.md", "doc/c.draft.md", "d.md");
+		Files.writeString(this.root.resolve(".gitignore"), "build/\n*.draft.md\n", StandardCharsets.UTF_8);
+		Process init = new ProcessBuilder("git", "init", "-q", this.root.toString()).redirectErrorStream(true).start();
+		init.getInputStream().readAllBytes();
+		assumeTrue(init.waitFor() == 0, "git is needed to tell what it ignores.");
+
+		assertEquals(List.of("d.md", "doc/b.md"), walkWith(DefaultMarkdownValidationResourcesFilter.emptyBuilder()
+				.skippingWhatGitIgnores(true)), "Ignored folders and files are expected to be skipped.");
 	}
 
 	@Test
