@@ -13,13 +13,17 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -29,6 +33,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.markdown.service.resources.walk.DefaultMarkdownValidationResourcesFilter;
+import com.advantest.markdown.service.resources.walk.ResourceFilter;
+import com.advantest.markdown.service.validation.MarkdownValidationRun;
 import com.advantest.resources.LocalFileSystemResource;
 import com.advantest.resources.Resource;
 import com.vladsch.flexmark.util.ast.Document;
@@ -136,4 +143,61 @@ class MarkdownServiceTest {
 				() -> new MarkdownService(new MarkdownParserAndHtmlRenderer(), null));
 	}
 
+	@Test
+	void theResourceFilterSkipsSymbolicLinksByDefault() {
+		try (MarkdownService built = MarkdownService.builderNotCheckingUriReachability().build()) {
+			assertTrue(built.resourceFilter() instanceof DefaultMarkdownValidationResourcesFilter,
+					"The default filter is expected to be the library's.");
+			assertTrue(built.resourceFilter().skipsFolder(Path.of("a"), Path.of("a/link"), linkAttributes()),
+					"The default filter is expected to skip a symbolic link.");
+		}
+	}
+
+	@Test
+	void theBuilderSetsTheResourceFilterOfTheRuns(@TempDir Path tempDir) throws IOException {
+		Files.createDirectories(tempDir.resolve("doc"));
+		Files.writeString(tempDir.resolve("doc/a.md"), "# A\n", StandardCharsets.UTF_8);
+		Files.writeString(tempDir.resolve("b.md"), "# B\n", StandardCharsets.UTF_8);
+		ResourceFilter onlyDoc = DefaultMarkdownValidationResourcesFilter.emptyBuilder().onlyPaths("doc/").build();
+
+		try (MarkdownService built = MarkdownService.builderNotCheckingUriReachability().withResourceFilter(onlyDoc)
+				.build()) {
+			assertSame(onlyDoc, built.resourceFilter(), "The service is expected to keep the filter it was given.");
+			try (MarkdownValidationRun run = built.createValidationRun()) {
+				assertEquals(Set.of(LocalFileSystemResource.of(tempDir.resolve("doc/a.md").toAbsolutePath().normalize())),
+						run.validateTree(tempDir).join().keySet(), "A run is expected to walk with the service's filter.");
+			}
+			try (MarkdownValidationRun run = built.createValidationRun(
+					DefaultMarkdownValidationResourcesFilter.emptyBuilder().build())) {
+				assertEquals(2, run.validateTree(tempDir).join().size(),
+						"A run created with a filter of its own is expected to walk with that one.");
+			}
+		}
+	}
+
+	@Test
+	void aResourceFilterMustBeGiven() {
+		MarkdownService.Builder builder = MarkdownService.builderNotCheckingUriReachability();
+		assertThrows(IllegalArgumentException.class, () -> builder.withResourceFilter(null));
+
+		try (MarkdownService built = builder.build()) {
+			assertThrows(IllegalArgumentException.class, () -> built.createValidationRun(null));
+		}
+	}
+
+	@Test
+	void aClosedServiceNeitherAnswersItsResourceFilterNorCreatesARunWithAFilter() {
+		MarkdownService built = MarkdownService.builderNotCheckingUriReachability().build();
+		ResourceFilter filter = built.resourceFilter();
+		built.close();
+
+		assertThrows(IllegalStateException.class, built::resourceFilter);
+		assertThrows(IllegalStateException.class, () -> built.createValidationRun(filter));
+	}
+
+	private static BasicFileAttributes linkAttributes() {
+		BasicFileAttributes attributes = mock(BasicFileAttributes.class);
+		when(attributes.isSymbolicLink()).thenReturn(true);
+		return attributes;
+	}
 }
