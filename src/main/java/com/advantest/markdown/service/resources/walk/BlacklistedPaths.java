@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -29,18 +30,23 @@ import org.slf4j.LoggerFactory;
  * <code>doc/a.md</code> name the same file.</li>
  * <li>An entry names a file. An entry naming an existing folder has no effect, which is reported
  * once when the list is read.</li>
+ * <li>An entry naming nothing that exists has no effect either. All such entries are reported
+ * together, once when the list is read, so that whoever keeps the list can remove them.</li>
  * </ul>
  */
 public final class BlacklistedPaths {
 
 	private static final Logger LOG = LoggerFactory.getLogger(BlacklistedPaths.class);
 
-	private static final BlacklistedPaths NONE = new BlacklistedPaths(Set.of());
+	private static final BlacklistedPaths NONE = new BlacklistedPaths(Set.of(), List.of());
 
 	private final Set<Path> files;
 
-	private BlacklistedPaths(Set<Path> files) {
+	private final List<String> entriesNamingNothing;
+
+	private BlacklistedPaths(Set<Path> files, List<String> entriesNamingNothing) {
 		this.files = files;
+		this.entriesNamingNothing = entriesNamingNothing;
 	}
 
 	/**
@@ -72,6 +78,7 @@ public final class BlacklistedPaths {
 	static BlacklistedPaths of(List<String> lines, Path base, String source) {
 		Path absoluteBase = base.toAbsolutePath().normalize();
 		Set<Path> files = new HashSet<>();
+		List<String> entriesNamingNothing = new ArrayList<>();
 		for (String line : lines) {
 			String entry = line.strip();
 			if (entry.isEmpty() || entry.startsWith("#")) {
@@ -93,9 +100,24 @@ public final class BlacklistedPaths {
 						source, line);
 				continue;
 			}
+			if (!Files.exists(file)) {
+				entriesNamingNothing.add(entry);
+			}
 			files.add(file);
 		}
-		return new BlacklistedPaths(files);
+		if (!entriesNamingNothing.isEmpty()) {
+			LOG.warn("Entries of the blacklist {} name no existing file and may be removed from it: {}", source,
+					String.join(", ", entriesNamingNothing));
+		}
+		return new BlacklistedPaths(files, List.copyOf(entriesNamingNothing));
+	}
+
+	/**
+	 * Tells which entries name nothing that exists, as they are written in the list once trimmed
+	 * and with <code>/</code> as separator.
+	 */
+	List<String> entriesNamingNothing() {
+		return this.entriesNamingNothing;
 	}
 
 	/**
