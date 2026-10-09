@@ -102,12 +102,13 @@ public class DefaultMarkdownValidationResourcesFilterTest {
 	@Test
 	void hiddenFilesAndFoldersCanBeSkipped() throws IOException {
 		create(this.root, "hiddenFolder/a.md", "hidden.md", "visible.md", ".dot/b.md", ".dot.md");
-		boolean dos = Files.getFileAttributeView(this.root, DosFileAttributeView.class) != null;
-		if (dos) {
+		if (Files.getFileAttributeView(this.root, DosFileAttributeView.class) != null) {
 			for (String hidden : List.of("hiddenFolder", "hidden.md", ".dot", ".dot.md")) {
 				Files.setAttribute(this.root.resolve(hidden), "dos:hidden", true);
 			}
 		}
+		// a file system may store the DOS attribute without taking it for hiddenness, as on Linux
+		boolean dos = Files.isHidden(this.root.resolve("hidden.md"));
 
 		List<String> found = walkWith(DefaultMarkdownValidationResourcesFilter.emptyBuilder().skippingHidden(true));
 
