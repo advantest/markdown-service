@@ -132,6 +132,15 @@ public class MarkdownValidationRunWalkTest {
 	}
 
 	@Test
+	void aRunNeedsAFilterAndAReader() {
+		ResourceFilter filter = DefaultMarkdownValidationResourcesFilter.emptyBuilder().build();
+
+		assertThrows(IllegalArgumentException.class,
+				() -> this.rules.createRun(null, ResourceContentsReader.FROM_THE_RESOURCE, null));
+		assertThrows(IllegalArgumentException.class, () -> this.rules.createRun(null, null, filter));
+	}
+
+	@Test
 	void aWalkChecksEveryMarkdownFileInTheOrderFound() throws IOException {
 		create("b.md", "a/c.md", "a/d.md", "e.txt");
 
