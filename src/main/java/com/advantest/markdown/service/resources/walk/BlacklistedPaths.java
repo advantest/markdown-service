@@ -42,11 +42,11 @@ public final class BlacklistedPaths {
 
 	private final Set<Path> files;
 
-	private final List<String> entriesNamingNothing;
+	private final List<String> entriesWithoutTarget;
 
-	private BlacklistedPaths(Set<Path> files, List<String> entriesNamingNothing) {
+	private BlacklistedPaths(Set<Path> files, List<String> entriesWithoutTarget) {
 		this.files = files;
-		this.entriesNamingNothing = entriesNamingNothing;
+		this.entriesWithoutTarget = entriesWithoutTarget;
 	}
 
 	/**
@@ -78,7 +78,7 @@ public final class BlacklistedPaths {
 	static BlacklistedPaths of(List<String> lines, Path base, String source) {
 		Path absoluteBase = base.toAbsolutePath().normalize();
 		Set<Path> files = new HashSet<>();
-		List<String> entriesNamingNothing = new ArrayList<>();
+		List<String> entriesWithoutTarget = new ArrayList<>();
 		for (String line : lines) {
 			String entry = line.strip();
 			if (entry.isEmpty() || entry.startsWith("#")) {
@@ -101,23 +101,23 @@ public final class BlacklistedPaths {
 				continue;
 			}
 			if (!Files.exists(file)) {
-				entriesNamingNothing.add(entry);
+				entriesWithoutTarget.add(entry);
 			}
 			files.add(file);
 		}
-		if (!entriesNamingNothing.isEmpty()) {
+		if (!entriesWithoutTarget.isEmpty()) {
 			LOG.warn("Entries of the blacklist {} name no existing file and may be removed from it: {}", source,
-					String.join(", ", entriesNamingNothing));
+					String.join(", ", entriesWithoutTarget));
 		}
-		return new BlacklistedPaths(files, List.copyOf(entriesNamingNothing));
+		return new BlacklistedPaths(files, List.copyOf(entriesWithoutTarget));
 	}
 
 	/**
 	 * Tells which entries name nothing that exists, as they are written in the list once trimmed
 	 * and with <code>/</code> as separator.
 	 */
-	List<String> entriesNamingNothing() {
-		return this.entriesNamingNothing;
+	List<String> entriesWithoutTarget() {
+		return this.entriesWithoutTarget;
 	}
 
 	/**

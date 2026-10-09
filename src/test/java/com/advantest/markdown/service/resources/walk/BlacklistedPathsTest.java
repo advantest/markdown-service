@@ -77,13 +77,13 @@ public class BlacklistedPathsTest {
 	}
 
 	@Test
-	void entriesNamingNothingThatExistsAreReported() throws IOException {
+	void entriesWithoutTargetAreReported() throws IOException {
 		create(this.root, "doc/a.md");
 
 		BlacklistedPaths listed = BlacklistedPaths.of(List.of("doc/a.md", "doc\\gone.md", " /old/b.md "), this.root,
 				"test");
 
-		assertEquals(List.of("doc/gone.md", "old/b.md"), listed.entriesNamingNothing(),
+		assertEquals(List.of("doc/gone.md", "old/b.md"), listed.entriesWithoutTarget(),
 				"Every entry naming nothing that exists is expected to be reported, as written once cleaned up.");
 		assertTrue(listed.contains(at("doc/a.md")), "An entry naming an existing file is expected to be listed.");
 	}
@@ -94,7 +94,7 @@ public class BlacklistedPathsTest {
 
 		BlacklistedPaths listed = BlacklistedPaths.of(List.of("# comment", "doc", "doc/a.md"), this.root, "test");
 
-		assertEquals(List.of(), listed.entriesNamingNothing(),
+		assertEquals(List.of(), listed.entriesWithoutTarget(),
 				"Neither a comment nor a folder nor an existing file is expected to be reported as naming nothing.");
 	}
 
