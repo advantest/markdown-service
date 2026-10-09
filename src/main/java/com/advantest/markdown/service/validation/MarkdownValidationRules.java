@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
+import com.advantest.markdown.service.resources.walk.ResourceFilter;
 import com.advantest.markdown.service.validation.anchor.AnchorValidator;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriValidator;
@@ -162,6 +163,25 @@ public class MarkdownValidationRules {
 	public MarkdownValidationRun createRun(UriReachabilityChecker uriReachabilityChecker,
 			ResourceContentsReader contentsReader) {
 		return new MarkdownValidationRun(this, this.parserAndRenderer, uriReachabilityChecker, contentsReader);
+	}
+
+	/**
+	 * Does what {@link #createRun(UriReachabilityChecker, ResourceContentsReader)} does, with the
+	 * given filter deciding which folders a walk of the run enters and which files it validates.
+	 * 
+	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
+	 *                               <code>null</code>, in which case no address is asked about
+	 * @param contentsReader what answers with the contents of a resource the run reads, must not be
+	 *                       <code>null</code>
+	 * @param resourceFilter the filter of the run's walks, must not be <code>null</code>
+	 * @return a new run, never <code>null</code>, to be closed by the caller
+	 * @throws IllegalArgumentException if the given reader or filter is <code>null</code>
+	 * @see MarkdownValidationRun#validateTree(java.nio.file.Path)
+	 */
+	public MarkdownValidationRun createRun(UriReachabilityChecker uriReachabilityChecker,
+			ResourceContentsReader contentsReader, ResourceFilter resourceFilter) {
+		return new MarkdownValidationRun(this, this.parserAndRenderer, uriReachabilityChecker, contentsReader,
+				resourceFilter);
 	}
 
 	/**

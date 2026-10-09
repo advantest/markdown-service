@@ -24,6 +24,8 @@ import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.resources.ResourceResolverRegistry;
 import com.advantest.markdown.service.resources.UnsavedResourceContents;
+import com.advantest.markdown.service.resources.walk.DefaultMarkdownValidationResourcesFilter;
+import com.advantest.markdown.service.resources.walk.ResourceFilter;
 import com.advantest.markdown.service.validation.uri.DefaultHttpUriReachabilityValidator;
 import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.HttpUriSyntaxValidator;
@@ -103,6 +105,8 @@ public class MarkdownService implements AutoCloseable {
 
 	private final List<AnchorValidator> anchorValidators;
 
+	private final ResourceFilter resourceFilter;
+
 	/** What the parts of this service use without owning it, closed after them. */
 	private final List<AutoCloseable> partsToClose;
 
@@ -131,7 +135,11 @@ public class MarkdownService implements AutoCloseable {
 				.withResourceContentsReader(unsavedContents.readerOfCurrentContents())
 				.build(),
 				ResourceResolverRegistry.ofLocalFileSystem(), unsavedContents, null, List.of(), List.of(),
-				List.of());
+				List.of(), defaultResourceFilter());
+	}
+
+	private static ResourceFilter defaultResourceFilter() {
+		return DefaultMarkdownValidationResourcesFilter.builderWithDefaults().build();
 	}
 
 	/**
@@ -148,7 +156,7 @@ public class MarkdownService implements AutoCloseable {
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers) {
 		this(parserAndRenderer, resourceResolvers, new UnsavedResourceContents(), null, List.of(), List.of(),
-				List.of());
+				List.of(), defaultResourceFilter());
 	}
 
 	/**
@@ -175,6 +183,8 @@ public class MarkdownService implements AutoCloseable {
 	 *                         they were registered in, must not be <code>null</code>
 	 * @param partsToClose what the other parts use without owning it, closed after them in the
 	 *                     given order, must not be <code>null</code>
+	 * @param resourceFilter the filter deciding which folders a walk of a validation run enters
+	 *                       and which files it validates, must not be <code>null</code>
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers,
@@ -182,9 +192,11 @@ public class MarkdownService implements AutoCloseable {
 			UriReachabilityChecker uriReachabilityChecker,
 			List<UriValidator> uriValidators,
 			List<AnchorValidator> anchorValidators,
-			List<AutoCloseable> partsToClose) {
+			List<AutoCloseable> partsToClose,
+			ResourceFilter resourceFilter) {
 		if (parserAndRenderer == null || resourceResolvers == null || unsavedContents == null
-				|| uriValidators == null || anchorValidators == null || partsToClose == null) {
+				|| uriValidators == null || anchorValidators == null || partsToClose == null
+				|| resourceFilter == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		useTheUsualDotExecutableWhereNobodyNamedOne();
@@ -198,6 +210,7 @@ public class MarkdownService implements AutoCloseable {
 		this.uriValidators = List.copyOf(uriValidators);
 		this.anchorValidators = List.copyOf(anchorValidators);
 		this.partsToClose = List.copyOf(partsToClose);
+		this.resourceFilter = resourceFilter;
 		this.cachesHolders = cachesHoldersAmong(uriReachabilityChecker, uriValidators,
 				anchorValidators);
 	}
@@ -735,16 +748,37 @@ public class MarkdownService implements AutoCloseable {
 	 * }
 	 * </pre>
 	 * 
+	 * <p>A folder tree is walked by the run's {@link MarkdownValidationRun#validateTree(java.nio.file.Path)}
+	 * with the {@link #resourceFilter() service's filter}.</p>
+	 * 
 	 * @return a new run, never <code>null</code>, to be closed by the caller
 	 * @see MarkdownValidationRun
 	 * @throws IllegalStateException if the service was closed
 	 */
 	public MarkdownValidationRun createValidationRun() {
+		return createValidationRun(this.resourceFilter);
+	}
+
+	/**
+	 * Does what {@link #createValidationRun()} does, with the given filter instead of the
+	 * service's deciding which folders a walk of the run enters and which files it validates.
+	 * 
+	 * @param resourceFilter the filter of the run's walks, must not be <code>null</code>; adapt
+	 *                       the service's with {@link DefaultMarkdownValidationResourcesFilter#toBuilder()}
+	 *                       if it is one
+	 * @return a new run, never <code>null</code>, to be closed by the caller
+	 * @throws IllegalArgumentException if the filter is <code>null</code>
+	 * @throws IllegalStateException if the service was closed
+	 */
+	public MarkdownValidationRun createValidationRun(ResourceFilter resourceFilter) {
 		requireOpen();
+		if (resourceFilter == null) {
+			throw new IllegalArgumentException("Argument must not be null.");
+		}
 		this.openRuns.removeIf(MarkdownValidationRun::isClosed);
 
 		MarkdownValidationRun run = this.validation.createRun(this.uriReachabilityChecker,
-				this.unsavedContents.readerOfContentsSnapshot());
+				this.unsavedContents.readerOfContentsSnapshot(), resourceFilter);
 		this.openRuns.add(run);
 		// remembered before the service is asked again whether it was closed, so that closing
 		// either sees this run and closes it, or this check sees that the service was closed
@@ -754,6 +788,19 @@ public class MarkdownService implements AutoCloseable {
 			throw new IllegalStateException("The service was closed and does nothing any more.");
 		}
 		return run;
+	}
+
+	/**
+	 * Answers the filter deciding which folders a walk of a validation run enters and which files
+	 * it validates, unless a run or a walk is given another one.
+	 * 
+	 * @return the service's filter, never <code>null</code>
+	 * @throws IllegalStateException if the service was closed
+	 * @see Builder#withResourceFilter(ResourceFilter)
+	 */
+	public ResourceFilter resourceFilter() {
+		requireOpen();
+		return this.resourceFilter;
 	}
 
 	/**
@@ -876,6 +923,8 @@ public class MarkdownService implements AutoCloseable {
 		private final List<AnchorValidator> anchorValidators = new ArrayList<>();
 
 		private final List<AutoCloseable> partsToClose = new ArrayList<>();
+
+		private ResourceFilter resourceFilter = defaultResourceFilter();
 
 		private Builder() {
 		}
@@ -1102,6 +1151,24 @@ public class MarkdownService implements AutoCloseable {
 		}
 
 		/**
+		 * Sets the filter deciding which folders a walk of a validation run enters and which files
+		 * it validates, replacing the one set before. The default skips symbolic links, i.e. does
+		 * not follow them, and nothing else; see
+		 * {@link DefaultMarkdownValidationResourcesFilter#builderWithDefaults()}.
+		 * 
+		 * @param filter the service's filter, must not be <code>null</code>
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the given filter is <code>null</code>
+		 */
+		public Builder withResourceFilter(ResourceFilter filter) {
+			if (filter == null) {
+				throw new IllegalArgumentException("Argument must not be null.");
+			}
+			this.resourceFilter = filter;
+			return this;
+		}
+
+		/**
 		 * Adds the given flexmark extension to the extensions already configured,
 		 * i.e. it does not replace or remove any of the default extensions.
 		 * 
@@ -1188,7 +1255,7 @@ public class MarkdownService implements AutoCloseable {
 
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers, unsavedContents,
 					this.uriReachabilityChecker, validatorsAskedInOrder, anchorValidatorsAskedInOrder,
-					this.partsToClose);
+					this.partsToClose, this.resourceFilter);
 		}
 
 	}
