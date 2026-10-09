@@ -30,8 +30,9 @@ import org.slf4j.LoggerFactory;
  * <code>doc/a.md</code> name the same file.</li>
  * <li>An entry names a file. An entry naming an existing folder has no effect, which is reported
  * once when the list is read.</li>
- * <li>An entry naming nothing that exists has no effect either. All such entries are reported
- * together, once when the list is read, so that whoever keeps the list can remove them.</li>
+ * <li>An entry without target, whose path leads to nothing that exists, has no effect either. All
+ * such entries are reported together, once when the list is read, so that whoever keeps the list
+ * can remove them.</li>
  * </ul>
  */
 public final class BlacklistedPaths {
@@ -113,7 +114,7 @@ public final class BlacklistedPaths {
 	}
 
 	/**
-	 * Tells which entries name nothing that exists, as they are written in the list once trimmed
+	 * Tells which entries have no target, as they are written in the list once trimmed
 	 * and with <code>/</code> as separator.
 	 */
 	List<String> entriesWithoutTarget() {
