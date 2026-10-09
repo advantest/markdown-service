@@ -276,7 +276,7 @@ public class MarkdownValidationRunTest {
 	@Test
 	void nullArgumentsAreRefused() {
 		try (MarkdownValidationRun run = rulesOf(new DocumentValidator(true)).createRun()) {
-			assertThrows(IllegalArgumentException.class, () -> run.validate(null));
+			assertThrows(IllegalArgumentException.class, () -> run.validate((Document) null));
 			assertThrows(IllegalArgumentException.class, () -> run.validate(null, UnresolvedResource.UNKNOWN_DOCUMENT));
 			assertThrows(IllegalArgumentException.class, () -> run.validate("# One\n", null));
 		}
