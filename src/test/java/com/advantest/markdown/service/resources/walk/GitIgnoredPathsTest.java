@@ -193,6 +193,22 @@ public class GitIgnoredPathsTest {
 	}
 
 	@Test
+	void anInterruptedThreadAsksGitNoLongerAndIgnoresNothing() throws IOException {
+		Path repository = repository("a.md");
+		ignore(repository, "a.md");
+		GitIgnoredPaths paths = new GitIgnoredPaths(GIT);
+
+		Thread.currentThread().interrupt();
+		try {
+			assertFalse(ignored(paths, repository, "a.md", false),
+					"Nothing is expected to be ignored where waiting for git was interrupted.");
+			assertTrue(Thread.currentThread().isInterrupted(), "The interrupt is expected to be kept.");
+		} finally {
+			Thread.interrupted();
+		}
+	}
+
+	@Test
 	void whereGitIsMissingNothingIsIgnored() throws IOException {
 		Path repository = repository("a.md");
 		ignore(repository, "a.md");
