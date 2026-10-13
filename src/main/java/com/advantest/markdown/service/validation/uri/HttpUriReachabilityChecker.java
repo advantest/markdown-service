@@ -6,6 +6,7 @@
  */
 package com.advantest.markdown.service.validation.uri;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -20,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +63,9 @@ import com.advantest.markdown.service.CachesHolder;
  * given instead, because what is long enough depends on a network this library knows nothing
  * about.</p>
  * 
+ * <p>A request the client refused because the connection already carried as many requests as the
+ * server takes at once is sent once more, since it never reached the server.</p>
+ * 
  * <p>Instances of this class can be used from several threads at once.</p>
  */
 public final class HttpUriReachabilityChecker implements UriReachabilityChecker, CachesHolder {
@@ -77,6 +82,9 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 * addresses are asked at the same time and each one only once.</p>
 	 */
 	public static final Duration DEFAULT_ANSWER_TIMEOUT = Duration.ofSeconds(15);
+
+	/** What the client says when it refuses a request beyond what a server takes at once. */
+	static final String TOO_MANY_STREAMS = "too many concurrent streams";
 
 	// Some servers answer a request only if they recognize who is asking, and refuse everything
 	// else, so this checker names itself after a tool such a server is used to.
@@ -267,7 +275,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 			return CompletableFuture.completedFuture(notReached(targetUri, exception));
 		}
 
-		return client.sendAsync(request, BodyHandlers.discarding())
+		return askAgainOnceIfRefused(() -> client.sendAsync(request, BodyHandlers.discarding()))
 				.<UriReachability>thenApply(response -> new UriReachability.Answered(response.statusCode()))
 				.exceptionally(throwable -> {
 					if (aborted.getAsBoolean()) {
@@ -276,6 +284,33 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 					}
 					return notReached(targetUri, throwable);
 				});
+	}
+
+	/**
+	 * Sends a request, and sends it once more if the client refused it because the connection
+	 * carried as many requests as the server takes at once.
+	 * 
+	 * <p>Such a request never reached the server, so sending it again is safe.</p>
+	 * 
+	 * @param <T> what the request answers
+	 * @param send sends the request, must not be <code>null</code>
+	 * @return the promise of the answer of the first or, if that one was refused, the second request
+	 */
+	static <T> CompletableFuture<T> askAgainOnceIfRefused(Supplier<CompletableFuture<T>> send) {
+		return send.get().exceptionallyCompose(failure -> isRefusedForTooManyStreams(failure)
+				? send.get()
+				: CompletableFuture.failedFuture(failure));
+	}
+
+	private static boolean isRefusedForTooManyStreams(Throwable failure) {
+		Throwable cause = failure instanceof CompletionException && failure.getCause() != null
+				? failure.getCause()
+				: failure;
+
+		// the client says so only in the message of an IOException
+		return cause instanceof IOException
+				&& cause.getMessage() != null
+				&& cause.getMessage().contains(TOO_MANY_STREAMS);
 	}
 
 	/**
