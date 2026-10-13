@@ -434,6 +434,63 @@ class HttpUriReachabilityCheckerTest {
 	}
 
 	@Test
+	void sendsNoMoreRequestsToAllServersAtOnceThanAllowed() {
+		List<CompletableFuture<HttpResponse<Void>>> onTheirWay = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringLater(onTheirWay);
+		UriReachabilityChecker.OfRun view = new HttpUriReachabilityChecker(executor -> httpClient,
+				Duration.ofSeconds(1), 2, 16).openForRun(Runnable::run);
+
+		view.check(URI.create("https://example.org/a"));
+		view.check(URI.create("https://example.com/a"));
+		CompletableFuture<UriReachability> third = view.check(URI.create("https://example.net/a"));
+
+		verify(httpClient, times(2)).sendAsync(any(), any());
+
+		onTheirWay.get(1).complete(responseWith(200));
+
+		verify(httpClient, times(3)).sendAsync(any(), any());
+		onTheirWay.get(2).complete(responseWith(404));
+		assertEquals(new UriReachability.Answered(404), third.join());
+	}
+
+	@Test
+	void requestWaitingForItsServerTakesNoPlaceAmongAllServers() {
+		List<CompletableFuture<HttpResponse<Void>>> onTheirWay = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringLater(onTheirWay);
+		UriReachabilityChecker.OfRun view = new HttpUriReachabilityChecker(executor -> httpClient,
+				Duration.ofSeconds(1), 2, 1).openForRun(Runnable::run);
+
+		view.check(URI.create("https://example.org/a"));
+		view.check(URI.create("https://example.org/b"));
+		view.check(URI.create("https://example.org/c"));
+		view.check(URI.create("https://example.com/a"));
+
+		verify(httpClient, times(2)).sendAsync(any(), any());
+	}
+
+	@Test
+	void everyViewSharesTheLimitOverAllServersOfTheChecker() {
+		List<CompletableFuture<HttpResponse<Void>>> onTheirWay = new ArrayList<>();
+		HttpClient firstClient = clientAnsweringLater(onTheirWay);
+		HttpClient secondClient = clientAnswering(200);
+		List<HttpClient> clients = new ArrayList<>(List.of(firstClient, secondClient));
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(executor -> clients.remove(0), Duration.ofSeconds(1), 1, 16);
+		UriReachabilityChecker.OfRun first = checker.openForRun(Runnable::run);
+		UriReachabilityChecker.OfRun second = checker.openForRun(Runnable::run);
+
+		first.check(URI.create("https://example.org/a"));
+		CompletableFuture<UriReachability> waiting = second.check(URI.create("https://example.com/a"));
+
+		verify(secondClient, times(0)).sendAsync(any(), any());
+
+		onTheirWay.get(0).complete(responseWith(200));
+
+		assertEquals(new UriReachability.Answered(200), waiting.join());
+		verify(secondClient).sendAsync(any(), any());
+	}
+
+	@Test
 	void everyViewSharesTheLimitOfTheChecker() {
 		List<CompletableFuture<HttpResponse<Void>>> onTheirWay = new ArrayList<>();
 		HttpClient firstClient = clientAnsweringLater(onTheirWay);
@@ -525,25 +582,42 @@ class HttpUriReachabilityCheckerTest {
 	@Test
 	void checkerNobodyGaveALimitSendsAsManyRequestsAtOnceAsThisClassDefaultsTo() {
 		assertEquals(16, HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER);
-		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER,
-				new HttpUriReachabilityChecker().getMaxNumberOfParallelNetworkRequestsPerServer());
-		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER,
-				new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30))
-						.getMaxNumberOfParallelNetworkRequestsPerServer());
+		assertEquals(128, HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS);
+		for (HttpUriReachabilityChecker checker : List.of(new HttpUriReachabilityChecker(),
+				new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30)))) {
+			assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER,
+					checker.getMaxNumberOfParallelNetworkRequestsPerServer());
+			assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS,
+					checker.getMaxNumberOfParallelNetworkRequests());
+		}
 	}
 
 	@Test
-	void checkerGivenALimitUsesExactlyThatOne() {
-		assertEquals(5, new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), 5)
-				.getMaxNumberOfParallelNetworkRequestsPerServer());
+	void checkerGivenLimitsUsesExactlyThoseOnes() {
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), 7, 5);
+
+		assertEquals(7, checker.getMaxNumberOfParallelNetworkRequests());
+		assertEquals(5, checker.getMaxNumberOfParallelNetworkRequestsPerServer());
+	}
+
+	@Test
+	void limitPerServerAboveTheLimitOverAllServersIsAllowed() {
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), 4, 32);
+
+		assertEquals(4, checker.getMaxNumberOfParallelNetworkRequests());
+		assertEquals(32, checker.getMaxNumberOfParallelNetworkRequestsPerServer());
 	}
 
 	@Test
 	void limitAllowingNoRequestAtAllIsRefused() {
-		assertThrows(IllegalArgumentException.class,
-				() -> new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), 0));
-		assertThrows(IllegalArgumentException.class,
-				() -> new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), -1));
+		for (int none : new int[] { 0, -1 }) {
+			assertThrows(IllegalArgumentException.class,
+					() -> new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), none, 16));
+			assertThrows(IllegalArgumentException.class,
+					() -> new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), 128, none));
+		}
 	}
 
 	private static UriReachabilityChecker.OfRun viewAsking(HttpClient httpClient) {

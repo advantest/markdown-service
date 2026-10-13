@@ -346,8 +346,46 @@ class MarkdownServiceBuilderTest {
 	}
 
 	@Test
+	void shippedCheckSendsNoMoreRequestsToAllServersAtOnceThanItDefaultsTo() {
+		MarkdownService service = MarkdownService.builderCheckingUriReachability().build();
+
+		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS,
+				assertInstanceOf(HttpUriReachabilityChecker.class, service.getUriReachabilityChecker().orElseThrow())
+						.getMaxNumberOfParallelNetworkRequests());
+	}
+
+	@Test
+	void shippedCheckSendsNoMoreRequestsToAllServersAtOnceThanTheBuilderIsTold() {
+		MarkdownService toldBefore = MarkdownService.builderNotCheckingUriReachability()
+				.withMaxNumberOfParallelNetworkRequests(50)
+				.withUriReachabilityCheck(Duration.ofSeconds(3), Duration.ofSeconds(30))
+				.build();
+		MarkdownService toldAfter = MarkdownService.builderNotCheckingUriReachability()
+				.withUriReachabilityCheck()
+				.withMaxNumberOfParallelNetworkRequests(70)
+				.withMaxNumberOfParallelNetworkRequestsPerServer(7)
+				.build();
+
+		assertEquals(50, assertInstanceOf(HttpUriReachabilityChecker.class,
+				toldBefore.getUriReachabilityChecker().orElseThrow()).getMaxNumberOfParallelNetworkRequests());
+		HttpUriReachabilityChecker checkerToldAfter = assertInstanceOf(HttpUriReachabilityChecker.class,
+				toldAfter.getUriReachabilityChecker().orElseThrow());
+		assertEquals(70, checkerToldAfter.getMaxNumberOfParallelNetworkRequests());
+		assertEquals(7, checkerToldAfter.getMaxNumberOfParallelNetworkRequestsPerServer());
+	}
+
+	@Test
+	void builderRefusesALimitOverAllServersAllowingNoRequestAtAll() {
+		MarkdownService.Builder builder = MarkdownService.builderNotCheckingUriReachability();
+
+		assertThrows(IllegalArgumentException.class, () -> builder.withMaxNumberOfParallelNetworkRequests(0));
+		assertThrows(IllegalArgumentException.class, () -> builder.withMaxNumberOfParallelNetworkRequests(-1));
+	}
+
+	@Test
 	void builderTakesNoCheckWhereOnlyTheLimitIsTold() {
 		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
+				.withMaxNumberOfParallelNetworkRequests(50)
 				.withMaxNumberOfParallelNetworkRequestsPerServer(5)
 				.build();
 
