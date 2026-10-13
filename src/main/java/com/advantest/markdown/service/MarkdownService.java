@@ -923,6 +923,9 @@ public class MarkdownService implements AutoCloseable {
 
 		private Duration shippedCheckUntilAnswered;
 
+		private int maxNumberOfParallelNetworkRequests =
+				HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS;
+
 		private int maxNumberOfParallelNetworkRequestsPerServer =
 				HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER;
 
@@ -1068,24 +1071,59 @@ public class MarkdownService implements AutoCloseable {
 		 * wait until an earlier one is answered, and sends a request refused all the same once more.
 		 * The limit belongs to the service, so every validation run shares it. Without this method
 		 * the check sends no more than
-		 * {@link HttpUriReachabilityChecker#DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER}.</p>
+		 * {@link HttpUriReachabilityChecker#DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER}.
+		 * The requests to all servers together are limited as well, see
+		 * {@link #withMaxNumberOfParallelNetworkRequests(int)}.</p>
 		 * 
 		 * <p>The number applies only to the shipped check, chosen with
 		 * {@link #withUriReachabilityCheck()} or {@link #withUriReachabilityCheck(Duration, Duration)},
 		 * in whichever order the two are said. A check given with
 		 * {@link #withUriReachabilityCheck(UriReachabilityChecker)} limits its requests itself.</p>
 		 * 
-		 * @param maxNumberOfParallelNetworkRequestsPerServer how many requests may be on their way to one
-		 *        server at once, at least one
+		 * @param maxNumberOfParallelNetworkRequestsPerServer how many requests may be on their way
+		 *        to one server at once, at least one
 		 * @return this builder for method chaining, never <code>null</code>
 		 * @throws IllegalArgumentException if the number is less than one
 		 */
-		public Builder withMaxNumberOfParallelNetworkRequestsPerServer(int maxNumberOfParallelNetworkRequestsPerServer) {
+		public Builder withMaxNumberOfParallelNetworkRequestsPerServer(
+				int maxNumberOfParallelNetworkRequestsPerServer) {
 			if (maxNumberOfParallelNetworkRequestsPerServer < 1) {
 				throw new IllegalArgumentException("At least one request has to be allowed at once, but "
 						+ maxNumberOfParallelNetworkRequestsPerServer + " were.");
 			}
 			this.maxNumberOfParallelNetworkRequestsPerServer = maxNumberOfParallelNetworkRequestsPerServer;
+			return this;
+		}
+
+		/**
+		 * Sends no more than the given number of requests to all servers together at once, where the
+		 * shipped check asks whether an address is there.
+		 * 
+		 * <p>Every open request costs the machine asking a connection or a stream, and a proxy in
+		 * between carries all of them, so documents naming many servers must not open as many
+		 * requests as the limits per server together allow. How many the machine and the network
+		 * take depends on where the service runs, which is why the number can be said here. A
+		 * request waits for its turn at its server first, see
+		 * {@link #withMaxNumberOfParallelNetworkRequestsPerServer(int)}, and then for its turn among
+		 * all servers. The limit belongs to the service, so every validation run shares it. Without
+		 * this method the check sends no more than
+		 * {@link HttpUriReachabilityChecker#DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS}.</p>
+		 * 
+		 * <p>Like the limit per server, the number applies only to the shipped check, in whichever
+		 * order it is said, and a check given with
+		 * {@link #withUriReachabilityCheck(UriReachabilityChecker)} limits its requests itself.</p>
+		 * 
+		 * @param maxNumberOfParallelNetworkRequests how many requests may be on their way to all
+		 *        servers together at once, at least one
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the number is less than one
+		 */
+		public Builder withMaxNumberOfParallelNetworkRequests(int maxNumberOfParallelNetworkRequests) {
+			if (maxNumberOfParallelNetworkRequests < 1) {
+				throw new IllegalArgumentException("At least one request has to be allowed at once, but "
+						+ maxNumberOfParallelNetworkRequests + " were.");
+			}
+			this.maxNumberOfParallelNetworkRequests = maxNumberOfParallelNetworkRequests;
 			return this;
 		}
 
@@ -1302,7 +1340,8 @@ public class MarkdownService implements AutoCloseable {
 
 			UriReachabilityChecker reachabilityChecker = this.shippedCheckUntilConnected != null
 					? new HttpUriReachabilityChecker(this.shippedCheckUntilConnected,
-							this.shippedCheckUntilAnswered, this.maxNumberOfParallelNetworkRequestsPerServer)
+							this.shippedCheckUntilAnswered, this.maxNumberOfParallelNetworkRequests,
+							this.maxNumberOfParallelNetworkRequestsPerServer)
 					: this.uriReachabilityChecker;
 
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers, unsavedContents,
