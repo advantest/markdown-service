@@ -312,6 +312,62 @@ class MarkdownServiceBuilderTest {
 	}
 
 	@Test
+	void shippedCheckSendsNoMoreRequestsToOneServerAtOnceThanItDefaultsTo() {
+		MarkdownService service = MarkdownService.builderCheckingUriReachability().build();
+
+		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS,
+				assertInstanceOf(HttpUriReachabilityChecker.class, service.getUriReachabilityChecker().orElseThrow())
+						.getMaxNumberOfParallelNetworkRequests());
+	}
+
+	@Test
+	void shippedCheckSendsNoMoreRequestsToOneServerAtOnceThanTheBuilderIsTold() {
+		MarkdownService toldBefore = MarkdownService.builderNotCheckingUriReachability()
+				.withMaxNumberOfParallelNetworkRequests(5)
+				.withUriReachabilityCheck(Duration.ofSeconds(3), Duration.ofSeconds(30))
+				.build();
+		MarkdownService toldAfter = MarkdownService.builderNotCheckingUriReachability()
+				.withUriReachabilityCheck()
+				.withMaxNumberOfParallelNetworkRequests(7)
+				.build();
+
+		assertEquals(5, assertInstanceOf(HttpUriReachabilityChecker.class,
+				toldBefore.getUriReachabilityChecker().orElseThrow()).getMaxNumberOfParallelNetworkRequests());
+		assertEquals(7, assertInstanceOf(HttpUriReachabilityChecker.class,
+				toldAfter.getUriReachabilityChecker().orElseThrow()).getMaxNumberOfParallelNetworkRequests());
+	}
+
+	@Test
+	void builderRefusesALimitAllowingNoRequestAtAll() {
+		MarkdownService.Builder builder = MarkdownService.builderNotCheckingUriReachability();
+
+		assertThrows(IllegalArgumentException.class, () -> builder.withMaxNumberOfParallelNetworkRequests(0));
+		assertThrows(IllegalArgumentException.class, () -> builder.withMaxNumberOfParallelNetworkRequests(-1));
+	}
+
+	@Test
+	void builderTakesNoCheckWhereOnlyTheLimitIsTold() {
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
+				.withMaxNumberOfParallelNetworkRequests(5)
+				.build();
+
+		assertTrue(service.getUriReachabilityChecker().isEmpty());
+	}
+
+	@Test
+	void shippedCheckReplacesACheckOfItsOwnToldEarlier() {
+		UriReachabilityChecker ownChecker =
+				executor -> targetUri -> CompletableFuture.completedFuture(new UriReachability.Answered(200));
+
+		MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
+				.withUriReachabilityCheck(ownChecker)
+				.withUriReachabilityCheck()
+				.build();
+
+		assertInstanceOf(HttpUriReachabilityChecker.class, service.getUriReachabilityChecker().orElseThrow());
+	}
+
+	@Test
 	void builderRefusesTimesThatMakeNoSense() {
 		MarkdownService.Builder builder = MarkdownService.builderNotCheckingUriReachability();
 

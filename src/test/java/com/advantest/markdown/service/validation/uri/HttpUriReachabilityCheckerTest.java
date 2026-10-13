@@ -399,6 +399,84 @@ class HttpUriReachabilityCheckerTest {
 	}
 
 	@Test
+	void sendsNoMoreRequestsToOneServerAtOnceThanAllowed() {
+		List<CompletableFuture<HttpResponse<Void>>> onTheirWay = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringLater(onTheirWay);
+		UriReachabilityChecker.OfRun view =
+				new HttpUriReachabilityChecker(executor -> httpClient, Duration.ofSeconds(1), 2).openForRun(Runnable::run);
+
+		view.check(URI.create("https://example.org/a"));
+		view.check(URI.create("https://example.org/b"));
+		CompletableFuture<UriReachability> third = view.check(URI.create("https://EXAMPLE.org/c"));
+
+		verify(httpClient, times(2)).sendAsync(any(), any());
+
+		onTheirWay.get(0).complete(responseWith(200));
+
+		verify(httpClient, times(3)).sendAsync(any(), any());
+		onTheirWay.get(2).complete(responseWith(404));
+		assertEquals(new UriReachability.Answered(404), third.join());
+	}
+
+	@Test
+	void requestToAnotherServerDoesNotWaitForTheRequestsToTheFirstOne() {
+		List<CompletableFuture<HttpResponse<Void>>> onTheirWay = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringLater(onTheirWay);
+		UriReachabilityChecker.OfRun view =
+				new HttpUriReachabilityChecker(executor -> httpClient, Duration.ofSeconds(1), 1).openForRun(Runnable::run);
+
+		view.check(URI.create("https://example.org/a"));
+		view.check(URI.create("https://example.com/a"));
+		view.check(URI.create("http://example.org/a"));
+		view.check(URI.create("https://example.org:8443/a"));
+
+		verify(httpClient, times(4)).sendAsync(any(), any());
+	}
+
+	@Test
+	void everyViewSharesTheLimitOfTheChecker() {
+		List<CompletableFuture<HttpResponse<Void>>> onTheirWay = new ArrayList<>();
+		HttpClient firstClient = clientAnsweringLater(onTheirWay);
+		HttpClient secondClient = clientAnswering(200);
+		List<HttpClient> clients = new ArrayList<>(List.of(firstClient, secondClient));
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(executor -> clients.remove(0), Duration.ofSeconds(1), 1);
+		UriReachabilityChecker.OfRun first = checker.openForRun(Runnable::run);
+		UriReachabilityChecker.OfRun second = checker.openForRun(Runnable::run);
+
+		first.check(URI.create("https://example.org/a"));
+		CompletableFuture<UriReachability> waiting = second.check(URI.create("https://example.org/b"));
+
+		verify(secondClient, times(0)).sendAsync(any(), any());
+
+		onTheirWay.get(0).complete(responseWith(200));
+
+		assertEquals(new UriReachability.Answered(200), waiting.join());
+		verify(secondClient).sendAsync(any(), any());
+	}
+
+	@Test
+	void requestOfACancelledViewIsNotSentWhenItsTurnComes() {
+		List<CompletableFuture<HttpResponse<Void>>> onTheirWay = new ArrayList<>();
+		HttpClient firstClient = clientAnsweringLater(onTheirWay);
+		HttpClient cancelledClient = clientAnswering(200);
+		List<HttpClient> clients = new ArrayList<>(List.of(firstClient, cancelledClient));
+		HttpUriReachabilityChecker checker =
+				new HttpUriReachabilityChecker(executor -> clients.remove(0), Duration.ofSeconds(1), 1);
+		UriReachabilityChecker.OfRun first = checker.openForRun(Runnable::run);
+		UriReachabilityChecker.OfRun cancelled = checker.openForRun(Runnable::run);
+
+		first.check(URI.create("https://example.org/a"));
+		CompletableFuture<UriReachability> waiting = cancelled.check(URI.create("https://example.org/b"));
+		cancelled.cancel();
+		onTheirWay.get(0).complete(responseWith(200));
+
+		verify(cancelledClient, times(0)).sendAsync(any(), any());
+		CompletionException failure = assertThrows(CompletionException.class, waiting::join);
+		assertInstanceOf(CancellationException.class, failure.getCause());
+	}
+
+	@Test
 	void requestRefusedForTooManyRequestsAtOnceIsSentOnceMore() {
 		HttpClient httpClient = clientAnsweringInTurn(
 				CompletableFuture.failedFuture(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS)),
@@ -444,6 +522,30 @@ class HttpUriReachabilityCheckerTest {
 		assertEquals(2, timesSent.get());
 	}
 
+	@Test
+	void checkerNobodyGaveALimitSendsAsManyRequestsAtOnceAsThisClassDefaultsTo() {
+		assertEquals(16, HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS);
+		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS,
+				new HttpUriReachabilityChecker().getMaxNumberOfParallelNetworkRequests());
+		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS,
+				new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30))
+						.getMaxNumberOfParallelNetworkRequests());
+	}
+
+	@Test
+	void checkerGivenALimitUsesExactlyThatOne() {
+		assertEquals(5, new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), 5)
+				.getMaxNumberOfParallelNetworkRequests());
+	}
+
+	@Test
+	void limitAllowingNoRequestAtAllIsRefused() {
+		assertThrows(IllegalArgumentException.class,
+				() -> new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), 0));
+		assertThrows(IllegalArgumentException.class,
+				() -> new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), -1));
+	}
+
 	private static UriReachabilityChecker.OfRun viewAsking(HttpClient httpClient) {
 		return checkerUsing(httpClient).openForRun(Runnable::run);
 	}
@@ -472,6 +574,18 @@ class HttpUriReachabilityCheckerTest {
 		HttpClient httpClient = mock(HttpClient.class);
 		when(httpClient.sendAsync(any(), any(BodyHandler.class)))
 				.thenAnswer(invocation -> CompletableFuture.failedFuture(failure));
+		return httpClient;
+	}
+
+	/** Answers every request with a promise of its own, which the test completes when it wants. */
+	@SuppressWarnings("unchecked")
+	private static HttpClient clientAnsweringLater(List<CompletableFuture<HttpResponse<Void>>> onTheirWay) {
+		HttpClient httpClient = mock(HttpClient.class);
+		when(httpClient.sendAsync(any(), any(BodyHandler.class))).thenAnswer(invocation -> {
+			CompletableFuture<HttpResponse<Void>> answer = new CompletableFuture<>();
+			onTheirWay.add(answer);
+			return answer;
+		});
 		return httpClient;
 	}
 
