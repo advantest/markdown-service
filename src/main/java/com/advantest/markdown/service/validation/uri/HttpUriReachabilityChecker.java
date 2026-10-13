@@ -65,7 +65,7 @@ import com.advantest.markdown.service.CachesHolder;
  * about.</p>
  * 
  * <p>No more requests are sent to one server at once than a given number, by default
- * {@link #DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS}. A server takes only so many requests
+ * {@link #DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER}. A server takes only so many requests
  * at once on one connection, and the client fails every request beyond that number instead of
  * sending it, which would report a working address as one that does not answer. A further request
  * to the same server waits, without holding a thread, until an earlier one is answered. The limit
@@ -96,7 +96,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 * standard recommends no less. Sixteen stays well below that and was measured to be as fast as
 	 * no limit at all over a corpus of documents.</p>
 	 */
-	public static final int DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS = 16;
+	public static final int DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER = 16;
 
 	/** What the client says when it refuses a request beyond what a server takes at once. */
 	static final String TOO_MANY_STREAMS = "too many concurrent streams";
@@ -114,7 +114,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 
 	private final Duration answerTimeout;
 
-	private final int maxNumberOfParallelNetworkRequests;
+	private final int maxNumberOfParallelNetworkRequestsPerServer;
 
 	private final Map<URI, CompletableFuture<UriReachability>> answersByUri = new ConcurrentHashMap<>();
 
@@ -123,7 +123,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	/**
 	 * Creates a checker asking over HTTP, giving an address the times this class defaults to:
 	 * {@link #DEFAULT_CONNECT_TIMEOUT} to accept the connection and {@link #DEFAULT_ANSWER_TIMEOUT}
-	 * to answer, and sending no more than {@link #DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS}
+	 * to answer, and sending no more than {@link #DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER}
 	 * requests to one server at once.
 	 */
 	public HttpUriReachabilityChecker() {
@@ -151,7 +151,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 *         is zero or negative, or if the time to answer is shorter than the time to connect
 	 */
 	public HttpUriReachabilityChecker(Duration untilConnected, Duration untilAnswered) {
-		this(untilConnected, untilAnswered, DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS);
+		this(untilConnected, untilAnswered, DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER);
 	}
 
 	/**
@@ -166,16 +166,16 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 *        <code>null</code> and must be longer than nothing
 	 * @param untilAnswered how long the far side has to answer, must not be <code>null</code>, must
 	 *        be longer than nothing and must not be shorter than <code>untilConnected</code>
-	 * @param maxNumberOfParallelNetworkRequests how many requests may be on their way to one server
+	 * @param maxNumberOfParallelNetworkRequestsPerServer how many requests may be on their way to one server
 	 *        at once, at least one
 	 * @throws IllegalArgumentException if one of the times is <code>null</code>, if one of them is
 	 *         zero or negative, if the time to answer is shorter than the time to connect, or if
 	 *         the number of requests is less than one
 	 */
 	public HttpUriReachabilityChecker(Duration untilConnected, Duration untilAnswered,
-			int maxNumberOfParallelNetworkRequests) {
+			int maxNumberOfParallelNetworkRequestsPerServer) {
 		this(clientsConnectingWithin(untilConnected, untilAnswered), untilAnswered,
-				maxNumberOfParallelNetworkRequests);
+				maxNumberOfParallelNetworkRequestsPerServer);
 	}
 
 	private static Function<Executor, HttpClient> clientsConnectingWithin(Duration untilConnected,
@@ -227,7 +227,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 */
 	HttpUriReachabilityChecker(Function<Executor, HttpClient> clientFactory, Duration answerTimeout) {
-		this(clientFactory, answerTimeout, DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS);
+		this(clientFactory, answerTimeout, DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER);
 	}
 
 	/**
@@ -237,23 +237,23 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 * @param clientFactory creates a client executing on the executor it is given, must not be
 	 *                      <code>null</code>
 	 * @param answerTimeout how long an address has to answer, must not be <code>null</code>
-	 * @param maxNumberOfParallelNetworkRequests how many requests may be on their way to one server
+	 * @param maxNumberOfParallelNetworkRequestsPerServer how many requests may be on their way to one server
 	 *                      at once, at least one
 	 * @throws IllegalArgumentException if one of the arguments is <code>null</code> or the number
 	 *         of requests is less than one
 	 */
 	HttpUriReachabilityChecker(Function<Executor, HttpClient> clientFactory, Duration answerTimeout,
-			int maxNumberOfParallelNetworkRequests) {
+			int maxNumberOfParallelNetworkRequestsPerServer) {
 		if (clientFactory == null || answerTimeout == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
-		if (maxNumberOfParallelNetworkRequests < 1) {
+		if (maxNumberOfParallelNetworkRequestsPerServer < 1) {
 			throw new IllegalArgumentException("At least one request has to be allowed at once, but "
-					+ maxNumberOfParallelNetworkRequests + " were.");
+					+ maxNumberOfParallelNetworkRequestsPerServer + " were.");
 		}
 		this.clientFactory = clientFactory;
 		this.answerTimeout = answerTimeout;
-		this.maxNumberOfParallelNetworkRequests = maxNumberOfParallelNetworkRequests;
+		this.maxNumberOfParallelNetworkRequestsPerServer = maxNumberOfParallelNetworkRequestsPerServer;
 	}
 
 	/**
@@ -276,8 +276,8 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 * 
 	 * @return the number, at least one
 	 */
-	public int getMaxNumberOfParallelNetworkRequests() {
-		return this.maxNumberOfParallelNetworkRequests;
+	public int getMaxNumberOfParallelNetworkRequestsPerServer() {
+		return this.maxNumberOfParallelNetworkRequestsPerServer;
 	}
 
 	/**
@@ -372,7 +372,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	private RequestLimit limitOf(URI targetUri) {
 		String server = (targetUri.getScheme() + "://" + targetUri.getRawAuthority()).toLowerCase(Locale.ROOT);
 		return this.limitsByServer.computeIfAbsent(server,
-				ignored -> new RequestLimit(this.maxNumberOfParallelNetworkRequests));
+				ignored -> new RequestLimit(this.maxNumberOfParallelNetworkRequestsPerServer));
 	}
 
 	/**

@@ -524,18 +524,18 @@ class HttpUriReachabilityCheckerTest {
 
 	@Test
 	void checkerNobodyGaveALimitSendsAsManyRequestsAtOnceAsThisClassDefaultsTo() {
-		assertEquals(16, HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS);
-		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS,
-				new HttpUriReachabilityChecker().getMaxNumberOfParallelNetworkRequests());
-		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS,
+		assertEquals(16, HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER);
+		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER,
+				new HttpUriReachabilityChecker().getMaxNumberOfParallelNetworkRequestsPerServer());
+		assertEquals(HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER,
 				new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30))
-						.getMaxNumberOfParallelNetworkRequests());
+						.getMaxNumberOfParallelNetworkRequestsPerServer());
 	}
 
 	@Test
 	void checkerGivenALimitUsesExactlyThatOne() {
 		assertEquals(5, new HttpUriReachabilityChecker(Duration.ofSeconds(3), Duration.ofSeconds(30), 5)
-				.getMaxNumberOfParallelNetworkRequests());
+				.getMaxNumberOfParallelNetworkRequestsPerServer());
 	}
 
 	@Test

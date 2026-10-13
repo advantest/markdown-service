@@ -923,8 +923,8 @@ public class MarkdownService implements AutoCloseable {
 
 		private Duration shippedCheckUntilAnswered;
 
-		private int maxNumberOfParallelNetworkRequests =
-				HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS;
+		private int maxNumberOfParallelNetworkRequestsPerServer =
+				HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER;
 
 		private final List<UriValidator> uriValidators = new ArrayList<>();
 
@@ -1068,24 +1068,24 @@ public class MarkdownService implements AutoCloseable {
 		 * wait until an earlier one is answered, and sends a request refused all the same once more.
 		 * The limit belongs to the service, so every validation run shares it. Without this method
 		 * the check sends no more than
-		 * {@link HttpUriReachabilityChecker#DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS}.</p>
+		 * {@link HttpUriReachabilityChecker#DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER}.</p>
 		 * 
 		 * <p>The number applies only to the shipped check, chosen with
 		 * {@link #withUriReachabilityCheck()} or {@link #withUriReachabilityCheck(Duration, Duration)},
 		 * in whichever order the two are said. A check given with
 		 * {@link #withUriReachabilityCheck(UriReachabilityChecker)} limits its requests itself.</p>
 		 * 
-		 * @param maxNumberOfParallelNetworkRequests how many requests may be on their way to one
+		 * @param maxNumberOfParallelNetworkRequestsPerServer how many requests may be on their way to one
 		 *        server at once, at least one
 		 * @return this builder for method chaining, never <code>null</code>
 		 * @throws IllegalArgumentException if the number is less than one
 		 */
-		public Builder withMaxNumberOfParallelNetworkRequests(int maxNumberOfParallelNetworkRequests) {
-			if (maxNumberOfParallelNetworkRequests < 1) {
+		public Builder withMaxNumberOfParallelNetworkRequestsPerServer(int maxNumberOfParallelNetworkRequestsPerServer) {
+			if (maxNumberOfParallelNetworkRequestsPerServer < 1) {
 				throw new IllegalArgumentException("At least one request has to be allowed at once, but "
-						+ maxNumberOfParallelNetworkRequests + " were.");
+						+ maxNumberOfParallelNetworkRequestsPerServer + " were.");
 			}
-			this.maxNumberOfParallelNetworkRequests = maxNumberOfParallelNetworkRequests;
+			this.maxNumberOfParallelNetworkRequestsPerServer = maxNumberOfParallelNetworkRequestsPerServer;
 			return this;
 		}
 
@@ -1302,7 +1302,7 @@ public class MarkdownService implements AutoCloseable {
 
 			UriReachabilityChecker reachabilityChecker = this.shippedCheckUntilConnected != null
 					? new HttpUriReachabilityChecker(this.shippedCheckUntilConnected,
-							this.shippedCheckUntilAnswered, this.maxNumberOfParallelNetworkRequests)
+							this.shippedCheckUntilAnswered, this.maxNumberOfParallelNetworkRequestsPerServer)
 					: this.uriReachabilityChecker;
 
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers, unsavedContents,
