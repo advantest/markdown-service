@@ -398,6 +398,52 @@ class HttpUriReachabilityCheckerTest {
 		goingOn.close();
 	}
 
+	@Test
+	void requestRefusedForTooManyRequestsAtOnceIsSentOnceMore() {
+		HttpClient httpClient = clientAnsweringInTurn(
+				CompletableFuture.failedFuture(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS)),
+				CompletableFuture.completedFuture(responseWith(200)));
+
+		UriReachability reachability = viewAsking(httpClient).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.Answered(200), reachability);
+		verify(httpClient, times(2)).sendAsync(any(), any());
+	}
+
+	@Test
+	void requestRefusedTwiceIsNotReached() {
+		HttpClient httpClient = clientAnsweringInTurn(
+				CompletableFuture.failedFuture(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS)),
+				CompletableFuture.failedFuture(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS)));
+
+		UriReachability reachability = viewAsking(httpClient).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.NotReached(HttpUriReachabilityChecker.TOO_MANY_STREAMS), reachability);
+		verify(httpClient, times(2)).sendAsync(any(), any());
+	}
+
+	@Test
+	void requestFailingForAnotherReasonIsNotSentAgain() {
+		HttpClient httpClient = clientFailingWith(new IOException("Connection reset"));
+
+		viewAsking(httpClient).check(SOME_ADDRESS).join();
+
+		verify(httpClient, times(1)).sendAsync(any(), any());
+	}
+
+	@Test
+	void refusalWrappedByTheFutureItFailedIsRecognized() {
+		AtomicInteger timesSent = new AtomicInteger();
+
+		String answer = HttpUriReachabilityChecker.askAgainOnceIfRefused(() -> timesSent.incrementAndGet() == 1
+				? CompletableFuture.<String>failedFuture(
+						new CompletionException(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS)))
+				: CompletableFuture.completedFuture("answered")).join();
+
+		assertEquals("answered", answer);
+		assertEquals(2, timesSent.get());
+	}
+
 	private static UriReachabilityChecker.OfRun viewAsking(HttpClient httpClient) {
 		return checkerUsing(httpClient).openForRun(Runnable::run);
 	}
@@ -426,6 +472,17 @@ class HttpUriReachabilityCheckerTest {
 		HttpClient httpClient = mock(HttpClient.class);
 		when(httpClient.sendAsync(any(), any(BodyHandler.class)))
 				.thenAnswer(invocation -> CompletableFuture.failedFuture(failure));
+		return httpClient;
+	}
+
+	/** Answers the first request with the first of the given answers, the second with the second, and so on. */
+	@SafeVarargs
+	@SuppressWarnings("unchecked")
+	private static HttpClient clientAnsweringInTurn(CompletableFuture<HttpResponse<Void>>... answers) {
+		HttpClient httpClient = mock(HttpClient.class);
+		AtomicInteger timesAsked = new AtomicInteger();
+		when(httpClient.sendAsync(any(), any(BodyHandler.class)))
+				.thenAnswer(invocation -> answers[timesAsked.getAndIncrement()]);
 		return httpClient;
 	}
 
