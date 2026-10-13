@@ -918,6 +918,14 @@ public class MarkdownService implements AutoCloseable {
 
 		private UriReachabilityChecker uriReachabilityChecker;
 
+		/** The times of the shipped check, <code>null</code> unless the shipped check was chosen. */
+		private Duration shippedCheckUntilConnected;
+
+		private Duration shippedCheckUntilAnswered;
+
+		private int maxNumberOfParallelNetworkRequests =
+				HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS;
+
 		private final List<UriValidator> uriValidators = new ArrayList<>();
 
 		private final List<AnchorValidator> anchorValidators = new ArrayList<>();
@@ -1014,7 +1022,8 @@ public class MarkdownService implements AutoCloseable {
 		 * @return this builder for method chaining, never <code>null</code>
 		 */
 		public Builder withUriReachabilityCheck() {
-			return withUriReachabilityCheck(new HttpUriReachabilityChecker());
+			return withUriReachabilityCheck(HttpUriReachabilityChecker.DEFAULT_CONNECT_TIMEOUT,
+					HttpUriReachabilityChecker.DEFAULT_ANSWER_TIMEOUT);
 		}
 
 		/**
@@ -1040,8 +1049,44 @@ public class MarkdownService implements AutoCloseable {
 		 *         connect
 		 */
 		public Builder withUriReachabilityCheck(Duration untilConnected, Duration untilAnswered) {
-			return withUriReachabilityCheck(
-					new HttpUriReachabilityChecker(untilConnected, untilAnswered));
+			// says at once what is wrong with the times rather than when the service is built
+			new HttpUriReachabilityChecker(untilConnected, untilAnswered);
+
+			this.uriReachabilityChecker = null;
+			this.shippedCheckUntilConnected = untilConnected;
+			this.shippedCheckUntilAnswered = untilAnswered;
+			return this;
+		}
+
+		/**
+		 * Sends no more than the given number of requests to one server at once, where the shipped
+		 * check asks whether an address is there.
+		 * 
+		 * <p>A server takes only so many requests at once on one connection, and the client fails
+		 * every request beyond that number, which would report a working address as one that does
+		 * not answer. The shipped check therefore makes every further request to the same server
+		 * wait until an earlier one is answered, and sends a request refused all the same once more.
+		 * The limit belongs to the service, so every validation run shares it. Without this method
+		 * the check sends no more than
+		 * {@link HttpUriReachabilityChecker#DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS}.</p>
+		 * 
+		 * <p>The number applies only to the shipped check, chosen with
+		 * {@link #withUriReachabilityCheck()} or {@link #withUriReachabilityCheck(Duration, Duration)},
+		 * in whichever order the two are said. A check given with
+		 * {@link #withUriReachabilityCheck(UriReachabilityChecker)} limits its requests itself.</p>
+		 * 
+		 * @param maxNumberOfParallelNetworkRequests how many requests may be on their way to one
+		 *        server at once, at least one
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the number is less than one
+		 */
+		public Builder withMaxNumberOfParallelNetworkRequests(int maxNumberOfParallelNetworkRequests) {
+			if (maxNumberOfParallelNetworkRequests < 1) {
+				throw new IllegalArgumentException("At least one request has to be allowed at once, but "
+						+ maxNumberOfParallelNetworkRequests + " were.");
+			}
+			this.maxNumberOfParallelNetworkRequests = maxNumberOfParallelNetworkRequests;
+			return this;
 		}
 
 		/**
@@ -1070,6 +1115,8 @@ public class MarkdownService implements AutoCloseable {
 				throw new IllegalArgumentException("Argument must not be null.");
 			}
 			this.uriReachabilityChecker = checker;
+			this.shippedCheckUntilConnected = null;
+			this.shippedCheckUntilAnswered = null;
 			return this;
 		}
 
@@ -1253,8 +1300,13 @@ public class MarkdownService implements AutoCloseable {
 			List<AnchorValidator> anchorValidatorsAskedInOrder = new ArrayList<>(this.anchorValidators);
 			Collections.reverse(anchorValidatorsAskedInOrder);
 
+			UriReachabilityChecker reachabilityChecker = this.shippedCheckUntilConnected != null
+					? new HttpUriReachabilityChecker(this.shippedCheckUntilConnected,
+							this.shippedCheckUntilAnswered, this.maxNumberOfParallelNetworkRequests)
+					: this.uriReachabilityChecker;
+
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers, unsavedContents,
-					this.uriReachabilityChecker, validatorsAskedInOrder, anchorValidatorsAskedInOrder,
+					reachabilityChecker, validatorsAskedInOrder, anchorValidatorsAskedInOrder,
 					this.partsToClose, this.resourceFilter);
 		}
 
