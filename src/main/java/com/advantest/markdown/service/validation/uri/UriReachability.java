@@ -29,7 +29,8 @@ public sealed interface UriReachability {
 
 	/**
 	 * The address did not answer, e.g. because no host of that name exists, because nothing
-	 * answered in time or because the connection was refused.
+	 * answered in time, because the connection was refused or because the server kept saying that it
+	 * cannot answer now.
 	 * 
 	 * @param failureReason why the address could not be reached, in the words of whatever tried
 	 *                      to reach it, must not be <code>null</code> and not blank

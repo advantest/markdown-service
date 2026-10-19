@@ -22,12 +22,19 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpConnectTimeoutException;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandler;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -38,6 +45,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -534,27 +542,37 @@ class HttpUriReachabilityCheckerTest {
 	}
 
 	@Test
-	void requestRefusedForTooManyRequestsAtOnceIsSentOnceMore() {
-		HttpClient httpClient = clientAnsweringInTurn(
-				CompletableFuture.failedFuture(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS)),
-				CompletableFuture.completedFuture(responseWith(200)));
+	void requestRefusedForTooManyRequestsAtOnceIsSentAgainAtOnce() {
+		List<Duration> waits = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringInTurn(refused(), answered(200));
 
-		UriReachability reachability = viewAsking(httpClient).check(SOME_ADDRESS).join();
+		UriReachability reachability = viewWaiting(httpClient, waits).check(SOME_ADDRESS).join();
 
 		assertEquals(new UriReachability.Answered(200), reachability);
 		verify(httpClient, times(2)).sendAsync(any(), any());
+		assertEquals(List.of(), waits);
 	}
 
 	@Test
-	void requestRefusedTwiceIsNotReached() {
-		HttpClient httpClient = clientAnsweringInTurn(
-				CompletableFuture.failedFuture(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS)),
-				CompletableFuture.failedFuture(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS)));
+	void requestRefusedTwiceIsSentAgainAfterAboutThreeSeconds() {
+		List<Duration> waits = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringInTurn(refused(), refused(), answered(200));
 
-		UriReachability reachability = viewAsking(httpClient).check(SOME_ADDRESS).join();
+		UriReachability reachability = viewWaiting(httpClient, waits).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.Answered(200), reachability);
+		verify(httpClient, times(3)).sendAsync(any(), any());
+		assertEquals(List.of(Duration.ofSeconds(3)), waits);
+	}
+
+	@Test
+	void requestRefusedThreeTimesIsNotReached() {
+		HttpClient httpClient = clientAnsweringInTurn(refused(), refused(), refused());
+
+		UriReachability reachability = viewWaiting(httpClient, new ArrayList<>()).check(SOME_ADDRESS).join();
 
 		assertEquals(new UriReachability.NotReached(HttpUriReachabilityChecker.TOO_MANY_STREAMS), reachability);
-		verify(httpClient, times(2)).sendAsync(any(), any());
+		verify(httpClient, times(3)).sendAsync(any(), any());
 	}
 
 	@Test
@@ -567,18 +585,213 @@ class HttpUriReachabilityCheckerTest {
 	}
 
 	@Test
-	void refusalWrappedByTheFutureItFailedIsRecognized() {
-		AtomicInteger timesSent = new AtomicInteger();
+	void requestTimingOutIsNotSentAgain() {
+		HttpClient httpClient = clientFailingWith(new HttpTimeoutException("request timed out"));
 
-		String answer = HttpUriReachabilityChecker.askAgainOnceIfRefused(() -> timesSent.incrementAndGet() == 1
-				? CompletableFuture.<String>failedFuture(
-						new CompletionException(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS)))
-				: CompletableFuture.completedFuture("answered")).join();
+		UriReachability reachability = viewWaiting(httpClient, new ArrayList<>()).check(SOME_ADDRESS).join();
 
-		assertEquals("answered", answer);
-		assertEquals(2, timesSent.get());
+		assertEquals(new UriReachability.NotReached("request timed out"), reachability);
+		verify(httpClient, times(1)).sendAsync(any(), any());
 	}
 
+	@Test
+	void refusalWrappedByTheFutureItFailedIsRecognized() {
+		HttpClient httpClient = clientAnsweringInTurn(
+				CompletableFuture.failedFuture(
+						new CompletionException(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS))),
+				answered(200));
+
+		UriReachability reachability = viewWaiting(httpClient, new ArrayList<>()).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.Answered(200), reachability);
+		verify(httpClient, times(2)).sendAsync(any(), any());
+	}
+
+	@Test
+	void serverSayingItCannotAnswerNowIsAskedAgainAfterAboutOneSecond() {
+		for (int statusCode : new int[] { 429, 503, 504 }) {
+			List<Duration> waits = new ArrayList<>();
+			HttpClient httpClient = clientAnsweringInTurn(answered(statusCode), answered(200));
+
+			UriReachability reachability = viewWaiting(httpClient, waits).check(SOME_ADDRESS).join();
+
+			assertEquals(new UriReachability.Answered(200), reachability, "status code " + statusCode);
+			verify(httpClient, times(2)).sendAsync(any(), any());
+			assertEquals(List.of(Duration.ofSeconds(1)), waits, "status code " + statusCode);
+		}
+	}
+
+	@Test
+	void serverStillBusyIsAskedAgainAfterAboutThreeSeconds() {
+		List<Duration> waits = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringInTurn(answered(503), answered(503), answered(404));
+
+		UriReachability reachability = viewWaiting(httpClient, waits).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.Answered(404), reachability);
+		assertEquals(List.of(Duration.ofSeconds(1), Duration.ofSeconds(3)), waits);
+	}
+
+	@Test
+	void serverStillBusyAfterBeingAskedAgainTwiceIsNotReachedWithItsStatusCodeAsTheReason() {
+		for (int statusCode : new int[] { 429, 503, 504 }) {
+			HttpClient httpClient =
+					clientAnsweringInTurn(answered(statusCode), answered(statusCode), answered(statusCode));
+
+			UriReachability reachability = viewWaiting(httpClient, new ArrayList<>()).check(SOME_ADDRESS).join();
+
+			assertEquals(new UriReachability.NotReached("HTTP status code " + statusCode), reachability);
+			verify(httpClient, times(3)).sendAsync(any(), any());
+		}
+	}
+
+	@Test
+	void anyOtherErrorStatusCodeIsNotAskedAgain() {
+		for (int statusCode : new int[] { 400, 404, 500, 502 }) {
+			List<Duration> waits = new ArrayList<>();
+			HttpClient httpClient = clientAnswering(statusCode);
+
+			UriReachability reachability = viewWaiting(httpClient, waits).check(SOME_ADDRESS).join();
+
+			assertEquals(new UriReachability.Answered(statusCode), reachability);
+			verify(httpClient, times(1)).sendAsync(any(), any());
+			assertEquals(List.of(), waits);
+		}
+	}
+
+	@Test
+	void waitVariesByUpToAQuarterAtRandom() {
+		List<Duration> shortestWaits = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringInTurn(answered(503), answered(503), answered(503));
+		new HttpUriReachabilityChecker(executor -> httpClient, Duration.ofSeconds(1), 128, 16,
+				recordingIn(shortestWaits), () -> 0.0).openForRun(Runnable::run).check(SOME_ADDRESS).join();
+
+		List<Duration> longestWaits = new ArrayList<>();
+		HttpClient otherClient = clientAnsweringInTurn(refused(), refused(), answered(200),
+				answered(503), answered(200));
+		UriReachabilityChecker.OfRun view = new HttpUriReachabilityChecker(executor -> otherClient,
+				Duration.ofSeconds(1), 128, 16, recordingIn(longestWaits), () -> 0.9999).openForRun(Runnable::run);
+		view.check(SOME_ADDRESS).join();
+		view.check(URI.create("https://example.org/other")).join();
+
+		assertEquals(List.of(Duration.ofMillis(750), Duration.ofMillis(2250)), shortestWaits);
+		assertEquals(List.of(Duration.ofMillis(3750), Duration.ofMillis(1250)), longestWaits);
+	}
+
+	@Test
+	void serverSayingHowLongToWaitIsWaitedForThatLong() {
+		List<Duration> waits = new ArrayList<>();
+		HttpClient httpClient =
+				clientAnsweringInTurn(answered(429, "2"), answered(503, " 5 "), answered(200));
+
+		UriReachability reachability = viewWaiting(httpClient, waits).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.Answered(200), reachability);
+		assertEquals(List.of(Duration.ofSeconds(2), Duration.ofSeconds(5)), waits);
+	}
+
+	@Test
+	void serverAskingForALongerWaitThanAllowedIsNotAskedAgain() {
+		List<Duration> waits = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringInTurn(answered(503, "6"), answered(200));
+
+		UriReachability reachability = viewWaiting(httpClient, waits).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.NotReached("HTTP status code 503"), reachability);
+		verify(httpClient, times(1)).sendAsync(any(), any());
+		assertEquals(List.of(), waits);
+		assertEquals(Duration.ofSeconds(5), HttpUriReachabilityChecker.LONGEST_WAIT_A_SERVER_MAY_ASK_FOR);
+	}
+
+	@Test
+	void serverSayingHowLongToWaitInAWayThatCannotBeReadIsWaitedForAsUsual() {
+		List<Duration> waits = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringInTurn(answered(503, "soon"), answered(200));
+
+		viewWaiting(httpClient, waits).check(SOME_ADDRESS).join();
+
+		assertEquals(List.of(Duration.ofSeconds(1)), waits);
+	}
+
+	@Test
+	void waitIsReadAsSecondsOrAsTheTimeFromWhichOnToAskAgain() {
+		assertEquals(Optional.of(Duration.ofSeconds(120)), HttpUriReachabilityChecker.waitOf("120"));
+		assertEquals(Optional.of(Duration.ZERO), HttpUriReachabilityChecker.waitOf("0"));
+		assertEquals(Optional.of(Duration.ZERO),
+				HttpUriReachabilityChecker.waitOf("Wed, 21 Oct 2015 07:28:00 GMT"));
+		Duration untilTomorrow = HttpUriReachabilityChecker.waitOf(DateTimeFormatter.RFC_1123_DATE_TIME
+				.format(ZonedDateTime.now(ZoneOffset.UTC).plusDays(1))).orElseThrow();
+		assertTrue(untilTomorrow.compareTo(Duration.ofHours(23)) > 0, untilTomorrow.toString());
+		assertTrue(HttpUriReachabilityChecker.waitOf("99999999999999999999").orElseThrow()
+				.compareTo(HttpUriReachabilityChecker.LONGEST_WAIT_A_SERVER_MAY_ASK_FOR) > 0);
+		assertEquals(Optional.empty(), HttpUriReachabilityChecker.waitOf("-1"));
+		assertEquals(Optional.empty(), HttpUriReachabilityChecker.waitOf(""));
+	}
+
+	@Test
+	void serverThatCouldNotAnswerNowIsAskedOnlyOncePerRunButAgainInTheNextRun() {
+		HttpClient httpClient = clientAnswering(503);
+		HttpUriReachabilityChecker checker = new HttpUriReachabilityChecker(executor -> httpClient,
+				Duration.ofSeconds(1), 128, 16, recordingIn(new ArrayList<>()), () -> 0.5);
+		UriReachabilityChecker.OfRun firstRun = checker.openForRun(Runnable::run);
+
+		UriReachability first = firstRun.check(SOME_ADDRESS).join();
+		UriReachability again = firstRun.check(SOME_ADDRESS).join();
+
+		verify(httpClient, times(3)).sendAsync(any(), any());
+		assertEquals(first, again);
+
+		checker.openForRun(Runnable::run).check(SOME_ADDRESS).join();
+
+		verify(httpClient, times(6)).sendAsync(any(), any());
+	}
+
+	@Test
+	void requestRefusedThreeTimesIsAskedAgainInTheNextRun() {
+		HttpClient httpClient = clientFailingWith(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS));
+		HttpUriReachabilityChecker checker = new HttpUriReachabilityChecker(executor -> httpClient,
+				Duration.ofSeconds(1), 128, 16, recordingIn(new ArrayList<>()), () -> 0.5);
+
+		checker.openForRun(Runnable::run).check(SOME_ADDRESS).join();
+		checker.openForRun(Runnable::run).check(SOME_ADDRESS).join();
+
+		verify(httpClient, times(6)).sendAsync(any(), any());
+	}
+
+	@Test
+	void requestWaitingToBeAskedAgainTakesNoPlaceAtItsServer() {
+		List<Runnable> waiting = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringInTurn(answered(503), answered(200), answered(404));
+		UriReachabilityChecker.OfRun view = new HttpUriReachabilityChecker(executor -> httpClient,
+				Duration.ofSeconds(1), 1, 1, wait -> waiting::add, () -> 0.5).openForRun(Runnable::run);
+
+		CompletableFuture<UriReachability> busy = view.check(SOME_ADDRESS);
+		UriReachability other = view.check(URI.create("https://example.org/other")).join();
+
+		assertEquals(new UriReachability.Answered(200), other);
+		verify(httpClient, times(2)).sendAsync(any(), any());
+		assertFalse(busy.isDone());
+
+		waiting.remove(0).run();
+
+		assertEquals(new UriReachability.Answered(404), busy.join());
+	}
+
+	@Test
+	void requestOfAViewCancelledWhileWaitingToBeAskedAgainIsNotSentAgain() {
+		List<Runnable> waiting = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringInTurn(answered(503), answered(200));
+		UriReachabilityChecker.OfRun view = new HttpUriReachabilityChecker(executor -> httpClient,
+				Duration.ofSeconds(1), 128, 16, wait -> waiting::add, () -> 0.5).openForRun(Runnable::run);
+
+		CompletableFuture<UriReachability> busy = view.check(SOME_ADDRESS);
+		view.cancel();
+		waiting.remove(0).run();
+
+		verify(httpClient, times(1)).sendAsync(any(), any());
+		CompletionException failure = assertThrows(CompletionException.class, busy::join);
+		assertInstanceOf(CancellationException.class, failure.getCause());
+	}
 	@Test
 	void checkerNobodyGaveALimitSendsAsManyRequestsAtOnceAsThisClassDefaultsTo() {
 		assertEquals(16, HttpUriReachabilityChecker.DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER);
@@ -624,6 +837,33 @@ class HttpUriReachabilityCheckerTest {
 		return checkerUsing(httpClient).openForRun(Runnable::run);
 	}
 
+	/** Opens a view whose waits before asking again are recorded instead of waited for. */
+	private static UriReachabilityChecker.OfRun viewWaiting(HttpClient httpClient, List<Duration> waits) {
+		return new HttpUriReachabilityChecker(executor -> httpClient, Duration.ofSeconds(1), 128, 16,
+				recordingIn(waits), () -> 0.5).openForRun(Runnable::run);
+	}
+
+	/** Records every wait in the given list and runs what is to follow at once. */
+	private static Function<Duration, Executor> recordingIn(List<Duration> waits) {
+		return wait -> {
+			waits.add(wait);
+			return Runnable::run;
+		};
+	}
+
+	private static CompletableFuture<HttpResponse<Void>> answered(int statusCode) {
+		return CompletableFuture.completedFuture(responseWith(statusCode));
+	}
+
+	private static CompletableFuture<HttpResponse<Void>> answered(int statusCode, String retryAfter) {
+		HttpResponse<Void> response = responseWith(statusCode);
+		when(response.headers()).thenReturn(HttpHeaders.of(Map.of("Retry-After", List.of(retryAfter)), (n, v) -> true));
+		return CompletableFuture.completedFuture(response);
+	}
+
+	private static CompletableFuture<HttpResponse<Void>> refused() {
+		return CompletableFuture.failedFuture(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS));
+	}
 	private static HttpUriReachabilityChecker checkerUsing(HttpClient httpClient) {
 		return new HttpUriReachabilityChecker(httpClient, Duration.ofSeconds(1));
 	}
@@ -678,6 +918,7 @@ class HttpUriReachabilityCheckerTest {
 	private static HttpResponse<Void> responseWith(int statusCode) {
 		HttpResponse<Void> response = mock(HttpResponse.class);
 		when(response.statusCode()).thenReturn(statusCode);
+		when(response.headers()).thenReturn(HttpHeaders.of(Map.of(), (name, value) -> true));
 		return response;
 	}
 

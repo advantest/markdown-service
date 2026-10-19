@@ -11,18 +11,27 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
+import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
+import java.util.function.DoubleSupplier;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +53,8 @@ import com.advantest.markdown.service.CachesHolder;
  * class where it says nothing.</p>
  * 
  * <p>Every answer is remembered, the one that came and the one that did not, for as long as this
- * checker lives. An address that costs a timeout costs it once and not once per document naming
+ * checker lives, except where a server says that it cannot answer now, as told below. An address
+ * that costs a timeout costs it once and not once per document naming
  * it, and an address is asked about only once even while several documents are validated at the
  * same time: the answer is put into the cache while it is still being waited for, so a second
  * document waits for the same request instead of starting another one. Nothing expires by itself,
@@ -68,9 +78,24 @@ import com.advantest.markdown.service.CachesHolder;
  * {@link #DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS_PER_SERVER}. A server takes only so many
  * requests at once on one connection, and the client fails every request beyond that number instead
  * of sending it, which would report a working address as one that does not answer. A further
- * request to the same server waits, without holding a thread, until an earlier one is answered. A
- * request refused all the same, because a server takes fewer requests than the limit allows, is sent
- * once more.</p>
+ * request to the same server waits, without holding a thread, until an earlier one is answered.</p>
+ * 
+ * <p>An address whose server says that it cannot answer now is asked again, twice at most. That is
+ * an answer with one of the status codes 429 "Too Many Requests", 503 "Service Unavailable" or 504
+ * "Gateway Timeout", which is asked again after about one and then about three seconds, and a
+ * request the client refused because the connection carried as many requests as the server takes at
+ * once, which is sent again at once and then after about three seconds. Every wait varies by a
+ * quarter at random, so that requests refused together do not come back together. A server saying
+ * in <code>Retry-After</code> how long to wait is followed if it asks for
+ * {@link #LONGEST_WAIT_A_SERVER_MAY_ASK_FOR} at most; a server asking for more is not asked again.
+ * A request waiting to be asked again holds no place in the limits below; it waits for its turn
+ * anew. Nothing else is asked again: another status code says something about the address, and a
+ * timeout has already used up the time an address is given.</p>
+ * 
+ * <p>An address that still cannot answer after that is {@link UriReachability.NotReached not
+ * reached}, with the status code or the refusal as its reason, and not an address answering with
+ * an error status code. Such an answer is remembered for the run that asked for it only, and not
+ * for as long as the checker lives, so that the next run asks again.</p>
  * 
  * <p>No more requests are sent to all servers together than a second number either, by default
  * {@link #DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS}. Every open request costs the machine
@@ -117,8 +142,28 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 */
 	public static final int DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS = 128;
 
+	/**
+	 * The longest wait a server may ask for in <code>Retry-After</code> and still be asked again.
+	 * 
+	 * <p>Asking again is worth a wait that stays below the time an address is given to answer; a
+	 * server asking for more is taken not to answer, rather than to hold up the run asking it.</p>
+	 */
+	public static final Duration LONGEST_WAIT_A_SERVER_MAY_ASK_FOR = Duration.ofSeconds(5);
+
 	/** What the client says when it refuses a request beyond what a server takes at once. */
 	static final String TOO_MANY_STREAMS = "too many concurrent streams";
+
+	/** How often an address saying that it cannot answer now is asked again at most. */
+	static final int MAX_NUMBER_OF_RETRIES = 2;
+
+	/** The status codes saying that the server, or a gateway in front of it, cannot answer now. */
+	private static final Set<Integer> STATUS_CODES_OF_A_BUSY_SERVER = Set.of(429, 503, 504);
+
+	/** How long to wait before asking a busy server again the first time, before the random part. */
+	private static final Duration FIRST_WAIT = Duration.ofSeconds(1);
+
+	/** How long to wait before asking again the second time, before the random part. */
+	private static final Duration SECOND_WAIT = Duration.ofSeconds(3);
 
 	// Some servers answer a request only if they recognize who is asking, and refuse everything
 	// else, so this checker names itself after a tool such a server is used to.
@@ -139,7 +184,13 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 
 	private final RequestLimit limitOverAllServers;
 
-	private final Map<URI, CompletableFuture<UriReachability>> answersByUri = new ConcurrentHashMap<>();
+	/** Hands out an executor running what it is given once the given time has passed. */
+	private final Function<Duration, Executor> delays;
+
+	/** Hands out a number from zero up to, but not including, one, which varies a wait. */
+	private final DoubleSupplier randomness;
+
+	private final Map<URI, CompletableFuture<Outcome>> answersByUri = new ConcurrentHashMap<>();
 
 	private final Map<String, RequestLimit> limitsByServer = new ConcurrentHashMap<>();
 
@@ -294,7 +345,35 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 */
 	HttpUriReachabilityChecker(Function<Executor, HttpClient> clientFactory, Duration answerTimeout,
 			int maxNumberOfParallelNetworkRequests, int maxNumberOfParallelNetworkRequestsPerServer) {
-		if (clientFactory == null || answerTimeout == null) {
+		this(clientFactory, answerTimeout, maxNumberOfParallelNetworkRequests,
+				maxNumberOfParallelNetworkRequestsPerServer,
+				wait -> CompletableFuture.delayedExecutor(wait.toMillis(), TimeUnit.MILLISECONDS),
+				() -> ThreadLocalRandom.current().nextDouble());
+	}
+
+	/**
+	 * Creates a checker asking with the clients the given factory creates, sending no more requests
+	 * at once than given, and waiting before asking an address again as the given delays and
+	 * randomness say, so that a test can watch the waits without waiting.
+	 * 
+	 * @param clientFactory creates a client executing on the executor it is given, must not be
+	 *                      <code>null</code>
+	 * @param answerTimeout how long an address has to answer, must not be <code>null</code>
+	 * @param maxNumberOfParallelNetworkRequests how many requests may be on their way to all
+	 *                      servers together at once, at least one
+	 * @param maxNumberOfParallelNetworkRequestsPerServer how many requests may be on their way to
+	 *                      one server at once, at least one
+	 * @param delays hands out an executor running what it is given once the given time has passed,
+	 *                      must not be <code>null</code>
+	 * @param randomness hands out a number from zero up to, but not including, one, which varies a
+	 *                      wait, must not be <code>null</code>
+	 * @throws IllegalArgumentException if one of the arguments is <code>null</code> or one of the
+	 *         numbers of requests is less than one
+	 */
+	HttpUriReachabilityChecker(Function<Executor, HttpClient> clientFactory, Duration answerTimeout,
+			int maxNumberOfParallelNetworkRequests, int maxNumberOfParallelNetworkRequestsPerServer,
+			Function<Duration, Executor> delays, DoubleSupplier randomness) {
+		if (clientFactory == null || answerTimeout == null || delays == null || randomness == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 		if (maxNumberOfParallelNetworkRequests < 1 || maxNumberOfParallelNetworkRequestsPerServer < 1) {
@@ -307,6 +386,8 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 		this.maxNumberOfParallelNetworkRequests = maxNumberOfParallelNetworkRequests;
 		this.maxNumberOfParallelNetworkRequestsPerServer = maxNumberOfParallelNetworkRequestsPerServer;
 		this.limitOverAllServers = new RequestLimit(maxNumberOfParallelNetworkRequests);
+		this.delays = delays;
+		this.randomness = randomness;
 	}
 
 	/**
@@ -371,22 +452,35 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	 * <p>An answer that was not waited for, because the view asking for it was cancelled, is
 	 * forgotten. A caller whose own view was not cancelled asks again with its own client rather
 	 * than going without the answer.</p>
+	 * 
+	 * <p>An answer saying that the server could not answer now is forgotten as well, but kept among
+	 * the answers of the run the caller belongs to, so that the run asks once and the next run asks
+	 * again.</p>
 	 */
-	private CompletableFuture<UriReachability> answerOf(URI targetUri, HttpClient client, BooleanSupplier aborted) {
-		CompletableFuture<UriReachability> answer =
+	private CompletableFuture<UriReachability> answerOf(URI targetUri, HttpClient client, BooleanSupplier aborted,
+			Map<URI, UriReachability> answersOfTheRunOnly) {
+		UriReachability answerOfTheRun = answersOfTheRunOnly.get(targetUri);
+		if (answerOfTheRun != null) {
+			return CompletableFuture.completedFuture(answerOfTheRun);
+		}
+
+		CompletableFuture<Outcome> answer =
 				this.answersByUri.computeIfAbsent(targetUri, uri -> ask(uri, client, aborted));
-		answer.whenComplete((reachability, failure) -> {
+		answer.whenComplete((outcome, failure) -> {
 			if (failure != null) {
+				this.answersByUri.remove(targetUri, answer);
+			} else if (!outcome.lasting()) {
+				answersOfTheRunOnly.putIfAbsent(targetUri, outcome.reachability());
 				this.answersByUri.remove(targetUri, answer);
 			}
 		});
 
-		return answer.exceptionallyCompose(failure -> {
+		return answer.thenApply(Outcome::reachability).exceptionallyCompose(failure -> {
 			if (aborted.getAsBoolean()) {
 				return CompletableFuture.failedFuture(failure);
 			}
 			this.answersByUri.remove(targetUri, answer);
-			return answerOf(targetUri, client, aborted);
+			return answerOf(targetUri, client, aborted, answersOfTheRunOnly);
 		});
 	}
 
@@ -398,7 +492,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 		this.answersByUri.clear();
 	}
 
-	private CompletableFuture<UriReachability> ask(URI targetUri, HttpClient client, BooleanSupplier aborted) {
+	private CompletableFuture<Outcome> ask(URI targetUri, HttpClient client, BooleanSupplier aborted) {
 		HttpRequest request;
 		try {
 			request = HttpRequest.newBuilder(targetUri)
@@ -409,24 +503,76 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 					.build();
 		} catch (IllegalArgumentException exception) {
 			// an address HTTP cannot ask about, e.g. one naming another scheme
-			return CompletableFuture.completedFuture(notReached(targetUri, exception));
+			return CompletableFuture.completedFuture(new Outcome(notReached(targetUri, exception), true));
 		}
 
+		return askAgain(targetUri, request, client, aborted, 0);
+	}
+
+	/**
+	 * Sends the request, and sends it again after a wait where the server said that it cannot answer
+	 * now and was not asked again as often as allowed yet.
+	 * 
+	 * @param retriesSoFar how often the request was sent again already
+	 */
+	private CompletableFuture<Outcome> askAgain(URI targetUri, HttpRequest request, HttpClient client,
+			BooleanSupplier aborted, int retriesSoFar) {
+		return send(targetUri, request, client, aborted)
+				.handle((response, failure) -> {
+					if (failure != null) {
+						if (aborted.getAsBoolean()) {
+							return CompletableFuture.<Outcome>failedFuture(new CancellationException(
+									"Nobody waited for the answer of the web address " + targetUri + " any more."));
+						}
+						if (!isRefusedForTooManyStreams(failure)) {
+							return CompletableFuture.completedFuture(new Outcome(notReached(targetUri, failure), true));
+						}
+						// a refused request never reached the server, so it is sent again at once the first time
+						return retriesSoFar < MAX_NUMBER_OF_RETRIES
+								? askAgainAfter(retriesSoFar == 0 ? Duration.ZERO : varied(SECOND_WAIT),
+										targetUri, request, client, aborted, retriesSoFar)
+								: CompletableFuture.completedFuture(
+										busy(targetUri, reasonOf(failure), retriesSoFar));
+					}
+
+					int statusCode = response.statusCode();
+					if (!STATUS_CODES_OF_A_BUSY_SERVER.contains(statusCode)) {
+						return CompletableFuture.completedFuture(
+								new Outcome(new UriReachability.Answered(statusCode), true));
+					}
+					Optional<Duration> wait = retriesSoFar < MAX_NUMBER_OF_RETRIES
+							? waitBeforeAskingAgain(response, retriesSoFar)
+							: Optional.empty();
+					return wait.isPresent()
+							? askAgainAfter(wait.get(), targetUri, request, client, aborted, retriesSoFar)
+							: CompletableFuture.completedFuture(
+									busy(targetUri, "HTTP status code " + statusCode, retriesSoFar));
+				})
+				.thenCompose(Function.identity());
+	}
+
+	private CompletableFuture<Outcome> askAgainAfter(Duration wait, URI targetUri, HttpRequest request,
+			HttpClient client, BooleanSupplier aborted, int retriesSoFar) {
+		LOG.debug("The web address {} cannot answer now and is asked again in {} ms.", targetUri, wait.toMillis());
+		// the request waits outside the limits, so that it holds no place another request could use
+		CompletableFuture<Void> waited = wait.isZero()
+				? CompletableFuture.completedFuture(null)
+				: CompletableFuture.runAsync(() -> { }, this.delays.apply(wait));
+		return waited.thenCompose(ignored -> askAgain(targetUri, request, client, aborted, retriesSoFar + 1));
+	}
+
+	/**
+	 * Sends the request once its turn has come at its server and among all servers.
+	 */
+	private CompletableFuture<HttpResponse<Void>> send(URI targetUri, HttpRequest request, HttpClient client,
+			BooleanSupplier aborted) {
 		// the turn at the server comes first, so that a request held up by a busy server takes no
 		// place among all servers that a request to another server could use
 		return limitOf(targetUri)
 				.submit(() -> this.limitOverAllServers.submit(() -> aborted.getAsBoolean()
 						? CompletableFuture.failedFuture(new CancellationException("Nobody waits for the answer"
 								+ " of the web address " + targetUri + " any more, so it is not asked."))
-						: askAgainOnceIfRefused(() -> client.sendAsync(request, BodyHandlers.discarding()))))
-				.<UriReachability>thenApply(response -> new UriReachability.Answered(response.statusCode()))
-				.exceptionally(throwable -> {
-					if (aborted.getAsBoolean()) {
-						throw new CancellationException("Nobody waited for the answer of the web address "
-								+ targetUri + " any more.");
-					}
-					return notReached(targetUri, throwable);
-				});
+						: client.sendAsync(request, BodyHandlers.discarding())));
 	}
 
 	/**
@@ -440,24 +586,48 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	}
 
 	/**
-	 * Sends a request, and sends it once more if the client refused it because the connection
-	 * carried as many requests as the server takes at once.
+	 * Says how long to wait before asking a busy server again: as long as the server asks for in
+	 * <code>Retry-After</code>, if it says so in a way that can be read, otherwise about one second
+	 * the first time and about three seconds the second time.
 	 * 
-	 * <p>Such a request never reached the server, so sending it again is safe. It happens although
-	 * the requests are limited, because a server may take fewer requests at once than the limit
-	 * allows, and because a redirect leads to a server whose requests are not counted; the one retry
-	 * covers that and is no replacement for the limit.</p>
-	 * 
-	 * @param <T> what the request answers
-	 * @param send sends the request, must not be <code>null</code>
-	 * @return the promise of the answer of the first or, if that one was refused, the second request
+	 * @return the wait, or nothing if the server asks for a longer one than
+	 *         {@link #LONGEST_WAIT_A_SERVER_MAY_ASK_FOR}
 	 */
-	static <T> CompletableFuture<T> askAgainOnceIfRefused(Supplier<CompletableFuture<T>> send) {
-		return send.get().exceptionallyCompose(failure -> isRefusedForTooManyStreams(failure)
-				? send.get()
-				: CompletableFuture.failedFuture(failure));
+	private Optional<Duration> waitBeforeAskingAgain(HttpResponse<?> response, int retriesSoFar) {
+		Optional<Duration> askedFor = response.headers().firstValue("Retry-After")
+				.flatMap(HttpUriReachabilityChecker::waitOf);
+		if (askedFor.isPresent()) {
+			return askedFor.get().compareTo(LONGEST_WAIT_A_SERVER_MAY_ASK_FOR) <= 0 ? askedFor : Optional.empty();
+		}
+		return Optional.of(varied(retriesSoFar == 0 ? FIRST_WAIT : SECOND_WAIT));
 	}
 
+	/**
+	 * Reads a <code>Retry-After</code>, which is either a number of seconds or the time from which
+	 * on to ask again.
+	 * 
+	 * @return the wait, never negative, or nothing if the value can be read neither way
+	 */
+	static Optional<Duration> waitOf(String retryAfter) {
+		String value = retryAfter.trim();
+		if (!value.isEmpty() && value.chars().allMatch(Character::isDigit)) {
+			// a number too large for a long is a wait too long anyway
+			return Optional.of(value.length() > 12 ? ChronoUnit.FOREVER.getDuration()
+					: Duration.ofSeconds(Long.parseLong(value)));
+		}
+		try {
+			Duration untilThen = Duration.between(ZonedDateTime.now(),
+					ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME));
+			return Optional.of(untilThen.isNegative() ? Duration.ZERO : untilThen);
+		} catch (DateTimeParseException exception) {
+			return Optional.empty();
+		}
+	}
+
+	/** Varies the given wait by up to a quarter, up or down, at random. */
+	private Duration varied(Duration wait) {
+		return Duration.ofMillis(Math.round(wait.toMillis() * (0.75 + 0.5 * this.randomness.getAsDouble())));
+	}
 	private static boolean isRefusedForTooManyStreams(Throwable failure) {
 		Throwable cause = failure instanceof CompletionException && failure.getCause() != null
 				? failure.getCause()
@@ -479,6 +649,9 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 
 		private volatile boolean aborted;
 
+		/** What the servers said they could not answer now, remembered for this run only. */
+		private final Map<URI, UriReachability> answersOfThisRunOnly = new ConcurrentHashMap<>();
+
 		private ViewOfRun(HttpClient client) {
 			this.client = client;
 		}
@@ -488,7 +661,7 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 			if (targetUri == null) {
 				throw new IllegalArgumentException("Argument must not be null.");
 			}
-			return answerOf(targetUri, this.client, () -> this.aborted);
+			return answerOf(targetUri, this.client, () -> this.aborted, this.answersOfThisRunOnly);
 		}
 
 		@Override
@@ -522,6 +695,19 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 		return new UriReachability.NotReached(reason);
 	}
 
+	/**
+	 * Says that an address was asked, and asked again, and still said that it cannot answer now.
+	 * 
+	 * <p>Unlike an address that gave no answer, this one is logged at warning level: it says
+	 * nothing about the address, so the finding made of it says only that the address was not
+	 * checked, and whoever reads the log learns why.</p>
+	 */
+	private static Outcome busy(URI targetUri, String reason, int retriesSoFar) {
+		LOG.warn("The web address {} was asked {} times and could not answer: {}", targetUri, retriesSoFar + 1,
+				reason);
+		return new Outcome(new UriReachability.NotReached(reason), false);
+	}
+
 	private static String reasonOf(Throwable throwable) {
 		Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
 				? throwable.getCause()
@@ -529,6 +715,17 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 
 		String message = cause.getMessage();
 		return message == null || message.isBlank() ? cause.getClass().getName() : message;
+	}
+
+	/**
+	 * What asking an address came to, and whether that may be remembered for as long as the checker
+	 * lives.
+	 * 
+	 * @param reachability what the address answered, or why it did not
+	 * @param lasting <code>false</code> if the server said that it cannot answer now, which the next
+	 *                run is to ask again
+	 */
+	private record Outcome(UriReachability reachability, boolean lasting) {
 	}
 
 }
