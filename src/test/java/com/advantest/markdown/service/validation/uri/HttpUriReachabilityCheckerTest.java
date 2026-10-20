@@ -634,7 +634,7 @@ class HttpUriReachabilityCheckerTest {
 
 	@Test
 	void serverStillBusyAfterBeingAskedAgainTwiceIsNotReachedWithItsStatusCodeAsTheReason() {
-		for (int statusCode : new int[] { 429, 503, 504 }) {
+		for (int statusCode : new int[] { 503, 504 }) {
 			HttpClient httpClient =
 					clientAnsweringInTurn(answered(statusCode), answered(statusCode), answered(statusCode));
 
@@ -643,6 +643,42 @@ class HttpUriReachabilityCheckerTest {
 			assertEquals(new UriReachability.NotReached("HTTP status code " + statusCode), reachability);
 			verify(httpClient, times(3)).sendAsync(any(), any());
 		}
+	}
+
+	@Test
+	void serverStillSayingItWasAskedTooOftenAfterBeingAskedAgainTwiceAnswers429() {
+		HttpClient httpClient = clientAnsweringInTurn(answered(429), answered(429), answered(429));
+
+		UriReachability reachability = viewWaiting(httpClient, new ArrayList<>()).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.Answered(429), reachability);
+		verify(httpClient, times(3)).sendAsync(any(), any());
+	}
+
+	@Test
+	void serverSayingItWasAskedTooOftenAndAskingForALongerWaitThanAllowedAnswers429() {
+		HttpClient httpClient = clientAnsweringInTurn(answered(429, "60"), answered(200));
+
+		UriReachability reachability = viewWaiting(httpClient, new ArrayList<>()).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.Answered(429), reachability);
+		verify(httpClient, times(1)).sendAsync(any(), any());
+	}
+
+	@Test
+	void serverThatWasAskedTooOftenIsAskedOnlyOncePerRunButAgainInTheNextRun() {
+		HttpClient httpClient = clientAnswering(429);
+		HttpUriReachabilityChecker checker = new HttpUriReachabilityChecker(executor -> httpClient,
+				Duration.ofSeconds(1), 128, 16, recordingIn(new ArrayList<>()), () -> 0.5);
+		UriReachabilityChecker.OfRun firstRun = checker.openForRun(Runnable::run);
+
+		assertEquals(new UriReachability.Answered(429), firstRun.check(SOME_ADDRESS).join());
+		assertEquals(new UriReachability.Answered(429), firstRun.check(SOME_ADDRESS).join());
+		verify(httpClient, times(3)).sendAsync(any(), any());
+
+		checker.openForRun(Runnable::run).check(SOME_ADDRESS).join();
+
+		verify(httpClient, times(6)).sendAsync(any(), any());
 	}
 
 	@Test

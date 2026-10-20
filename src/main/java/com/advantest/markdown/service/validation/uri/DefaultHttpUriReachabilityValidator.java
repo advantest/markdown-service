@@ -22,7 +22,9 @@ import com.advantest.markdown.service.validation.ValidationIssue;
  * <p>Two things can be wrong with an address that can be read: it does not answer at all, or it
  * answers by saying that there is nothing there. Both are decided by asking it, which is what the
  * {@link UriReachabilityChecker} of the run does, and both are therefore reported only in a run that
- * was given such a check. In a run without one, this validator finds nothing.</p>
+ * was given such a check. In a run without one, this validator finds nothing. An address answering
+ * 429 "Too Many Requests" is not reported either: its server is there and only refused to be asked
+ * once more, so whether the address is right is not known.</p>
  * 
  * <p>This validator answers for a target naming the scheme <code>http</code> or <code>https</code>
  * that was read as an address. A text that was meant as a web address and is none belongs to
@@ -36,6 +38,12 @@ public class DefaultHttpUriReachabilityValidator implements UriValidator {
 	private static final String SCHEME_HTTP = "http";
 
 	private static final String SCHEME_HTTPS = "https";
+
+	/**
+	 * The status code of a server saying that it was asked too often. It says nothing about the
+	 * address asked, only that the address could not be checked, so it is no finding.
+	 */
+	private static final int STATUS_CODE_TOO_MANY_REQUESTS = 429;
 
 
 	@Override
@@ -70,6 +78,8 @@ public class DefaultHttpUriReachabilityValidator implements UriValidator {
 			case UriReachability.NotReached notReached -> List.of(
 					issue(target, MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_DOES_NOT_ANSWER, IssueSeverity.WARNING,
 							addressDoesNotAnswerMessage(target.uriText(), notReached.failureReason())));
+			case UriReachability.Answered answered when answered.statusCode() == STATUS_CODE_TOO_MANY_REQUESTS ->
+					List.of();
 			case UriReachability.Answered answered when answered.statusCode() >= 400 -> List.of(
 					issue(target, MarkdownIssueTypes.LINK_HTTP_WEB_ADDRESS_NOT_REACHABLE, IssueSeverity.ERROR,
 							addressNotReachableMessage(target.uriText(), answered.statusCode())));

@@ -182,6 +182,12 @@ class DefaultHttpUriReachabilityValidatorTest {
 	}
 
 	@Test
+	void addressWhoseServerWasAskedTooOftenIsNotReported() {
+		assertTrue(VALIDATOR.validate(targetOf("https://example.org/busy"),
+				contextAnswering(new UriReachability.Answered(429))).join().isEmpty());
+	}
+
+	@Test
 	void addressThatIsThereIsNotReported() {
 		assertTrue(VALIDATOR.validate(targetOf("https://example.org/guide"),
 				contextAnswering(new UriReachability.Answered(200))).join().isEmpty());

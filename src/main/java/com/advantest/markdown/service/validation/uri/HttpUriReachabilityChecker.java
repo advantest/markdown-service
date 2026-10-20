@@ -94,8 +94,10 @@ import com.advantest.markdown.service.CachesHolder;
  * 
  * <p>An address that still cannot answer after that is {@link UriReachability.NotReached not
  * reached}, with the status code or the refusal as its reason, and not an address answering with
- * an error status code. Such an answer is remembered for the run that asked for it only, and not
- * for as long as the checker lives, so that the next run asks again.</p>
+ * an error status code. A server still saying 429 is the exception: it answered, only not about the
+ * address, so the address is handed back as {@link UriReachability.Answered answering} 429, which
+ * the shipped validator reports nothing for. Such an answer is remembered for the run that asked
+ * for it only, and not for as long as the checker lives, so that the next run asks again.</p>
  * 
  * <p>No more requests are sent to all servers together than a second number either, by default
  * {@link #DEFAULT_MAX_NUMBER_OF_PARALLEL_NETWORK_REQUESTS}. Every open request costs the machine
@@ -158,6 +160,9 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 
 	/** The status codes saying that the server, or a gateway in front of it, cannot answer now. */
 	private static final Set<Integer> STATUS_CODES_OF_A_BUSY_SERVER = Set.of(429, 503, 504);
+
+	/** The status code of a server saying that it was asked too often by whoever asks. */
+	private static final int STATUS_CODE_TOO_MANY_REQUESTS = 429;
 
 	/** How long to wait before asking a busy server again the first time, before the random part. */
 	private static final Duration FIRST_WAIT = Duration.ofSeconds(1);
@@ -543,10 +548,12 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 					Optional<Duration> wait = retriesSoFar < MAX_NUMBER_OF_RETRIES
 							? waitBeforeAskingAgain(response, retriesSoFar)
 							: Optional.empty();
-					return wait.isPresent()
-							? askAgainAfter(wait.get(), targetUri, request, client, aborted, retriesSoFar)
-							: CompletableFuture.completedFuture(
-									busy(targetUri, "HTTP status code " + statusCode, retriesSoFar));
+					if (wait.isPresent()) {
+						return askAgainAfter(wait.get(), targetUri, request, client, aborted, retriesSoFar);
+					}
+					return CompletableFuture.completedFuture(statusCode == STATUS_CODE_TOO_MANY_REQUESTS
+							? askedTooOften(targetUri, retriesSoFar)
+							: busy(targetUri, "HTTP status code " + statusCode, retriesSoFar));
 				})
 				.thenCompose(Function.identity());
 	}
@@ -706,6 +713,21 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 		LOG.warn("The web address {} was asked {} times and could not answer: {}", targetUri, retriesSoFar + 1,
 				reason);
 		return new Outcome(new UriReachability.NotReached(reason), false);
+	}
+
+	/**
+	 * Says that an address was asked, and asked again, and its server still said that it was asked
+	 * too often.
+	 * 
+	 * <p>Unlike any other busy server, this one did answer, and the address is handed back as
+	 * answering with the status code 429. A server counting the requests of whoever asks is there,
+	 * and its limit says nothing about the address asked. It is logged at warning level, because
+	 * the address was not checked, and it is remembered for the run that asked only.</p>
+	 */
+	private static Outcome askedTooOften(URI targetUri, int retriesSoFar) {
+		LOG.warn("The web address {} was asked {} times and its server still said that it was asked too often"
+				+ " (HTTP status code 429), so the address is not checked.", targetUri, retriesSoFar + 1);
+		return new Outcome(new UriReachability.Answered(STATUS_CODE_TOO_MANY_REQUESTS), false);
 	}
 
 	private static String reasonOf(Throwable throwable) {
