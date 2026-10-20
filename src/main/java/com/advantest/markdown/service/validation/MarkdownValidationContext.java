@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.util.Optional;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
-import com.advantest.markdown.service.parsing.ParsedMarkdownDocumentsCache;
+import com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchorsCache;
 import com.advantest.markdown.service.resources.ResourceContentsCache;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.Resource;
@@ -46,7 +46,7 @@ public interface MarkdownValidationContext {
 	 */
 	static MarkdownValidationContext parsingWith(MarkdownParserAndHtmlRenderer parserAndRenderer) {
 		ResourceContentsCache contents = new ResourceContentsCache();
-		return new ValidationRunContext(contents, new ParsedMarkdownDocumentsCache(parserAndRenderer, contents));
+		return new ValidationRunContext(contents, new MarkdownSectionAnchorsCache(parserAndRenderer, contents));
 	}
 
 	/**

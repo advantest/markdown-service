@@ -19,7 +19,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
-import com.advantest.markdown.service.parsing.ParsedMarkdownDocumentsCache;
+import com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchorsCache;
 import com.advantest.markdown.service.resources.ResourceContentsCache;
 import com.advantest.resources.Resource;
 import com.advantest.resources.ResourceKind;
@@ -104,7 +104,7 @@ class ValidationRunContextTest {
 	@Test
 	void aContextWithoutItsCachesCannotBeCreated() {
 		ResourceContentsCache contents = new ResourceContentsCache();
-		ParsedMarkdownDocumentsCache documents = new ParsedMarkdownDocumentsCache(this.parserAndRenderer, contents);
+		MarkdownSectionAnchorsCache documents = new MarkdownSectionAnchorsCache(this.parserAndRenderer, contents);
 
 		assertThrows(IllegalArgumentException.class, () -> new ValidationRunContext(null, documents));
 		assertThrows(IllegalArgumentException.class, () -> new ValidationRunContext(contents, null));

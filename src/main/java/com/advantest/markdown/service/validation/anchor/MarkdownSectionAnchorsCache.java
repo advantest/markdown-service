@@ -4,7 +4,7 @@
  * 
  * Copyright © 2026 Advantest Europe GmbH. All rights reserved.
  */
-package com.advantest.markdown.service.parsing;
+package com.advantest.markdown.service.validation.anchor;
 
 import java.io.IOException;
 import java.util.Map;
@@ -42,7 +42,7 @@ import com.vladsch.flexmark.util.ast.Document;
  * have been, and several threads may ask at the same time; a resource they ask for at once is parsed
  * by the first of them, while the others wait for what it parsed.</p>
  */
-public final class ParsedMarkdownDocumentsCache {
+public final class MarkdownSectionAnchorsCache {
 
 	private final MarkdownParserAndHtmlRenderer parserAndRenderer;
 
@@ -58,7 +58,7 @@ public final class ParsedMarkdownDocumentsCache {
 	 *                          <code>null</code>
 	 * @throws IllegalArgumentException if one of the arguments is <code>null</code>
 	 */
-	public ParsedMarkdownDocumentsCache(MarkdownParserAndHtmlRenderer parserAndRenderer,
+	public MarkdownSectionAnchorsCache(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceContentsCache contentsCache) {
 		if (parserAndRenderer == null || contentsCache == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");

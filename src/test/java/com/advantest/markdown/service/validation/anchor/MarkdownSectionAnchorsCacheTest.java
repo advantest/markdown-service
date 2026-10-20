@@ -4,7 +4,7 @@
  * 
  * Copyright © 2026 Advantest Europe GmbH. All rights reserved.
  */
-package com.advantest.markdown.service.parsing;
+package com.advantest.markdown.service.validation.anchor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -36,7 +36,7 @@ import com.vladsch.flexmark.util.ast.Document;
 /**
  * Checks what a run remembers about the documents it parsed.
  */
-class ParsedMarkdownDocumentsCacheTest {
+class MarkdownSectionAnchorsCacheTest {
 
 	/** A resource answering with a fixed text, or failing, and counting how often it was read. */
 	private static final class CountingResource implements Resource {
@@ -99,8 +99,8 @@ class ParsedMarkdownDocumentsCacheTest {
 
 	private final ResourceContentsCache contentsCache = new ResourceContentsCache();
 
-	private final ParsedMarkdownDocumentsCache cache =
-			new ParsedMarkdownDocumentsCache(this.parserAndRenderer, this.contentsCache);
+	private final MarkdownSectionAnchorsCache cache =
+			new MarkdownSectionAnchorsCache(this.parserAndRenderer, this.contentsCache);
 
 	@Test
 	void parsesAResourceAskedForTwiceOnce() throws IOException {
@@ -154,8 +154,8 @@ class ParsedMarkdownDocumentsCacheTest {
 				throw new IllegalStateException("The parser broke.");
 			}
 		};
-		ParsedMarkdownDocumentsCache cacheParsingWithFailures =
-				new ParsedMarkdownDocumentsCache(failingParser, this.contentsCache);
+		MarkdownSectionAnchorsCache cacheParsingWithFailures =
+				new MarkdownSectionAnchorsCache(failingParser, this.contentsCache);
 		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide\n");
 
 		IllegalStateException firstFailure = assertThrows(IllegalStateException.class,
@@ -224,7 +224,7 @@ class ParsedMarkdownDocumentsCacheTest {
 
 	@Test
 	void takesAsMarkdownWhatTheParserAccepts() throws IOException {
-		ParsedMarkdownDocumentsCache cacheAcceptingMore = new ParsedMarkdownDocumentsCache(
+		MarkdownSectionAnchorsCache cacheAcceptingMore = new MarkdownSectionAnchorsCache(
 				MarkdownParserAndHtmlRenderer.builder()
 						.withMarkdownFileExtensions(MarkdownFileExtensions.accepting("md", "mkd"))
 						.build(),
@@ -271,9 +271,9 @@ class ParsedMarkdownDocumentsCacheTest {
 	@Test
 	void cannotBeCreatedWithoutAParserOrAContentsCache() {
 		assertThrows(IllegalArgumentException.class,
-				() -> new ParsedMarkdownDocumentsCache(null, this.contentsCache));
+				() -> new MarkdownSectionAnchorsCache(null, this.contentsCache));
 		assertThrows(IllegalArgumentException.class,
-				() -> new ParsedMarkdownDocumentsCache(this.parserAndRenderer, null));
+				() -> new MarkdownSectionAnchorsCache(this.parserAndRenderer, null));
 	}
 
 }

@@ -9,7 +9,7 @@ package com.advantest.markdown.service.validation;
 import java.io.IOException;
 import java.util.Optional;
 
-import com.advantest.markdown.service.parsing.ParsedMarkdownDocumentsCache;
+import com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchorsCache;
 import com.advantest.markdown.service.resources.ResourceContentsCache;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.Resource;
@@ -30,7 +30,7 @@ import com.vladsch.flexmark.util.ast.Document;
  * @param uriReachabilityChecker the check of the run asking an address whether it is there, may be
  *                               <code>null</code>, in which case no address is asked about
  */
-record ValidationRunContext(ResourceContentsCache contents, ParsedMarkdownDocumentsCache documents,
+record ValidationRunContext(ResourceContentsCache contents, MarkdownSectionAnchorsCache documents,
 		UriReachabilityChecker.OfRun uriReachabilityChecker) implements MarkdownValidationContext {
 
 	ValidationRunContext {
@@ -42,7 +42,7 @@ record ValidationRunContext(ResourceContentsCache contents, ParsedMarkdownDocume
 	/**
 	 * Creates the context of a run asking no address whether it is there.
 	 */
-	ValidationRunContext(ResourceContentsCache contents, ParsedMarkdownDocumentsCache documents) {
+	ValidationRunContext(ResourceContentsCache contents, MarkdownSectionAnchorsCache documents) {
 		this(contents, documents, null);
 	}
 

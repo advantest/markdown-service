@@ -29,7 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
-import com.advantest.markdown.service.parsing.ParsedMarkdownDocumentsCache;
+import com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchorsCache;
 import com.advantest.markdown.service.resources.ResourceContentsCache;
 import com.advantest.markdown.service.resources.walk.DefaultMarkdownValidationResourcesFilter;
 import com.advantest.markdown.service.resources.walk.ResourceFilter;
@@ -163,7 +163,7 @@ public final class MarkdownValidationRun implements AutoCloseable {
 
 		this.contents = new ResourceContentsCache(contentsReader);
 		this.context = new ValidationRunContext(this.contents,
-				new ParsedMarkdownDocumentsCache(parserAndRenderer, this.contents), this.uriReachabilityChecker);
+				new MarkdownSectionAnchorsCache(parserAndRenderer, this.contents), this.uriReachabilityChecker);
 	}
 
 	/**
