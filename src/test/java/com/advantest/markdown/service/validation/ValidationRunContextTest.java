@@ -7,7 +7,6 @@
 package com.advantest.markdown.service.validation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -15,6 +14,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +23,6 @@ import com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchorsCa
 import com.advantest.markdown.service.resources.ResourceContentsCache;
 import com.advantest.resources.Resource;
 import com.advantest.resources.ResourceKind;
-import com.vladsch.flexmark.util.ast.Document;
 
 /**
  * Checks that a validation run reads and parses through caches of its own.
@@ -71,15 +70,15 @@ class ValidationRunContextTest {
 	@Test
 	void aResourceReadAndParsedInOneRunIsReadOnce() throws IOException {
 		MarkdownValidationContext context = MarkdownValidationContext.parsingWith(this.parserAndRenderer);
-		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide\n");
+		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide {#guide}\n");
 
 		String contents = context.getContents(resource);
-		Document firstDocument = context.getParsedMarkdownDocument(resource);
-		Document secondDocument = context.getParsedMarkdownDocument(resource);
+		Set<String> firstAnchors = context.getMarkdownSectionAnchors(resource);
+		Set<String> secondAnchors = context.getMarkdownSectionAnchors(resource);
 
-		assertEquals("# Guide\n", contents);
-		assertEquals("# Guide\n", firstDocument.getChars().toString());
-		assertSame(firstDocument, secondDocument, "A document is expected to be parsed once per run.");
+		assertEquals("# Guide {#guide}\n", contents);
+		assertEquals(Set.of("guide"), firstAnchors);
+		assertSame(firstAnchors, secondAnchors, "A document is expected to be parsed once per run.");
 		assertEquals(1, resource.readCount, "A resource is expected to be read once per run.");
 	}
 
@@ -87,12 +86,9 @@ class ValidationRunContextTest {
 	void aNewRunReadsAndParsesAgain() throws IOException {
 		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide\n");
 
-		Document firstRunsDocument =
-				MarkdownValidationContext.parsingWith(this.parserAndRenderer).getParsedMarkdownDocument(resource);
-		Document secondRunsDocument =
-				MarkdownValidationContext.parsingWith(this.parserAndRenderer).getParsedMarkdownDocument(resource);
+		MarkdownValidationContext.parsingWith(this.parserAndRenderer).getMarkdownSectionAnchors(resource);
+		MarkdownValidationContext.parsingWith(this.parserAndRenderer).getMarkdownSectionAnchors(resource);
 
-		assertNotSame(firstRunsDocument, secondRunsDocument, "A run is not expected to share its documents.");
 		assertEquals(2, resource.readCount, "A run is not expected to share what it read.");
 	}
 
@@ -104,9 +100,9 @@ class ValidationRunContextTest {
 	@Test
 	void aContextWithoutItsCachesCannotBeCreated() {
 		ResourceContentsCache contents = new ResourceContentsCache();
-		MarkdownSectionAnchorsCache documents = new MarkdownSectionAnchorsCache(this.parserAndRenderer, contents);
+		MarkdownSectionAnchorsCache anchors = new MarkdownSectionAnchorsCache(this.parserAndRenderer, contents);
 
-		assertThrows(IllegalArgumentException.class, () -> new ValidationRunContext(null, documents));
+		assertThrows(IllegalArgumentException.class, () -> new ValidationRunContext(null, anchors));
 		assertThrows(IllegalArgumentException.class, () -> new ValidationRunContext(contents, null));
 	}
 

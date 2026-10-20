@@ -8,13 +8,13 @@ package com.advantest.markdown.service.validation;
 
 import java.io.IOException;
 import java.util.Optional;
+import java.util.Set;
 
 import com.advantest.markdown.MarkdownParserAndHtmlRenderer;
 import com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchorsCache;
 import com.advantest.markdown.service.resources.ResourceContentsCache;
 import com.advantest.markdown.service.validation.uri.UriReachabilityChecker;
 import com.advantest.resources.Resource;
-import com.vladsch.flexmark.util.ast.Document;
 
 /**
  * What one validation run knows besides the document it walks through.
@@ -29,7 +29,9 @@ import com.vladsch.flexmark.util.ast.Document;
  * <p>What it is for today is looking into another document. A link points into a document that has
  * to be read and parsed to answer whether the anchor it names is there, and fifty links into the
  * same document are one question, not fifty. The context answers it once and remembers the answer,
- * the failure included, for as long as the run lasts. It does not outlive the run, because a
+ * the failure included, for as long as the run lasts. It hands out what a check needs to know of
+ * the other document, never the parsed document itself: a parsed document is not to be read by two
+ * threads at once, and the documents of a run are checked by several threads. It does not outlive the run, because a
  * document changes while its author types and an answer remembered longer would have to be
  * forgotten again at the right moment &ndash; a question this way never has to be asked.</p>
  * 
@@ -66,11 +68,12 @@ public interface MarkdownValidationContext {
 	String getContents(Resource resource) throws IOException;
 
 	/**
-	 * Reads and parses the given Markdown resource, or answers with what was read for it earlier in
-	 * this run.
+	 * Answers the section anchors the given Markdown resource declares, reading and parsing it only
+	 * if it was not asked for earlier in this run.
 	 * 
-	 * <p>The parsed document carries the resource it came from, so that what it refers to resolves
-	 * against its own location and not against the location of the document being checked.</p>
+	 * <p>The document is parsed with the resource it came from, so that what it refers to resolves
+	 * against its own location and not against the location of the document being checked. The
+	 * answer is shared by every thread asking, so it cannot be changed.</p>
 	 * 
 	 * <p>Only a resource named like a Markdown file is read, i.e. one carrying an extension the
 	 * parser accepts as Markdown. Reading anything else and parsing it as Markdown would answer
@@ -80,14 +83,16 @@ public interface MarkdownValidationContext {
 	 * 
 	 * @param markdownResource the resource to be read, must not be <code>null</code> and must be
 	 *                         named like a Markdown file
-	 * @return the parsed document, never <code>null</code>
+	 * @return the anchors, never <code>null</code>, possibly empty
 	 * @throws IOException if the resource cannot be read, raised again for every further caller
 	 *                     asking for the same resource in this run
 	 * @throws IllegalArgumentException if the given resource is <code>null</code> or is not named
 	 *                                  like a Markdown file, the resource nobody resolved among
 	 *                                  them
+	 * @see com.advantest.markdown.service.validation.anchor.MarkdownSectionAnchors#validAnchorsIn(
+	 *      com.vladsch.flexmark.util.ast.Document)
 	 */
-	Document getParsedMarkdownDocument(Resource markdownResource) throws IOException;
+	Set<String> getMarkdownSectionAnchors(Resource markdownResource) throws IOException;
 
 	/**
 	 * Hands out the check of this run asking an address whether it is there.

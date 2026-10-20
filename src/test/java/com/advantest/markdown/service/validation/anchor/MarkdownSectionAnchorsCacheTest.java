@@ -17,11 +17,13 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +36,7 @@ import com.advantest.resources.UnresolvedResource;
 import com.vladsch.flexmark.util.ast.Document;
 
 /**
- * Checks what a run remembers about the documents it parsed.
+ * Checks what a run remembers about the section anchors of the documents it parsed.
  */
 class MarkdownSectionAnchorsCacheTest {
 
@@ -106,10 +108,10 @@ class MarkdownSectionAnchorsCacheTest {
 	void parsesAResourceAskedForTwiceOnce() throws IOException {
 		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide\n");
 
-		Document firstAnswer = this.cache.parseMarkdown(resource);
-		Document secondAnswer = this.cache.parseMarkdown(resource);
+		Set<String> firstAnswer = this.cache.sectionAnchorsOf(resource);
+		Set<String> secondAnswer = this.cache.sectionAnchorsOf(resource);
 
-		assertSame(firstAnswer, secondAnswer, "The document parsed first is expected again.");
+		assertSame(firstAnswer, secondAnswer, "The anchors found first are expected again.");
 		assertEquals(1, resource.reads(), "A document is expected to be read once.");
 	}
 
@@ -118,29 +120,26 @@ class MarkdownSectionAnchorsCacheTest {
 		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide\n");
 
 		this.contentsCache.readAllContents(resource);
-		this.cache.parseMarkdown(resource);
+		this.cache.sectionAnchorsOf(resource);
 
 		assertEquals(1, resource.reads(), "Reading and parsing are expected to share one read.");
 	}
 
 	@Test
 	void tellsTwoResourcesApartByTheirResolvedPath() throws IOException {
-		CountingResource guide = new CountingResource("/docs/guide.md", "# Guide\n");
-		CountingResource notes = new CountingResource("/docs/notes.md", "# Notes\n");
+		CountingResource guide = new CountingResource("/docs/guide.md", "# Guide {#guide}\n");
+		CountingResource notes = new CountingResource("/docs/notes.md", "# Notes {#notes}\n");
 
-		Document parsedGuide = this.cache.parseMarkdown(guide);
-		Document parsedNotes = this.cache.parseMarkdown(notes);
-
-		assertEquals("# Guide\n", parsedGuide.getChars().toString());
-		assertEquals("# Notes\n", parsedNotes.getChars().toString());
+		assertEquals(Set.of("guide"), this.cache.sectionAnchorsOf(guide));
+		assertEquals(Set.of("notes"), this.cache.sectionAnchorsOf(notes));
 	}
 
 	@Test
 	void doesNotReadAResourceThatCannotBeReadAgain() {
 		CountingResource missing = CountingResource.failing("/docs/gone.md", new IOException("Gone."));
 
-		IOException firstFailure = assertThrows(IOException.class, () -> this.cache.parseMarkdown(missing));
-		IOException secondFailure = assertThrows(IOException.class, () -> this.cache.parseMarkdown(missing));
+		IOException firstFailure = assertThrows(IOException.class, () -> this.cache.sectionAnchorsOf(missing));
+		IOException secondFailure = assertThrows(IOException.class, () -> this.cache.sectionAnchorsOf(missing));
 
 		assertSame(firstFailure, secondFailure, "Every caller is expected to be told what went wrong.");
 		assertEquals(1, missing.reads(), "A failing document is expected to be read once.");
@@ -159,9 +158,9 @@ class MarkdownSectionAnchorsCacheTest {
 		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide\n");
 
 		IllegalStateException firstFailure = assertThrows(IllegalStateException.class,
-				() -> cacheParsingWithFailures.parseMarkdown(resource));
+				() -> cacheParsingWithFailures.sectionAnchorsOf(resource));
 		IllegalStateException secondFailure = assertThrows(IllegalStateException.class,
-				() -> cacheParsingWithFailures.parseMarkdown(resource));
+				() -> cacheParsingWithFailures.sectionAnchorsOf(resource));
 
 		assertSame(firstFailure, secondFailure);
 	}
@@ -170,28 +169,46 @@ class MarkdownSectionAnchorsCacheTest {
 	void remembersAnErrorOfReading() {
 		CountingResource resource = CountingResource.failing("/docs/broken.md", new LinkageError("Missing."));
 
-		assertThrows(LinkageError.class, () -> this.cache.parseMarkdown(resource));
-		assertThrows(LinkageError.class, () -> this.cache.parseMarkdown(resource));
+		assertThrows(LinkageError.class, () -> this.cache.sectionAnchorsOf(resource));
+		assertThrows(LinkageError.class, () -> this.cache.sectionAnchorsOf(resource));
 
 		assertEquals(1, resource.reads());
 	}
 
 	@Test
-	void letsAParsedDocumentKnowWhereItCameFrom() throws IOException {
+	void parsesADocumentWithTheResourceItCameFrom() throws IOException {
+		AtomicReference<Resource> parsedWith = new AtomicReference<>();
+		MarkdownParserAndHtmlRenderer recordingParser = new MarkdownParserAndHtmlRenderer() {
+			@Override
+			public Document parseMarkdown(String markdownSourceCode, Resource documentResource) {
+				parsedWith.set(documentResource);
+				return super.parseMarkdown(markdownSourceCode, documentResource);
+			}
+		};
 		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide\n");
 
-		Document parsedDocument = this.cache.parseMarkdown(resource);
+		new MarkdownSectionAnchorsCache(recordingParser, this.contentsCache).sectionAnchorsOf(resource);
 
-		assertSame(resource, MarkdownParserAndHtmlRenderer.KEY_DOCUMENT_RESOURCE.get(parsedDocument),
-				"The parsed document is expected to carry the resource it was read from.");
+		assertSame(resource, parsedWith.get(),
+				"The document is expected to be parsed with the resource it was read from.");
+	}
+
+	@Test
+	void answersAnchorsThatCannotBeChanged() throws IOException {
+		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide\n");
+
+		Set<String> anchors = this.cache.sectionAnchorsOf(resource);
+
+		assertThrows(UnsupportedOperationException.class, () -> anchors.add("notes"),
+				"Anchors shared by several threads are expected to stay as they were found.");
 	}
 
 	@Test
 	void doesNotRememberAnUnresolvedResource() {
 		UnresolvedResource unresolved = new UnresolvedResource("guide.md");
 
-		IOException firstFailure = assertThrows(IOException.class, () -> this.cache.parseMarkdown(unresolved));
-		IOException secondFailure = assertThrows(IOException.class, () -> this.cache.parseMarkdown(unresolved));
+		IOException firstFailure = assertThrows(IOException.class, () -> this.cache.sectionAnchorsOf(unresolved));
+		IOException secondFailure = assertThrows(IOException.class, () -> this.cache.sectionAnchorsOf(unresolved));
 
 		assertNotSame(firstFailure, secondFailure, "An unresolved resource is expected to be read every time.");
 	}
@@ -201,8 +218,8 @@ class MarkdownSectionAnchorsCacheTest {
 		CountingResource unnamed = new CountingResource("", "# Guide\n");
 		CountingResource nameless = new CountingResource(null, "# Guide\n");
 
-		assertThrows(IllegalArgumentException.class, () -> this.cache.parseMarkdown(unnamed));
-		assertThrows(IllegalArgumentException.class, () -> this.cache.parseMarkdown(nameless));
+		assertThrows(IllegalArgumentException.class, () -> this.cache.sectionAnchorsOf(unnamed));
+		assertThrows(IllegalArgumentException.class, () -> this.cache.sectionAnchorsOf(nameless));
 		assertEquals(0, unnamed.reads() + nameless.reads(), "Without a name nothing says that this is Markdown.");
 	}
 
@@ -210,16 +227,16 @@ class MarkdownSectionAnchorsCacheTest {
 	void refusesAResourceThatIsNoMarkdownFile() {
 		CountingResource plainText = new CountingResource("/docs/guide.txt", "# Guide\n");
 
-		assertThrows(IllegalArgumentException.class, () -> this.cache.parseMarkdown(plainText));
+		assertThrows(IllegalArgumentException.class, () -> this.cache.sectionAnchorsOf(plainText));
 		assertEquals(0, plainText.reads(),
 				"Reading a document that is no Markdown and parsing it as Markdown answers about nothing.");
 	}
 
 	@Test
 	void ignoresHowTheMarkdownExtensionIsWritten() throws IOException {
-		CountingResource shouted = new CountingResource("/docs/GUIDE.MD", "# Guide\n");
+		CountingResource shouted = new CountingResource("/docs/GUIDE.MD", "# Guide {#guide}\n");
 
-		assertEquals("# Guide\n", this.cache.parseMarkdown(shouted).getChars().toString());
+		assertEquals(Set.of("guide"), this.cache.sectionAnchorsOf(shouted));
 	}
 
 	@Test
@@ -229,10 +246,10 @@ class MarkdownSectionAnchorsCacheTest {
 						.withMarkdownFileExtensions(MarkdownFileExtensions.accepting("md", "mkd"))
 						.build(),
 				this.contentsCache);
-		CountingResource resource = new CountingResource("/docs/guide.mkd", "# Guide\n");
+		CountingResource resource = new CountingResource("/docs/guide.mkd", "# Guide {#guide}\n");
 
-		assertEquals("# Guide\n", cacheAcceptingMore.parseMarkdown(resource).getChars().toString());
-		assertThrows(IllegalArgumentException.class, () -> this.cache.parseMarkdown(resource),
+		assertEquals(Set.of("guide"), cacheAcceptingMore.sectionAnchorsOf(resource));
+		assertThrows(IllegalArgumentException.class, () -> this.cache.sectionAnchorsOf(resource),
 				"A cache whose parser was not told about that extension is expected to refuse it.");
 	}
 
@@ -241,20 +258,20 @@ class MarkdownSectionAnchorsCacheTest {
 		CountingResource resource = new CountingResource("/docs/guide.md", "# Guide\n");
 		int threadCount = 8;
 		CountDownLatch start = new CountDownLatch(1);
-		List<Future<Document>> answers = new ArrayList<>();
+		List<Future<Set<String>>> answers = new ArrayList<>();
 
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		try {
 			for (int i = 0; i < threadCount; i++) {
 				answers.add(executor.submit(() -> {
 					start.await();
-					return this.cache.parseMarkdown(resource);
+					return this.cache.sectionAnchorsOf(resource);
 				}));
 			}
 			start.countDown();
 
-			Document firstAnswer = answers.get(0).get();
-			for (Future<Document> answer : answers) {
+			Set<String> firstAnswer = answers.get(0).get();
+			for (Future<Set<String>> answer : answers) {
 				assertSame(firstAnswer, answer.get());
 			}
 		} finally {
@@ -265,7 +282,7 @@ class MarkdownSectionAnchorsCacheTest {
 
 	@Test
 	void refusesNoResource() {
-		assertThrows(IllegalArgumentException.class, () -> this.cache.parseMarkdown(null));
+		assertThrows(IllegalArgumentException.class, () -> this.cache.sectionAnchorsOf(null));
 	}
 
 	@Test

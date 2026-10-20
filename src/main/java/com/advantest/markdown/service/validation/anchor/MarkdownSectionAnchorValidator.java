@@ -19,7 +19,6 @@ import com.advantest.markdown.service.validation.IssueSeverity;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
 import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
-import com.vladsch.flexmark.util.ast.Document;
 /**
  * Checks that a link into a Markdown document points to a section that document declares.
  * 
@@ -29,8 +28,9 @@ import com.vladsch.flexmark.util.ast.Document;
  * fragment points into the document it stands in, which is a Markdown document by the very fact
  * that it is being checked, so this validator answers for it as well.</p>
  * 
- * <p>Another document is asked of the validation run rather than read here, so a document fifty
- * links point into is read and parsed once. The document a link stands in is taken as it was handed
+ * <p>The anchors of another document are asked of the validation run rather than read here, so a
+ * document fifty links point into is read and parsed once, and the run never hands a parsed document
+ * to two threads. The document a link stands in is taken as it was handed
  * over, so that what is checked is the text a reader is looking at and not the text that was stored
  * last.</p>
  */
@@ -71,12 +71,12 @@ public class MarkdownSectionAnchorValidator implements AnchorValidator {
 			throw new IllegalArgumentException("Arguments must not be null.");
 		}
 
-		Document targetDocument;
+		Set<String> declaredAnchors;
 		if (target.namesTheDocumentItself()) {
-			targetDocument = target.documentContainingTheLink();
+			declaredAnchors = MarkdownSectionAnchors.validAnchorsIn(target.documentContainingTheLink());
 		} else {
 			try {
-				targetDocument = context.getParsedMarkdownDocument(target.targetResource());
+				declaredAnchors = context.getMarkdownSectionAnchors(target.targetResource());
 			} catch (IOException failure) {
 				// whoever asks has read the target before asking, so the target can only have
 				// vanished between the two reads; that it cannot be read is said where it is read,
@@ -87,7 +87,6 @@ public class MarkdownSectionAnchorValidator implements AnchorValidator {
 			}
 		}
 
-		Set<String> declaredAnchors = MarkdownSectionAnchors.validAnchorsIn(targetDocument);
 		if (declaredAnchors.contains(target.anchor())) {
 			return CompletableFuture.completedFuture(List.of());
 		}

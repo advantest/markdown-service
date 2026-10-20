@@ -75,7 +75,10 @@ import com.vladsch.flexmark.util.ast.Document;
  * walks of a run share what the run read and parsed, and none of them validates a file another
  * walk of the run validated already.</p>
  * 
- * <p>A run can be used from several threads at once.</p>
+ * <p>A run can be used from several threads at once. Every document is parsed by the thread checking
+ * it, and what one check learns of another document is handed over as a fact that cannot be changed,
+ * e.g. the anchors it declares, never as the parsed document, so no parsed document is read by two
+ * threads.</p>
  */
 public final class MarkdownValidationRun implements AutoCloseable {
 

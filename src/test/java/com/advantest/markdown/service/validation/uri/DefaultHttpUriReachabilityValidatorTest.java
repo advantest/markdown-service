@@ -16,6 +16,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,6 @@ import com.advantest.markdown.service.validation.MarkdownIssueTypes;
 import com.advantest.markdown.service.validation.MarkdownValidationContext;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.resources.Resource;
-import com.vladsch.flexmark.util.ast.Document;
 
 /**
  * Tests what the shipped validator of web addresses answers for a target, and which target it
@@ -50,8 +50,8 @@ class DefaultHttpUriReachabilityValidatorTest {
 			}
 
 			@Override
-			public Document getParsedMarkdownDocument(Resource markdownResource) throws IOException {
-				return CONTEXT_WITHOUT_CHECK.getParsedMarkdownDocument(markdownResource);
+			public Set<String> getMarkdownSectionAnchors(Resource markdownResource) throws IOException {
+				return CONTEXT_WITHOUT_CHECK.getMarkdownSectionAnchors(markdownResource);
 			}
 
 			@Override
