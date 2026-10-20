@@ -185,6 +185,29 @@ public class MarkdownValidationRules {
 	}
 
 	/**
+	 * Does what {@link #createRun(UriReachabilityChecker, ResourceContentsReader, ResourceFilter)}
+	 * does, with the walks of the run validating at most the given number of files at once rather
+	 * than {@link MarkdownValidationRun#DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL}.
+	 * 
+	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
+	 *                               <code>null</code>, in which case no address is asked about
+	 * @param contentsReader what answers with the contents of a resource the run reads, must not be
+	 *                       <code>null</code>
+	 * @param resourceFilter the filter of the run's walks, must not be <code>null</code>
+	 * @param maxNumberOfDocumentsValidatedInParallel how many files the walks of the run validate
+	 *                                                at once, at least one
+	 * @return a new run, never <code>null</code>, to be closed by the caller
+	 * @throws IllegalArgumentException if the given reader or filter is <code>null</code>, or if the
+	 *                                  number is less than one
+	 */
+	public MarkdownValidationRun createRun(UriReachabilityChecker uriReachabilityChecker,
+			ResourceContentsReader contentsReader, ResourceFilter resourceFilter,
+			int maxNumberOfDocumentsValidatedInParallel) {
+		return new MarkdownValidationRun(this, this.parserAndRenderer, uriReachabilityChecker, contentsReader,
+				resourceFilter, maxNumberOfDocumentsValidatedInParallel);
+	}
+
+	/**
 	 * Checks the given Markdown document.
 	 * 
 	 * <p>A validator that cannot answer at once is not waited for where it is asked: the document

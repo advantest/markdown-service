@@ -24,6 +24,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,12 +76,30 @@ import com.vladsch.flexmark.util.ast.Document;
  * walks of a run share what the run read and parsed, and none of them validates a file another
  * walk of the run validated already.</p>
  * 
+ * <p>A walk validates the files it finds several at a time, on threads the run owns, at most as
+ * many at once as the run was told, by default {@link #DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL}.
+ * All walks of a run share that limit. A document handed to the run by name or as source code is
+ * validated by the thread handing it over, as before, whatever the limit.</p>
+ * 
  * <p>A run can be used from several threads at once. Every document is parsed by the thread checking
  * it, and what one check learns of another document is handed over as a fact that cannot be changed,
  * e.g. the anchors it declares, never as the parsed document, so no parsed document is read by two
  * threads.</p>
  */
 public final class MarkdownValidationRun implements AutoCloseable {
+
+	/**
+	 * How many files a walk validates at once, where nobody says otherwise: half the processors of
+	 * this machine, but no more than four and at least one.
+	 * 
+	 * <p>Validating a file mostly reads, parses and walks it, which keeps a processor busy. Over a
+	 * large tree, four files at once were measured to take a third of the time one file at a time
+	 * takes, and more than four gained next to nothing while holding more memory. Half the
+	 * processors leave the other half to whatever else the machine runs, e.g. the editor showing
+	 * the findings.</p>
+	 */
+	public static final int DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL =
+			Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 2));
 
 	private static final Logger LOG = LoggerFactory.getLogger(MarkdownValidationRun.class);
 
@@ -93,6 +112,11 @@ public final class MarkdownValidationRun implements AutoCloseable {
 	private final ResourceContentsCache contents;
 
 	private final ExecutorService executor;
+
+	/** The threads validating the files a walk found, as many as may be validated at once. */
+	private final ExecutorService documentExecutor;
+
+	private final int maxNumberOfDocumentsValidatedInParallel;
 
 	private final UriReachabilityChecker.OfRun uriReachabilityChecker;
 
@@ -152,14 +176,48 @@ public final class MarkdownValidationRun implements AutoCloseable {
 	MarkdownValidationRun(MarkdownValidationRules rules, MarkdownParserAndHtmlRenderer parserAndRenderer,
 			UriReachabilityChecker uriReachabilityChecker, ResourceContentsReader contentsReader,
 			ResourceFilter resourceFilter) {
+		this(rules, parserAndRenderer, uriReachabilityChecker, contentsReader, resourceFilter,
+				DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL);
+	}
+
+	/**
+	 * Creates a run applying the given rules, opening the given check for the run, walking folder
+	 * trees with the given filter and validating at most the given number of the files found at once.
+	 * 
+	 * @param rules the rules every document of the run is checked by, must not be <code>null</code>
+	 * @param parserAndRenderer the parser reading the source code handed to the run and every
+	 *                          document the run looks into, must not be <code>null</code>
+	 * @param uriReachabilityChecker the check asking an address whether it is there, may be
+	 *                               <code>null</code>, in which case no address is asked about
+	 * @param contentsReader what answers with the contents of a resource the run reads, at most
+	 *                       once per resource, must not be <code>null</code>
+	 * @param resourceFilter the filter deciding which folders a walk of the run enters and which
+	 *                       files it validates, must not be <code>null</code>
+	 * @param maxNumberOfDocumentsValidatedInParallel how many files the walks of the run validate
+	 *                                                at once, at least one
+	 * @throws IllegalArgumentException if the rules, the parser, the reader or the filter are
+	 *                                  <code>null</code>, or if the number is less than one
+	 */
+	MarkdownValidationRun(MarkdownValidationRules rules, MarkdownParserAndHtmlRenderer parserAndRenderer,
+			UriReachabilityChecker uriReachabilityChecker, ResourceContentsReader contentsReader,
+			ResourceFilter resourceFilter, int maxNumberOfDocumentsValidatedInParallel) {
 		if (rules == null || parserAndRenderer == null || contentsReader == null || resourceFilter == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
+		}
+		if (maxNumberOfDocumentsValidatedInParallel < 1) {
+			throw new IllegalArgumentException("At least one document has to be validated at once, but "
+					+ maxNumberOfDocumentsValidatedInParallel + " were.");
 		}
 		this.rules = rules;
 		this.parserAndRenderer = parserAndRenderer;
 		this.resourceFilter = resourceFilter;
+		this.maxNumberOfDocumentsValidatedInParallel = maxNumberOfDocumentsValidatedInParallel;
 		this.walker = new ResourceTreeWalker(parserAndRenderer.getMarkdownFileExtensions()::isMarkdownFile);
 		this.executor = Executors.newVirtualThreadPerTaskExecutor();
+		// platform threads, since validating a file keeps a processor busy rather than waiting; a
+		// thread is started only once a walk hands it a file, so a run that never walks starts none
+		this.documentExecutor = Executors.newFixedThreadPool(maxNumberOfDocumentsValidatedInParallel,
+				Thread.ofPlatform().name("markdown-validation-", 1).daemon().factory());
 		this.uriReachabilityChecker = uriReachabilityChecker == null
 				? null
 				: uriReachabilityChecker.openForRun(this.executor);
@@ -468,15 +526,24 @@ public final class MarkdownValidationRun implements AutoCloseable {
 				});
 	}
 
-	/** Checks a document a walk found, which fails its own promise only, not the walk. */
+	/**
+	 * Hands a document a walk found to the threads validating found documents, without waiting for
+	 * them. A document that cannot be checked fails its own promise only, not the walk.
+	 */
 	private CompletableFuture<List<ValidationIssue>> validateFound(Resource document) {
 		CompletableFuture<List<ValidationIssue>> findings = await(new CompletableFuture<>());
 		try {
-			return readAndValidate(document, findings);
-		} catch (RuntimeException | Error failure) {
-			// the promise was failed with it already
-			return findings;
+			this.documentExecutor.execute(() -> {
+				try {
+					readAndValidate(document, findings);
+				} catch (RuntimeException | Error failure) {
+					// the promise was failed with it already
+				}
+			});
+		} catch (RejectedExecutionException failure) {
+			findings.completeExceptionally(failure);
 		}
+		return findings;
 	}
 
 	/**
@@ -506,6 +573,15 @@ public final class MarkdownValidationRun implements AutoCloseable {
 	}
 
 	/**
+	 * Tells how many files a walk of this run validates at once at most.
+	 * 
+	 * @return the number of files validated at once, at least one
+	 */
+	public int getMaxNumberOfDocumentsValidatedInParallel() {
+		return this.maxNumberOfDocumentsValidatedInParallel;
+	}
+
+	/**
 	 * Tells whether the run was {@link #close() closed}, which it is from the moment closing began.
 	 * 
 	 * @return <code>true</code> if the run was closed
@@ -515,7 +591,7 @@ public final class MarkdownValidationRun implements AutoCloseable {
 	}
 	/**
 	 * Waits for every promise of findings still being waited for, and then lets go of everything
-	 * the run holds: the check opened for it first, then the executor its work ran on. A document
+	 * the run holds: the check opened for it first, then the threads its work ran on. A document
 	 * handed to a closed run is refused. Closing a closed run does nothing.
 	 * 
 	 * <p>Close a run from the thread that created it, or from any other thread that is not waiting
@@ -536,7 +612,11 @@ public final class MarkdownValidationRun implements AutoCloseable {
 				this.uriReachabilityChecker.close();
 			}
 		} finally {
-			this.executor.close();
+			try {
+				this.documentExecutor.close();
+			} finally {
+				this.executor.close();
+			}
 		}
 	}
 

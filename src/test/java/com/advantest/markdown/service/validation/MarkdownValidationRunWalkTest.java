@@ -29,7 +29,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -410,6 +412,99 @@ public class MarkdownValidationRunWalkTest {
 		try (MarkdownValidationRun run = runWith(filter)) {
 			assertTrue(run.isValidated(this.root.resolve("doc/a.md"), this.root), "doc/a.md is expected to be checked.");
 			assertFalse(run.isValidated(this.root.resolve("src/b.md"), this.root), "src/b.md is expected to be skipped.");
+		}
+	}
+
+	@Test
+	void aWalkChecksAsManyFilesAtOnceAsTheRunWasToldAndNoMore() throws Exception {
+		create("a.md", "b.md", "c.md", "d.md", "e.md");
+		BlockingValidator blocking = new BlockingValidator(2);
+		MarkdownValidationRules blockingRules = new MarkdownValidationRules(this.parserAndRenderer, List.of(blocking));
+
+		try (MarkdownValidationRun run = blockingRules.createRun(null, ResourceContentsReader.FROM_THE_RESOURCE,
+				DefaultMarkdownValidationResourcesFilter.builderWithDefaults().build(), 2)) {
+			assertEquals(2, run.getMaxNumberOfDocumentsValidatedInParallel());
+			CompletableFuture<Map<Resource, List<ValidationIssue>>> findings = run.validateTree(this.root);
+
+			assertTrue(blocking.enoughArrived.await(30, TimeUnit.SECONDS),
+					"Two files are expected to be checked at the same time.");
+			Thread.sleep(200);
+			assertEquals(2, blocking.checkingNow.get(), "No third file is expected to be checked meanwhile.");
+
+			blocking.release.countDown();
+			assertEquals(resources("a.md", "b.md", "c.md", "d.md", "e.md"), List.copyOf(join(findings).keySet()),
+					"Every file is expected to be checked, in the order the walk found it.");
+		}
+		assertEquals(2, blocking.mostAtOnce.get(), "No more than two files are expected to be checked at once.");
+	}
+
+	@Test
+	void aWalkChecksOneFileAtATimeIfTheRunWasToldSo() throws Exception {
+		create("a.md", "b.md", "c.md");
+		BlockingValidator blocking = new BlockingValidator(1);
+		blocking.release.countDown();
+		MarkdownValidationRules blockingRules = new MarkdownValidationRules(this.parserAndRenderer, List.of(blocking));
+
+		try (MarkdownValidationRun run = blockingRules.createRun(null, ResourceContentsReader.FROM_THE_RESOURCE,
+				DefaultMarkdownValidationResourcesFilter.builderWithDefaults().build(), 1)) {
+			assertEquals(3, join(run.validateTree(this.root)).size(), "Every file is expected to be checked.");
+		}
+		assertEquals(1, blocking.mostAtOnce.get(), "One file is expected to be checked at a time.");
+	}
+
+	@Test
+	void aRunChecksHalfAsManyFilesAtOnceAsThereAreProcessorsButNoMoreThanFour() {
+		int processors = Runtime.getRuntime().availableProcessors();
+
+		assertEquals(Math.max(1, Math.min(4, processors / 2)),
+				MarkdownValidationRun.DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL);
+	}
+
+	@Test
+	void aRunCheckingNoFileAtOnceIsRefused() {
+		ResourceFilter filter = DefaultMarkdownValidationResourcesFilter.builderWithDefaults().build();
+
+		for (int none : new int[] { 0, -1 }) {
+			assertThrows(IllegalArgumentException.class,
+					() -> this.rules.createRun(null, ResourceContentsReader.FROM_THE_RESOURCE, filter, none));
+		}
+	}
+
+	/**
+	 * A validator triggered by the document that counts how many documents it checks at once, and
+	 * holds every document until the test releases it.
+	 */
+	private static class BlockingValidator implements MarkdownValidator {
+
+		private final AtomicInteger checkingNow = new AtomicInteger();
+
+		private final AtomicInteger mostAtOnce = new AtomicInteger();
+
+		private final CountDownLatch enoughArrived;
+
+		private final CountDownLatch release = new CountDownLatch(1);
+
+		BlockingValidator(int enough) {
+			this.enoughArrived = new CountDownLatch(enough);
+		}
+
+		@Override
+		public Set<Class<? extends Node>> getTriggeringNodeTypes() {
+			return Set.of(Document.class);
+		}
+
+		@Override
+		public CompletableFuture<List<ValidationIssue>> validate(Node node, MarkdownValidationContext context) {
+			this.mostAtOnce.accumulateAndGet(this.checkingNow.incrementAndGet(), Math::max);
+			this.enoughArrived.countDown();
+			try {
+				this.release.await(30, TimeUnit.SECONDS);
+			} catch (InterruptedException interrupted) {
+				Thread.currentThread().interrupt();
+			} finally {
+				this.checkingNow.decrementAndGet();
+			}
+			return CompletableFuture.completedFuture(List.of());
 		}
 	}
 
