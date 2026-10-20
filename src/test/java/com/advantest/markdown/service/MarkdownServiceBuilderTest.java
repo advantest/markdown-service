@@ -29,6 +29,7 @@ import com.advantest.flexmark.ext.jira.tickets.JiraTicketExtension;
 import com.advantest.flexmark.ext.plantuml.PlantUmlExtension;
 import com.advantest.markdown.MarkdownCustomization;
 import com.advantest.markdown.service.validation.MarkdownIssueTypes;
+import com.advantest.markdown.service.validation.MarkdownValidationRun;
 import com.advantest.markdown.service.validation.ValidationIssue;
 import com.advantest.markdown.service.validation.uri.HttpUriReachabilityChecker;
 import com.advantest.markdown.service.validation.uri.UriReachability;
@@ -390,6 +391,33 @@ class MarkdownServiceBuilderTest {
 				.build();
 
 		assertTrue(service.getUriReachabilityChecker().isEmpty());
+	}
+
+	@Test
+	void builderHandsTheNumberOfFilesValidatedAtOnceToEveryRun() {
+		try (MarkdownService service = MarkdownService.builderNotCheckingUriReachability()
+				.withMaxNumberOfDocumentsValidatedInParallel(3)
+				.build();
+				MarkdownValidationRun run = service.createValidationRun()) {
+			assertEquals(3, run.getMaxNumberOfDocumentsValidatedInParallel());
+		}
+	}
+
+	@Test
+	void builderLetsARunValidateTheDefaultNumberOfFilesAtOnceIfNothingIsTold() {
+		try (MarkdownService service = MarkdownService.builderNotCheckingUriReachability().build();
+				MarkdownValidationRun run = service.createValidationRun()) {
+			assertEquals(MarkdownValidationRun.DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL,
+					run.getMaxNumberOfDocumentsValidatedInParallel());
+		}
+	}
+
+	@Test
+	void builderRefusesToValidateNoFileAtOnce() {
+		MarkdownService.Builder builder = MarkdownService.builderNotCheckingUriReachability();
+
+		assertThrows(IllegalArgumentException.class, () -> builder.withMaxNumberOfDocumentsValidatedInParallel(0));
+		assertThrows(IllegalArgumentException.class, () -> builder.withMaxNumberOfDocumentsValidatedInParallel(-1));
 	}
 
 	@Test

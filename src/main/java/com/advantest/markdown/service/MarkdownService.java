@@ -107,6 +107,8 @@ public class MarkdownService implements AutoCloseable {
 
 	private final ResourceFilter resourceFilter;
 
+	private final int maxNumberOfDocumentsValidatedInParallel;
+
 	/** What the parts of this service use without owning it, closed after them. */
 	private final List<AutoCloseable> partsToClose;
 
@@ -135,7 +137,8 @@ public class MarkdownService implements AutoCloseable {
 				.withResourceContentsReader(unsavedContents.readerOfCurrentContents())
 				.build(),
 				ResourceResolverRegistry.ofLocalFileSystem(), unsavedContents, null, List.of(), List.of(),
-				List.of(), defaultResourceFilter());
+				List.of(), defaultResourceFilter(),
+				MarkdownValidationRun.DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL);
 	}
 
 	private static ResourceFilter defaultResourceFilter() {
@@ -156,7 +159,8 @@ public class MarkdownService implements AutoCloseable {
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers) {
 		this(parserAndRenderer, resourceResolvers, new UnsavedResourceContents(), null, List.of(), List.of(),
-				List.of(), defaultResourceFilter());
+				List.of(), defaultResourceFilter(),
+				MarkdownValidationRun.DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL);
 	}
 
 	/**
@@ -185,6 +189,8 @@ public class MarkdownService implements AutoCloseable {
 	 *                     given order, must not be <code>null</code>
 	 * @param resourceFilter the filter deciding which folders a walk of a validation run enters
 	 *                       and which files it validates, must not be <code>null</code>
+	 * @param maxNumberOfDocumentsValidatedInParallel how many files a walk of a validation run
+	 *                                                validates at once, at least one
 	 */
 	MarkdownService(MarkdownParserAndHtmlRenderer parserAndRenderer,
 			ResourceResolverRegistry resourceResolvers,
@@ -193,11 +199,16 @@ public class MarkdownService implements AutoCloseable {
 			List<UriValidator> uriValidators,
 			List<AnchorValidator> anchorValidators,
 			List<AutoCloseable> partsToClose,
-			ResourceFilter resourceFilter) {
+			ResourceFilter resourceFilter,
+			int maxNumberOfDocumentsValidatedInParallel) {
 		if (parserAndRenderer == null || resourceResolvers == null || unsavedContents == null
 				|| uriValidators == null || anchorValidators == null || partsToClose == null
 				|| resourceFilter == null) {
 			throw new IllegalArgumentException("Arguments must not be null.");
+		}
+		if (maxNumberOfDocumentsValidatedInParallel < 1) {
+			throw new IllegalArgumentException("At least one file has to be validated at once, but "
+					+ maxNumberOfDocumentsValidatedInParallel + " were.");
 		}
 		useTheUsualDotExecutableWhereNobodyNamedOne();
 		this.parserAndRenderer = parserAndRenderer;
@@ -211,6 +222,7 @@ public class MarkdownService implements AutoCloseable {
 		this.anchorValidators = List.copyOf(anchorValidators);
 		this.partsToClose = List.copyOf(partsToClose);
 		this.resourceFilter = resourceFilter;
+		this.maxNumberOfDocumentsValidatedInParallel = maxNumberOfDocumentsValidatedInParallel;
 		this.cachesHolders = cachesHoldersAmong(uriReachabilityChecker, uriValidators,
 				anchorValidators);
 	}
@@ -778,7 +790,8 @@ public class MarkdownService implements AutoCloseable {
 		this.openRuns.removeIf(MarkdownValidationRun::isClosed);
 
 		MarkdownValidationRun run = this.validation.createRun(this.uriReachabilityChecker,
-				this.unsavedContents.readerOfContentsSnapshot(), resourceFilter);
+				this.unsavedContents.readerOfContentsSnapshot(), resourceFilter,
+				this.maxNumberOfDocumentsValidatedInParallel);
 		this.openRuns.add(run);
 		// remembered before the service is asked again whether it was closed, so that closing
 		// either sees this run and closes it, or this check sees that the service was closed
@@ -936,6 +949,9 @@ public class MarkdownService implements AutoCloseable {
 		private final List<AutoCloseable> partsToClose = new ArrayList<>();
 
 		private ResourceFilter resourceFilter = defaultResourceFilter();
+
+		private int maxNumberOfDocumentsValidatedInParallel =
+				MarkdownValidationRun.DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL;
 
 		private Builder() {
 		}
@@ -1124,6 +1140,31 @@ public class MarkdownService implements AutoCloseable {
 						+ maxNumberOfParallelNetworkRequests + " were.");
 			}
 			this.maxNumberOfParallelNetworkRequests = maxNumberOfParallelNetworkRequests;
+			return this;
+		}
+
+		/**
+		 * Lets a walk of a validation run validate no more than the given number of files at once.
+		 * 
+		 * <p>A walk hands the files it finds to threads of its run, so that reading, parsing and
+		 * validating one file does not wait for the files found before it. More threads cost more
+		 * memory, and beyond a few of them a walk hardly gets faster, so without this method a walk
+		 * validates no more than
+		 * {@link MarkdownValidationRun#DEFAULT_MAX_NUMBER_OF_DOCUMENTS_VALIDATED_IN_PARALLEL} files
+		 * at once. One validates the files one after another. The findings come in the order the
+		 * walk found the files, whatever the number.</p>
+		 * 
+		 * @param maxNumberOfDocumentsValidatedInParallel how many files a walk validates at once, at
+		 *        least one
+		 * @return this builder for method chaining, never <code>null</code>
+		 * @throws IllegalArgumentException if the number is less than one
+		 */
+		public Builder withMaxNumberOfDocumentsValidatedInParallel(int maxNumberOfDocumentsValidatedInParallel) {
+			if (maxNumberOfDocumentsValidatedInParallel < 1) {
+				throw new IllegalArgumentException("At least one file has to be validated at once, but "
+						+ maxNumberOfDocumentsValidatedInParallel + " were.");
+			}
+			this.maxNumberOfDocumentsValidatedInParallel = maxNumberOfDocumentsValidatedInParallel;
 			return this;
 		}
 
@@ -1346,7 +1387,7 @@ public class MarkdownService implements AutoCloseable {
 
 			return new MarkdownService(this.parserAndRendererBuilder.build(), resolvers, unsavedContents,
 					reachabilityChecker, validatorsAskedInOrder, anchorValidatorsAskedInOrder,
-					this.partsToClose, this.resourceFilter);
+					this.partsToClose, this.resourceFilter, this.maxNumberOfDocumentsValidatedInParallel);
 		}
 
 	}
