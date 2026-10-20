@@ -112,8 +112,16 @@ import com.advantest.markdown.service.CachesHolder;
  */
 public final class HttpUriReachabilityChecker implements UriReachabilityChecker, CachesHolder {
 
-	/** How long it may take until the far side accepts the connection, where nobody says otherwise. */
-	public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(2);
+	/**
+	 * How long it may take until the far side accepts the connection, where nobody says otherwise.
+	 * 
+	 * <p>Five seconds leave room for a first connection, which has to look up the name of the server
+	 * and may have to pass a proxy, and for many connections opened at once, e.g. while several
+	 * documents are validated at the same time. Two seconds were measured to fail working addresses
+	 * in both cases. An address that cannot be connected to at all costs the longer time once, since
+	 * every address is asked at most once and while other addresses are asked.</p>
+	 */
+	public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
 
 	/**
 	 * How long it may take until the far side has answered, where nobody says otherwise.

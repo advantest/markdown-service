@@ -249,7 +249,7 @@ class HttpUriReachabilityCheckerTest {
 	@Test
 	void theDefaultTimesAreTheOnesTheMeasurementAskedFor() {
 		// the values themselves, so that changing one of them is a decision rather than an edit
-		assertEquals(Duration.ofSeconds(2), HttpUriReachabilityChecker.DEFAULT_CONNECT_TIMEOUT);
+		assertEquals(Duration.ofSeconds(5), HttpUriReachabilityChecker.DEFAULT_CONNECT_TIMEOUT);
 		assertEquals(Duration.ofSeconds(15), HttpUriReachabilityChecker.DEFAULT_ANSWER_TIMEOUT);
 	}
 
