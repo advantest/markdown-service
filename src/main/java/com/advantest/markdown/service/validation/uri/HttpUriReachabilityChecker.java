@@ -9,6 +9,7 @@ package com.advantest.markdown.service.validation.uri;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
@@ -89,8 +90,13 @@ import com.advantest.markdown.service.CachesHolder;
  * in <code>Retry-After</code> how long to wait is followed if it asks for
  * {@link #LONGEST_WAIT_A_SERVER_MAY_ASK_FOR} at most; a server asking for more is not asked again.
  * A request waiting to be asked again holds no place in the limits below; it waits for its turn
- * anew. Nothing else is asked again: another status code says something about the address, and a
- * timeout has already used up the time an address is given.</p>
+ * anew.</p>
+ * 
+ * <p>A server that did not accept the connection in time is asked again once, after about one
+ * second, varied the same way. The request never reached the server, and a first connection or many
+ * connections opened at once were measured to miss the time now and then where the next attempt
+ * succeeds. Nothing else is asked again: another status code says something about the address, and
+ * a timeout while waiting for the answer has already used up the time an address is given.</p>
  * 
  * <p>An address that still cannot answer after that is {@link UriReachability.NotReached not
  * reached}, with the status code or the refusal as its reason, and not an address answering with
@@ -165,6 +171,9 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 
 	/** How often an address saying that it cannot answer now is asked again at most. */
 	static final int MAX_NUMBER_OF_RETRIES = 2;
+
+	/** How often a server that did not accept the connection in time is asked again at most. */
+	static final int MAX_NUMBER_OF_RETRIES_AFTER_A_CONNECT_TIMEOUT = 1;
 
 	/** The status codes saying that the server, or a gateway in front of it, cannot answer now. */
 	private static final Set<Integer> STATUS_CODES_OF_A_BUSY_SERVER = Set.of(429, 503, 504);
@@ -537,6 +546,11 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 							return CompletableFuture.<Outcome>failedFuture(new CancellationException(
 									"Nobody waited for the answer of the web address " + targetUri + " any more."));
 						}
+						if (isConnectTimeout(failure)) {
+							return retriesSoFar < MAX_NUMBER_OF_RETRIES_AFTER_A_CONNECT_TIMEOUT
+									? askAgainAfter(varied(FIRST_WAIT), targetUri, request, client, aborted, retriesSoFar)
+									: CompletableFuture.completedFuture(new Outcome(notReached(targetUri, failure), true));
+						}
 						if (!isRefusedForTooManyStreams(failure)) {
 							return CompletableFuture.completedFuture(new Outcome(notReached(targetUri, failure), true));
 						}
@@ -643,15 +657,24 @@ public final class HttpUriReachabilityChecker implements UriReachabilityChecker,
 	private Duration varied(Duration wait) {
 		return Duration.ofMillis(Math.round(wait.toMillis() * (0.75 + 0.5 * this.randomness.getAsDouble())));
 	}
+	private static boolean isConnectTimeout(Throwable failure) {
+		return unwrapped(failure) instanceof HttpConnectTimeoutException;
+	}
+
 	private static boolean isRefusedForTooManyStreams(Throwable failure) {
-		Throwable cause = failure instanceof CompletionException && failure.getCause() != null
-				? failure.getCause()
-				: failure;
+		Throwable cause = unwrapped(failure);
 
 		// the client says so only in the message of an IOException
 		return cause instanceof IOException
 				&& cause.getMessage() != null
 				&& cause.getMessage().contains(TOO_MANY_STREAMS);
+	}
+
+	/** The failure itself, or the cause it carries if it only wraps that cause for a promise. */
+	private static Throwable unwrapped(Throwable failure) {
+		return failure instanceof CompletionException && failure.getCause() != null
+				? failure.getCause()
+				: failure;
 	}
 
 	/**

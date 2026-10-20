@@ -80,7 +80,7 @@ class HttpUriReachabilityCheckerTest {
 	void addressThatDoesNotAnswerYieldsTheReasonItGave() {
 		HttpClient httpClient = clientFailingWith(new HttpConnectTimeoutException("HTTP connect timed out"));
 
-		UriReachability reachability = viewAsking(httpClient).check(SOME_ADDRESS).join();
+		UriReachability reachability = viewWaiting(httpClient, new ArrayList<>()).check(SOME_ADDRESS).join();
 
 		assertEquals(new UriReachability.NotReached("HTTP connect timed out"), reachability);
 	}
@@ -131,12 +131,13 @@ class HttpUriReachabilityCheckerTest {
 	@Test
 	void addressThatCouldNotBeReachedIsRememberedAsWell() {
 		HttpClient httpClient = clientFailingWith(new HttpConnectTimeoutException("HTTP connect timed out"));
-		UriReachabilityChecker.OfRun view = viewAsking(httpClient);
+		UriReachabilityChecker.OfRun view = viewWaiting(httpClient, new ArrayList<>());
 
 		view.check(SOME_ADDRESS);
 		view.check(SOME_ADDRESS);
 
-		verify(httpClient, times(1)).sendAsync(any(), any());
+		// the first check asked once more, because the server did not accept the connection in time
+		verify(httpClient, times(2)).sendAsync(any(), any());
 	}
 
 	@Test
@@ -595,6 +596,40 @@ class HttpUriReachabilityCheckerTest {
 	}
 
 	@Test
+	void serverNotAcceptingTheConnectionInTimeIsAskedAgainAfterAboutOneSecond() {
+		List<Duration> waits = new ArrayList<>();
+		HttpClient httpClient = clientAnsweringInTurn(connectTimedOut(), answered(200));
+
+		UriReachability reachability = viewWaiting(httpClient, waits).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.Answered(200), reachability);
+		verify(httpClient, times(2)).sendAsync(any(), any());
+		assertEquals(List.of(Duration.ofSeconds(1)), waits);
+	}
+
+	@Test
+	void serverNotAcceptingTheConnectionInTimeTwiceIsNotReachedWithoutBeingAskedAThirdTime() {
+		HttpClient httpClient = clientAnsweringInTurn(connectTimedOut(), connectTimedOut(), answered(200));
+
+		UriReachability reachability = viewWaiting(httpClient, new ArrayList<>()).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.NotReached("HTTP connect timed out"), reachability);
+		verify(httpClient, times(2)).sendAsync(any(), any());
+	}
+
+	@Test
+	void connectTimeoutWrappedByTheFutureItFailedIsRecognized() {
+		HttpClient httpClient = clientAnsweringInTurn(
+				CompletableFuture.failedFuture(
+						new CompletionException(new HttpConnectTimeoutException("HTTP connect timed out"))),
+				answered(200));
+
+		UriReachability reachability = viewWaiting(httpClient, new ArrayList<>()).check(SOME_ADDRESS).join();
+
+		assertEquals(new UriReachability.Answered(200), reachability);
+	}
+
+	@Test
 	void refusalWrappedByTheFutureItFailedIsRecognized() {
 		HttpClient httpClient = clientAnsweringInTurn(
 				CompletableFuture.failedFuture(
@@ -899,6 +934,10 @@ class HttpUriReachabilityCheckerTest {
 
 	private static CompletableFuture<HttpResponse<Void>> refused() {
 		return CompletableFuture.failedFuture(new IOException(HttpUriReachabilityChecker.TOO_MANY_STREAMS));
+	}
+
+	private static CompletableFuture<HttpResponse<Void>> connectTimedOut() {
+		return CompletableFuture.failedFuture(new HttpConnectTimeoutException("HTTP connect timed out"));
 	}
 	private static HttpUriReachabilityChecker checkerUsing(HttpClient httpClient) {
 		return new HttpUriReachabilityChecker(httpClient, Duration.ofSeconds(1));
