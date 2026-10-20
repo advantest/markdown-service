@@ -282,6 +282,27 @@ public class MarkdownValidationRunWalkTest {
 	}
 
 	@Test
+	void aWalkRunsOnAPlatformThread() throws IOException {
+		create("a/b.md");
+		List<Thread> walking = new CopyOnWriteArrayList<>();
+		ResourceFilter recording = new ResourceFilter() {
+			@Override
+			public boolean skipsFile(Path walkRoot, Path file, BasicFileAttributes attributes) {
+				walking.add(Thread.currentThread());
+				return false;
+			}
+		};
+
+		try (MarkdownValidationRun run = this.rules.createRun()) {
+			join(run.validateTree(this.root, recording));
+		}
+
+		assertEquals(1, walking.size(), "The walk is expected to have asked the filter about the one file.");
+		assertFalse(walking.get(0).isVirtual(),
+				"The walk is expected to run on a platform thread, since it blocks in file system calls.");
+	}
+
+	@Test
 	void aWalkMustStartInAnExistingFolder() throws IOException {
 		create("a.md");
 

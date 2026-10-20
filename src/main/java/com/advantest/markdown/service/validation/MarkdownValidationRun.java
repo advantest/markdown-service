@@ -113,6 +113,13 @@ public final class MarkdownValidationRun implements AutoCloseable {
 
 	private final ExecutorService executor;
 
+	/**
+	 * The threads walking folder trees, one per walk. Platform threads, since a walk spends its time
+	 * in file system calls that block rather than wait for something a virtual thread could step
+	 * aside for, and that pin the carrier of a virtual thread instead.
+	 */
+	private final ExecutorService walkExecutor;
+
 	/** The threads validating the files a walk found, as many as may be validated at once. */
 	private final ExecutorService documentExecutor;
 
@@ -214,6 +221,8 @@ public final class MarkdownValidationRun implements AutoCloseable {
 		this.maxNumberOfDocumentsValidatedInParallel = maxNumberOfDocumentsValidatedInParallel;
 		this.walker = new ResourceTreeWalker(parserAndRenderer.getMarkdownFileExtensions()::isMarkdownFile);
 		this.executor = Executors.newVirtualThreadPerTaskExecutor();
+		this.walkExecutor = Executors.newThreadPerTaskExecutor(
+				Thread.ofPlatform().name("markdown-walk-", 1).daemon().factory());
 		// platform threads, since validating a file keeps a processor busy rather than waiting; a
 		// thread is started only once a walk hands it a file, so a run that never walks starts none
 		this.documentExecutor = Executors.newFixedThreadPool(maxNumberOfDocumentsValidatedInParallel,
@@ -477,7 +486,7 @@ public final class MarkdownValidationRun implements AutoCloseable {
 
 		CompletableFuture<Void> walked = new CompletableFuture<>();
 		this.runningWalks.add(walked);
-		this.executor.execute(() -> {
+		this.walkExecutor.execute(() -> {
 			try {
 				walkAndValidate(List.copyOf(distinctRoots), filter, findings);
 			} finally {
@@ -613,9 +622,13 @@ public final class MarkdownValidationRun implements AutoCloseable {
 			}
 		} finally {
 			try {
-				this.documentExecutor.close();
+				this.walkExecutor.close();
 			} finally {
-				this.executor.close();
+				try {
+					this.documentExecutor.close();
+				} finally {
+					this.executor.close();
+				}
 			}
 		}
 	}
