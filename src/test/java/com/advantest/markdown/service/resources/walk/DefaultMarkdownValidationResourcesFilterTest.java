@@ -77,6 +77,30 @@ public class DefaultMarkdownValidationResourcesFilterTest {
 	}
 
 	@Test
+	void aBuilderTellsWhichSwitchesAreOn() {
+		Builder defaults = DefaultMarkdownValidationResourcesFilter.builderWithDefaults();
+		assertTrue(defaults.skipsSymbolicLinks(), "The defaults are expected to skip symbolic links.");
+		assertFalse(defaults.skipsDotPrefixedFolders(), "The defaults are expected to keep dot-prefixed folders.");
+		assertFalse(defaults.skipsHidden(), "The defaults are expected to keep hidden files and folders.");
+		assertFalse(defaults.skipsWhatGitIgnores(), "The defaults are expected not to ask git.");
+
+		Builder all = DefaultMarkdownValidationResourcesFilter.emptyBuilder().skippingSymbolicLinks(true)
+				.skippingDotPrefixedFolders(true).skippingHidden(true).skippingWhatGitIgnores(true);
+		assertTrue(all.skipsSymbolicLinks(), "Symbolic links are expected to be skipped once switched on.");
+		assertTrue(all.skipsDotPrefixedFolders(), "Dot-prefixed folders are expected to be skipped once switched on.");
+		assertTrue(all.skipsHidden(), "Hidden files and folders are expected to be skipped once switched on.");
+		assertTrue(all.skipsWhatGitIgnores(), "What git ignores is expected to be skipped once switched on.");
+
+		Builder copy = all.build().toBuilder();
+		assertTrue(copy.skipsSymbolicLinks() && copy.skipsDotPrefixedFolders() && copy.skipsHidden()
+				&& copy.skipsWhatGitIgnores(), "A filter's builder is expected to keep its switches.");
+
+		Builder empty = DefaultMarkdownValidationResourcesFilter.emptyBuilder();
+		assertFalse(empty.skipsSymbolicLinks() || empty.skipsDotPrefixedFolders() || empty.skipsHidden()
+				|| empty.skipsWhatGitIgnores(), "An empty builder is expected to have every switch off.");
+	}
+
+	@Test
 	void anEmptyBuilderFollowsSymbolicLinksAndSkipsNothing() throws IOException {
 		DefaultMarkdownValidationResourcesFilter filter = DefaultMarkdownValidationResourcesFilter.emptyBuilder()
 				.build();

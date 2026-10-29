@@ -198,6 +198,46 @@ public final class DefaultMarkdownValidationResourcesFilter implements ResourceF
 		}
 
 		/**
+		 * Tells whether the filter to be built skips symbolic links.
+		 * 
+		 * @return <code>true</code> if it skips them
+		 * @see #skippingSymbolicLinks(boolean)
+		 */
+		public boolean skipsSymbolicLinks() {
+			return this.skipSymbolicLinks;
+		}
+
+		/**
+		 * Tells whether the filter to be built skips folders whose name starts with <code>.</code>.
+		 * 
+		 * @return <code>true</code> if it skips them
+		 * @see #skippingDotPrefixedFolders(boolean)
+		 */
+		public boolean skipsDotPrefixedFolders() {
+			return this.skipDotPrefixedFolders;
+		}
+
+		/**
+		 * Tells whether the filter to be built skips files and folders the file system marks hidden.
+		 * 
+		 * @return <code>true</code> if it skips them
+		 * @see #skippingHidden(boolean)
+		 */
+		public boolean skipsHidden() {
+			return this.skipHidden;
+		}
+
+		/**
+		 * Tells whether the filter to be built skips what <code>git</code> ignores.
+		 * 
+		 * @return <code>true</code> if it skips it
+		 * @see #skippingWhatGitIgnores(boolean)
+		 */
+		public boolean skipsWhatGitIgnores() {
+			return this.skipGitIgnored;
+		}
+
+		/**
 		 * Skips every file whose extension is none of the given ones, compared case-insensitively.
 		 * A file without an extension is skipped.
 		 * 
