@@ -7,6 +7,6 @@ parsing and checking Markdown source code as well as translating Markdown to HTM
 
 - **Language features** — parsing, validation, completion, formatting, following links, and refactoring,
   code mining for Markdown, built on `markdown-core`.
-- **Extension points** — a `ServiceLoader` SPI so extensions can add validators,
-  completions and other optional features without living in this repository.
+- **Extension points** — a caller adds validators, extensions of the parser and the renderer and other
+  customisations through the builder of the service, so that they need not live in this repository.
 
