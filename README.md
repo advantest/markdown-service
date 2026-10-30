@@ -1,7 +1,7 @@
 # Markdown Language Service (markdown-service)
 
 Markdown language service is a Java library providing all Markdown language features like
-parsing and checking Markdown source code as well as translating Markdown to HTML (rednering HTML).
+parsing and checking Markdown source code as well as translating Markdown to HTML (rendering HTML).
 
 ## Scope
 
