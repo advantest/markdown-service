@@ -38,23 +38,3 @@ this repository, in addition to what a task asks for.
 Pushing a commit is the repository owner's business alone. Commit what the task asks for and leave
 the branch where it is: do not push it, do not open a pull request and do not ask to be allowed to.
 Whoever owns the repository decides when work leaves this machine and under which name it arrives.
-
-## This repository knows nothing about where its code came from
-
-Code is ported into this repository from other projects. What it says about itself must not depend
-on them:
-
-- **Do not name another project** in a comment, a message, a test name or a documentation file of
-  this repository, neither the project the code was ported from nor a project reading this library.
-- **Do not describe the behaviour of another project**, and do not justify a behaviour of this
-  library by saying what another one does. A comment says what this code does and why that is
-  right here; a reader must be able to understand it without knowing any other repository.
-- **Do not point to an issue, a decision or a document that lives elsewhere.** An identifier like
-  `I-01` or `D-24` means nothing to a reader of this repository.
-
-A relation between this library and another project is documented in the repository that owns that
-relation, not here. Where a behaviour looks arbitrary without its history, the comment states the
-rule that is implemented, e.g. that a message keeps a double space, not who once produced it.
-
-There is no exception to this. Every file of this repository, test code included, is written for a
-reader who knows nothing but this repository.
