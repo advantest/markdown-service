@@ -38,3 +38,8 @@ this repository, in addition to what a task asks for.
 Pushing a commit is the repository owner's business alone. Commit what the task asks for and leave
 the branch where it is: do not push it, do not open a pull request and do not ask to be allowed to.
 Whoever owns the repository decides when work leaves this machine and under which name it arrives.
+
+## This repository is open source
+
+The library must not depend on any closed-source library, neither at compile time nor at run time.
+Name only the repositories this one depends on, and never a closed-source one.
