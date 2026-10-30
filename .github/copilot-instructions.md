@@ -26,6 +26,7 @@ this repository, in addition to what a task asks for.
   of such a series is not expected to be green on its own.
 - Write the commit message in whole sentences, saying what the commit achieves rather than which
   files it touches.
+- Limit the first line of a commit message, its title, to 72 characters.
 
 ## Markdown files
 
