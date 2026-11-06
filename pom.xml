@@ -174,6 +174,11 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.1.2</version>
+				<configuration>
+					<systemPropertyVariables>
+						<expectedVersion>${project.version}</expectedVersion>
+					</systemPropertyVariables>
+				</configuration>
 				<dependencies>
 					<dependency>
 						<groupId>org.junit.jupiter</groupId>
@@ -188,6 +193,11 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
 				<version>3.1.2</version>
+				<configuration>
+					<systemPropertyVariables>
+						<expectedVersion>${project.version}</expectedVersion>
+					</systemPropertyVariables>
+				</configuration>
 				<dependencies>
 					<dependency>
 						<groupId>org.junit.jupiter</groupId>
