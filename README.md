@@ -19,3 +19,13 @@ parsing and checking Markdown source code as well as translating Markdown to HTM
 The build needs Java 21 and Maven 3.9, which the Maven wrapper fetches. It takes `markdown-core` from the
 GitHub Packages registry of its repository, which needs a GitHub token in the Maven settings, or from the
 local Maven repository once `./mvnw install` was run in a checkout of `markdown-core`.
+
+## License
+
+This work is made available under the terms of the BSD 3-Clause License.
+The licence accompanies this distribution: [LICENSE](LICENSE).
+
+## Copyright
+
+Copyright (c) 2022-2026, Advantest Europe GmbH.
+All rights reserved.
