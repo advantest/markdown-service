@@ -4,7 +4,7 @@
 
 	<groupId>com.advantest.markdown</groupId>
 	<artifactId>markdown-service</artifactId>
-	<version>1.0.0-SNAPSHOT</version> <!-- set to something like 1.0.2-20240821-1452 for releases -->
+	<version>1.0.0-SNAPSHOT</version> <!-- set to x.y.z for a release and tag it x.y.z on main -->
 
 	<name>Markdown service</name>
 	<description>Service facade for Markdown parsing and HTML rendering</description>
